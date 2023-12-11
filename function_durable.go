@@ -1,21 +1,21 @@
-//go:build !durable
+//go:build durable
 
 package dispatch
 
 import (
-	"context"
-	"fmt"
-	"reflect"
-	"strings"
-	"time"
-
-	"github.com/stealthrocket/coroutine"
 	coroutinev1 "github.com/stealthrocket/ring/proto/go/ring/coroutine/v1"
-	"google.golang.org/protobuf/encoding/protowire"
-	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
-	"google.golang.org/protobuf/types/known/durationpb"
+	coroutine "github.com/stealthrocket/coroutine"
+	time "time"
+	durationpb "google.golang.org/protobuf/types/known/durationpb"
+	anypb "google.golang.org/protobuf/types/known/anypb"
+	strings "strings"
+	proto "google.golang.org/protobuf/proto"
+	context "context"
+	reflect "reflect"
+	protowire "google.golang.org/protobuf/encoding/protowire"
+	fmt "fmt"
 )
+import _types "github.com/stealthrocket/coroutine/types"
 
 // Func is a constructor for Function values. In most cases, it is useful to
 // infer the type parameters from the signature of the function passed as
@@ -76,9 +76,6 @@ func (f Function[Input, Output]) Execute(ctx context.Context, req *coroutinev1.E
 		CoroutineVersion: req.CoroutineVersion,
 	}
 
-	// When running in volatile mode, we cannot snapshot the coroutine state
-	// and return it to the caller. Instead, we run the coroutine to completion
-	// in a blocking fashion until it returns a result or an error.
 	if !coroutine.Durable {
 		var canceled bool
 		coroutine.Run(coro, func(v any) any {
@@ -137,11 +134,7 @@ func (f Function[Input, Output]) Execute(ctx context.Context, req *coroutinev1.E
 
 func (f Function[Input, Output]) entrypoint(input Input) func() any {
 	return func() any {
-		// The context that gets passed as argument here should be recreated
-		// each time the coroutine is resumed, ideally inheriting from the
-		// parent context passed to the Execute method. This is difficult to
-		// do right in durable mode because we shouldn't capture the parent
-		// context in the coroutine state.
+
 		v, err := f(context.TODO(), input)
 		if err != nil {
 			return err
@@ -167,4 +160,20 @@ func errorTypeOf(err error) string {
 		return str[i+1:]
 	}
 	return str
+}
+func init() {
+	_types.RegisterFunc[func(ctx context.Context, req *coroutinev1.ExecuteRequest) (*coroutinev1.ExecuteResponse, error)]("github.com/stealthrocket/dispatch/sdk/dispatch-go.Execute")
+	_types.RegisterClosure[func(v any) any, struct {
+		F  uintptr
+		X0 context.Context
+		X1 coroutine.Coroutine[any, any]
+		X2 bool
+	}]("github.com/stealthrocket/dispatch/sdk/dispatch-go.Execute.func1")
+	_types.RegisterFunc[func[Input, Output proto.Message](f func(context.Context, Input) (Output, error)) Function[Input, Output]]("github.com/stealthrocket/dispatch/sdk/dispatch-go.Func")
+	_types.RegisterFunc[func(input Input) func() any]("github.com/stealthrocket/dispatch/sdk/dispatch-go.entrypoint")
+	_types.RegisterClosure[func() any, struct {
+		F  uintptr
+		X0 Input
+	}]("github.com/stealthrocket/dispatch/sdk/dispatch-go.entrypoint.func1")
+	_types.RegisterFunc[func(err error) string]("github.com/stealthrocket/dispatch/sdk/dispatch-go.errorTypeOf")
 }
