@@ -7,7 +7,7 @@ import (
 	"time"
 
 	coroutinev1 "github.com/stealthrocket/ring/proto/go/ring/coroutine/v1"
-	"github.com/stealthrocket/stargate/sdk/dispatch-go"
+	"github.com/stealthrocket/dispatch/sdk/dispatch-go"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )

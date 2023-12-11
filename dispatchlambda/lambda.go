@@ -10,7 +10,7 @@ import (
 	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/aws/aws-sdk-go/aws/arn"
 	coroutinev1 "github.com/stealthrocket/ring/proto/go/ring/coroutine/v1"
-	"github.com/stealthrocket/stargate/sdk/dispatch-go"
+	"github.com/stealthrocket/dispatch/sdk/dispatch-go"
 	"google.golang.org/protobuf/proto"
 )
 
