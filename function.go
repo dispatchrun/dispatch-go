@@ -135,6 +135,9 @@ func (f Function[Input, Output]) Execute(ctx context.Context, req *coroutinev1.E
 	return res, nil
 }
 
+// TODO: remove explicit noinline directive once stealthrocket/coroutine#84 is fixed.
+//
+//go:noinline
 func (f Function[Input, Output]) entrypoint(input Input) func() any {
 	return func() any {
 		// The context that gets passed as argument here should be recreated
