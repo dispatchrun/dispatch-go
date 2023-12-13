@@ -3,17 +3,18 @@
 package dispatch
 
 import (
-	coroutinev1 "github.com/stealthrocket/ring/proto/go/ring/coroutine/v1"
-	coroutine "github.com/stealthrocket/coroutine"
-	time "time"
+	protowire "google.golang.org/protobuf/encoding/protowire"
 	durationpb "google.golang.org/protobuf/types/known/durationpb"
-	anypb "google.golang.org/protobuf/types/known/anypb"
+	reflect "reflect"
 	strings "strings"
 	proto "google.golang.org/protobuf/proto"
 	context "context"
-	reflect "reflect"
-	protowire "google.golang.org/protobuf/encoding/protowire"
+	coroutinev1 "github.com/stealthrocket/ring/proto/go/ring/coroutine/v1"
+	anypb "google.golang.org/protobuf/types/known/anypb"
+	httpv1 "github.com/stealthrocket/dispatch/proto/go/http/v1"
+	coroutine "github.com/stealthrocket/coroutine"
 	fmt "fmt"
+	time "time"
 )
 import _types "github.com/stealthrocket/coroutine/types"
 
@@ -132,6 +133,9 @@ func (f Function[Input, Output]) Execute(ctx context.Context, req *coroutinev1.E
 	return res, nil
 }
 
+// TODO: remove explicit noinline directive once stealthrocket/coroutine#84 is fixed.
+//
+//go:noinline
 func (f Function[Input, Output]) entrypoint(input Input) func() any {
 	return func() any {
 
@@ -162,18 +166,19 @@ func errorTypeOf(err error) string {
 	return str
 }
 func init() {
-	_types.RegisterFunc[func(ctx context.Context, req *coroutinev1.ExecuteRequest) (*coroutinev1.ExecuteResponse, error)]("github.com/stealthrocket/dispatch/sdk/dispatch-go.Execute")
+	_types.RegisterFunc[func(ctx context.Context, req *coroutinev1.ExecuteRequest) (*coroutinev1.ExecuteResponse, error)]("github.com/stealthrocket/dispatch/sdk/dispatch-go.Function[go.shape.*uint8,go.shape.*uint8].Execute")
 	_types.RegisterClosure[func(v any) any, struct {
 		F  uintptr
+		D  uintptr
 		X0 context.Context
 		X1 coroutine.Coroutine[any, any]
 		X2 bool
-	}]("github.com/stealthrocket/dispatch/sdk/dispatch-go.Execute.func1")
-	_types.RegisterFunc[func[Input, Output proto.Message](f func(context.Context, Input) (Output, error)) Function[Input, Output]]("github.com/stealthrocket/dispatch/sdk/dispatch-go.Func")
-	_types.RegisterFunc[func(input Input) func() any]("github.com/stealthrocket/dispatch/sdk/dispatch-go.entrypoint")
+	}]("github.com/stealthrocket/dispatch/sdk/dispatch-go.Function[go.shape.*uint8,go.shape.*uint8].Execute.func1")
+	_types.RegisterFunc[func(input *httpv1.Request) func() any]("github.com/stealthrocket/dispatch/sdk/dispatch-go.Function[go.shape.*uint8,go.shape.*uint8].entrypoint")
 	_types.RegisterClosure[func() any, struct {
 		F  uintptr
-		X0 Input
-	}]("github.com/stealthrocket/dispatch/sdk/dispatch-go.entrypoint.func1")
+		D  uintptr
+		X0 *httpv1.Request
+	}]("github.com/stealthrocket/dispatch/sdk/dispatch-go.Function[go.shape.*uint8,go.shape.*uint8].entrypoint.func1")
 	_types.RegisterFunc[func(err error) string]("github.com/stealthrocket/dispatch/sdk/dispatch-go.errorTypeOf")
 }
