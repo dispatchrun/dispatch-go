@@ -8,8 +8,8 @@ import (
 
 	"github.com/aws/aws-lambda-go/lambda/messages"
 	"github.com/aws/aws-lambda-go/lambdacontext"
-	coroutinev1 "github.com/stealthrocket/ring/proto/go/ring/coroutine/v1"
 	"github.com/stealthrocket/dispatch/sdk/dispatch-go/dispatchlambda"
+	coroutinev1 "github.com/stealthrocket/ring/proto/go/ring/coroutine/v1"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -27,7 +27,7 @@ func TestHandlerNonBase64Payload(t *testing.T) {
 	h := dispatchlambda.Handler(func(ctx context.Context, input *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
 		return nil, nil
 	})
-	_, err := h.Invoke(context.Background(), []byte("not base64"))
+	_, err := h.Invoke(context.Background(), []byte(`"not base64"`))
 	assertInvokeError(t, err, "Bad Request", "payload is not base64 encoded")
 }
 
@@ -35,7 +35,7 @@ func TestHandlerMissingFunctionARN(t *testing.T) {
 	h := dispatchlambda.Handler(func(ctx context.Context, input *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
 		return nil, nil
 	})
-	_, err := h.Invoke(context.Background(), []byte("aW52b2tlZA=="))
+	_, err := h.Invoke(context.Background(), []byte(`"aW52b2tlZA=="`))
 	assertInvokeError(t, err, "Bad Request", "missing function ARN")
 }
 
@@ -46,7 +46,7 @@ func TestHandlerMalformedFunctionARN(t *testing.T) {
 	ctx := lambdacontext.NewContext(context.Background(), &lambdacontext.LambdaContext{
 		InvokedFunctionArn: "not an ARN",
 	})
-	_, err := h.Invoke(ctx, []byte("aW52b2tlZDovL2Z1bmN0aW9uOg=="))
+	_, err := h.Invoke(ctx, []byte(`"aW52b2tlZDovL2Z1bmN0aW9uOg=="`))
 	assertInvokeError(t, err, "Bad Request", "malformed function ARN")
 }
 
@@ -57,7 +57,7 @@ func TestHandlerNonLambdaFunctionARN(t *testing.T) {
 	ctx := lambdacontext.NewContext(context.Background(), &lambdacontext.LambdaContext{
 		InvokedFunctionArn: "arn:aws:lambda:us-east-1:123456789012:whatever:my-function",
 	})
-	_, err := h.Invoke(ctx, []byte("aW52b2tlZDovL2Z1bmN0aW9uOg=="))
+	_, err := h.Invoke(ctx, []byte(`"aW52b2tlZDovL2Z1bmN0aW9uOg=="`))
 	assertInvokeError(t, err, "Bad Request", "function ARN is not a Lambda function ARN: invalid prefix: arn:aws:lambda:us-east-1:123456789012:whatever:my-function")
 }
 
@@ -68,7 +68,7 @@ func TestHandlerMissingFunctionVersion(t *testing.T) {
 	ctx := lambdacontext.NewContext(context.Background(), &lambdacontext.LambdaContext{
 		InvokedFunctionArn: "arn:aws:lambda:us-east-1:123456789012:function:my-function",
 	})
-	_, err := h.Invoke(ctx, []byte("aW52b2tlZDovL2Z1bmN0aW9uOg=="))
+	_, err := h.Invoke(ctx, []byte(`"aW52b2tlZDovL2Z1bmN0aW9uOg=="`))
 	assertInvokeError(t, err, "Bad Request", "function ARN is not a Lambda function ARN: missing version: arn:aws:lambda:us-east-1:123456789012:function:my-function")
 }
 
@@ -79,7 +79,7 @@ func TestHandlerInvokePayloadNotProtobufMessage(t *testing.T) {
 	ctx := lambdacontext.NewContext(context.Background(), &lambdacontext.LambdaContext{
 		InvokedFunctionArn: "arn:aws:lambda:us-east-1:123456789012:function:my-function:1",
 	})
-	_, err := h.Invoke(ctx, []byte("aW52b2tlZDovL2Z1bmN0aW9uOg=="))
+	_, err := h.Invoke(ctx, []byte(`"aW52b2tlZDovL2Z1bmN0aW9uOg=="`))
 	assertInvokeError(t, err, "Bad Request", "raw payload did not contain a protobuf encoded execution request")
 }
 
@@ -106,16 +106,18 @@ func TestHandlerInvokeError(t *testing.T) {
 		t.Fatalf("unexpected error marshaling request: %v", err)
 	}
 
-	payload := make([]byte, base64.StdEncoding.EncodedLen(len(b)))
-	base64.StdEncoding.Encode(payload, b)
+	payload := make([]byte, 2+base64.StdEncoding.EncodedLen(len(b)))
+	payload[0] = '"'
+	payload[len(payload)-1] = '"'
+	base64.StdEncoding.Encode(payload[1:len(payload)-1], b)
 
 	b, err = h.Invoke(ctx, payload)
 	if err != nil {
 		t.Fatalf("unexpected error invoking function: %v", err)
 	}
 
-	payload = make([]byte, base64.StdEncoding.DecodedLen(len(b)))
-	n, err := base64.StdEncoding.Decode(payload, b)
+	payload = make([]byte, base64.StdEncoding.DecodedLen(len(b)-2))
+	n, err := base64.StdEncoding.Decode(payload, b[1:len(b)-1])
 	if err != nil {
 		t.Fatalf("unexpected error decoding payload: %v", err)
 	}
@@ -160,16 +162,18 @@ func TestHandlerInvokeResult(t *testing.T) {
 		t.Fatalf("unexpected error marshaling request: %v", err)
 	}
 
-	payload := make([]byte, base64.StdEncoding.EncodedLen(len(b)))
-	base64.StdEncoding.Encode(payload, b)
+	payload := make([]byte, 2+base64.StdEncoding.EncodedLen(len(b)))
+	payload[0] = '"'
+	payload[len(payload)-1] = '"'
+	base64.StdEncoding.Encode(payload[1:len(payload)-1], b)
 
 	b, err = h.Invoke(ctx, payload)
 	if err != nil {
 		t.Fatalf("unexpected error invoking function: %v", err)
 	}
 
-	payload = make([]byte, base64.StdEncoding.DecodedLen(len(b)))
-	n, err := base64.StdEncoding.Decode(payload, b)
+	payload = make([]byte, base64.StdEncoding.DecodedLen(len(b)-2))
+	n, err := base64.StdEncoding.Decode(payload, b[1:len(b)-1])
 	if err != nil {
 		t.Fatalf("unexpected error decoding payload: %v", err)
 	}
