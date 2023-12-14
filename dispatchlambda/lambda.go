@@ -73,9 +73,9 @@ func (h handlerFunc[Input, Output]) Invoke(ctx context.Context, payload []byte) 
 	// Those fields are ignored in the lambda dispatch handler, the Lambda
 	// function is the source of thruth defining the coroutine ID and version.
 	req.CoroutineVersion = functionVersion
-	req.CoroutineId = functionArn.String()
-	req.CoroutineId = strings.TrimSuffix(req.CoroutineId, functionVersion)
-	req.CoroutineId = strings.TrimSuffix(req.CoroutineId, ":")
+	req.CoroutineUri = functionArn.String()
+	req.CoroutineUri = strings.TrimSuffix(req.CoroutineUri, functionVersion)
+	req.CoroutineUri = strings.TrimSuffix(req.CoroutineUri, ":")
 
 	r, err := dispatch.Function[Input, Output](h).Execute(ctx, req)
 	if err != nil {
@@ -92,7 +92,7 @@ func (h handlerFunc[Input, Output]) Invoke(ctx context.Context, payload []byte) 
 	// We don't need to pass these values back in the response, they are already
 	// known by the invoking client: the coroutine ID is the Lambda function ARN
 	// and the version is returned in the ExecutedVersion field of the response.
-	r.CoroutineId, r.CoroutineVersion = "", ""
+	r.CoroutineUri, r.CoroutineVersion = "", ""
 
 	rawResponse, err := proto.Marshal(r)
 	if err != nil {
