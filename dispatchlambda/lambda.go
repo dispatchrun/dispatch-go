@@ -9,8 +9,8 @@ import (
 	"github.com/aws/aws-lambda-go/lambda/messages"
 	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/aws/aws-sdk-go/aws/arn"
-	coroutinev1 "github.com/stealthrocket/ring/proto/go/ring/coroutine/v1"
 	"github.com/stealthrocket/dispatch/sdk/dispatch-go"
+	coroutinev1 "github.com/stealthrocket/ring/proto/go/ring/coroutine/v1"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -26,6 +26,14 @@ func (h handlerFunc[Input, Output]) Invoke(ctx context.Context, payload []byte) 
 	if len(payload) == 0 {
 		return nil, badRequest("empty payload")
 	}
+	if len(payload) < 2 {
+		return nil, badRequest("payload is too short")
+	}
+	if payload[0] != '"' || payload[len(payload)-1] != '"' {
+		return nil, badRequest("payload is not a string")
+	}
+	payload = payload[1 : len(payload)-1]
+
 	rawPayload := make([]byte, base64.StdEncoding.DecodedLen(len(payload)))
 	n, err := base64.StdEncoding.Decode(rawPayload, payload)
 	if err != nil {
@@ -47,9 +55,14 @@ func (h handlerFunc[Input, Output]) Invoke(ctx context.Context, payload []byte) 
 		return nil, badRequest("function ARN is not a Lambda function ARN: invalid prefix: " + functionArn.String())
 	}
 	functionName := strings.TrimPrefix(functionArn.Resource, "function:")
-	functionName, functionVersion, ok := strings.Cut(functionName, ":")
+	_, functionVersion, ok := strings.Cut(functionName, ":")
 	if !ok {
-		return nil, badRequest("function ARN is not a Lambda function ARN: missing version: " + functionArn.String())
+		// Special case used when running the function as a local docker image.
+		//
+		// TODO: this is somewhat hacky, we should find a better way to do it.
+		if functionName != "test_function" {
+			return nil, badRequest("function ARN is not a Lambda function ARN: missing version: " + functionArn.String())
+		}
 	}
 
 	req := new(coroutinev1.ExecuteRequest)
@@ -86,8 +99,11 @@ func (h handlerFunc[Input, Output]) Invoke(ctx context.Context, payload []byte) 
 		return nil, err
 	}
 
-	rawPayload = make([]byte, base64.StdEncoding.EncodedLen(len(rawResponse)))
-	base64.StdEncoding.Encode(rawPayload, rawResponse)
+	rawPayload = make([]byte, 2+base64.StdEncoding.EncodedLen(len(rawResponse)))
+	i := len(rawPayload) - 1
+	rawPayload[0] = '"'
+	rawPayload[i] = '"'
+	base64.StdEncoding.Encode(rawPayload[1:i], rawResponse)
 	return rawPayload, nil
 }
 
