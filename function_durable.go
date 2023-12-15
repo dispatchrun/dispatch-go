@@ -3,18 +3,18 @@
 package dispatch
 
 import (
+	coroutine "github.com/stealthrocket/coroutine"
+	anypb "google.golang.org/protobuf/types/known/anypb"
 	reflect "reflect"
-	proto "google.golang.org/protobuf/proto"
 	context "context"
-	protowire "google.golang.org/protobuf/encoding/protowire"
+	coroutinev1 "github.com/stealthrocket/ring/proto/go/ring/coroutine/v1"
 	fmt "fmt"
 	time "time"
 	durationpb "google.golang.org/protobuf/types/known/durationpb"
-	anypb "google.golang.org/protobuf/types/known/anypb"
-	httpv1 "github.com/stealthrocket/dispatch/proto/go/dispatch/http/v1"
-	coroutinev1 "github.com/stealthrocket/ring/proto/go/ring/coroutine/v1"
-	coroutine "github.com/stealthrocket/coroutine"
 	strings "strings"
+	httpv1 "github.com/stealthrocket/dispatch/proto/go/dispatch/http/v1"
+	proto "google.golang.org/protobuf/proto"
+	protowire "google.golang.org/protobuf/encoding/protowire"
 )
 import _types "github.com/stealthrocket/coroutine/types"
 
@@ -73,7 +73,7 @@ func (f Function[Input, Output]) Execute(ctx context.Context, req *coroutinev1.E
 	}
 
 	res := &coroutinev1.ExecuteResponse{
-		CoroutineUri:      req.CoroutineUri,
+		CoroutineUri:     req.CoroutineUri,
 		CoroutineVersion: req.CoroutineVersion,
 	}
 
@@ -169,16 +169,17 @@ func init() {
 	_types.RegisterFunc[func(ctx context.Context, req *coroutinev1.ExecuteRequest) (*coroutinev1.ExecuteResponse, error)]("github.com/stealthrocket/dispatch/sdk/dispatch-go.Function[go.shape.*uint8,go.shape.*uint8].Execute")
 	_types.RegisterClosure[func(v any) any, struct {
 		F  uintptr
-		D  uintptr
 		X0 context.Context
 		X1 coroutine.Coroutine[any, any]
 		X2 bool
+		D  uintptr
 	}]("github.com/stealthrocket/dispatch/sdk/dispatch-go.Function[go.shape.*uint8,go.shape.*uint8].Execute.func1")
 	_types.RegisterFunc[func(input *httpv1.Request) func() any]("github.com/stealthrocket/dispatch/sdk/dispatch-go.Function[go.shape.*uint8,go.shape.*uint8].entrypoint")
 	_types.RegisterClosure[func() any, struct {
 		F  uintptr
+		X0 Function[*httpv1.Request, *httpv1.Response]
+		X1 *httpv1.Request
 		D  uintptr
-		X0 *httpv1.Request
 	}]("github.com/stealthrocket/dispatch/sdk/dispatch-go.Function[go.shape.*uint8,go.shape.*uint8].entrypoint.func1")
 	_types.RegisterFunc[func(err error) string]("github.com/stealthrocket/dispatch/sdk/dispatch-go.errorTypeOf")
 }

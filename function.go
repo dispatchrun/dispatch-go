@@ -72,7 +72,7 @@ func (f Function[Input, Output]) Execute(ctx context.Context, req *coroutinev1.E
 	}
 
 	res := &coroutinev1.ExecuteResponse{
-		CoroutineUri:      req.CoroutineUri,
+		CoroutineUri:     req.CoroutineUri,
 		CoroutineVersion: req.CoroutineVersion,
 	}
 
