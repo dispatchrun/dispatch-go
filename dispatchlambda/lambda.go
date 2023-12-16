@@ -3,6 +3,7 @@ package dispatchlambda
 import (
 	"context"
 	"encoding/base64"
+	"os"
 	"strings"
 
 	"github.com/aws/aws-lambda-go/lambda"
@@ -13,6 +14,8 @@ import (
 	coroutinev1 "github.com/stealthrocket/ring/proto/go/ring/coroutine/v1"
 	"google.golang.org/protobuf/proto"
 )
+
+var awsLambdaFunctionVersion = os.Getenv("AWS_LAMBDA_FUNCTION_VERSION")
 
 // Handler creates a lambda function handler executing the given dispatch
 // function when invoked.
@@ -56,13 +59,16 @@ func (h handlerFunc[Input, Output]) Invoke(ctx context.Context, payload []byte) 
 	}
 	functionName := strings.TrimPrefix(functionArn.Resource, "function:")
 	_, functionVersion, ok := strings.Cut(functionName, ":")
-	if !ok {
-		// Special case used when running the function as a local docker image.
-		//
-		// TODO: this is somewhat hacky, we should find a better way to do it.
-		if functionName != "test_function" {
-			return nil, badRequest("function ARN is not a Lambda function ARN: missing version: " + functionArn.String())
-		}
+	if ok { // turn the function ARN into an unqualified version
+		functionName = lambdaContext.InvokedFunctionArn
+		functionName = strings.TrimSuffix(functionName, functionVersion)
+		functionName = strings.TrimSuffix(functionName, ":")
+	} else {
+		functionName = lambdaContext.InvokedFunctionArn
+		functionVersion = awsLambdaFunctionVersion
+	}
+	if functionVersion == "" {
+		return nil, badRequest("function ARN is not a Lambda function ARN: missing version: " + functionArn.String())
 	}
 
 	req := new(coroutinev1.ExecuteRequest)
@@ -72,10 +78,7 @@ func (h handlerFunc[Input, Output]) Invoke(ctx context.Context, payload []byte) 
 
 	// Those fields are ignored in the lambda dispatch handler, the Lambda
 	// function is the source of thruth defining the coroutine ID and version.
-	req.CoroutineVersion = functionVersion
-	req.CoroutineUri = functionArn.String()
-	req.CoroutineUri = strings.TrimSuffix(req.CoroutineUri, functionVersion)
-	req.CoroutineUri = strings.TrimSuffix(req.CoroutineUri, ":")
+	req.CoroutineUri, req.CoroutineVersion = functionName, functionVersion
 
 	r, err := dispatch.Function[Input, Output](h).Execute(ctx, req)
 	if err != nil {
