@@ -17,6 +17,12 @@ import (
 
 var awsLambdaFunctionVersion = os.Getenv("AWS_LAMBDA_FUNCTION_VERSION")
 
+// Start is a shortcut to start a Lambda function handler executing the given
+// dispatch function when invoked.
+func Start[Input, Output proto.Message](f dispatch.Function[Input, Output]) {
+	lambda.Start(Handler(f))
+}
+
 // Handler creates a lambda function handler executing the given dispatch
 // function when invoked.
 func Handler[Input, Output proto.Message](f dispatch.Function[Input, Output]) lambda.Handler {
