@@ -143,8 +143,15 @@ func TestHandlerInvokeResult(t *testing.T) {
 	h := dispatchlambda.Handler(func(ctx context.Context, input *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
 		return wrapperspb.String("output"), nil
 	})
+
+	const (
+		functionVersion        = "1"
+		unqualifiedFunctionARN = "arn:aws:lambda:us-east-1:123456789012:function:my-function"
+		qualifiedFunctionARN   = unqualifiedFunctionARN + ":" + functionVersion
+	)
+
 	ctx := lambdacontext.NewContext(context.Background(), &lambdacontext.LambdaContext{
-		InvokedFunctionArn: "arn:aws:lambda:us-east-1:123456789012:function:my-function:1",
+		InvokedFunctionArn: qualifiedFunctionARN,
 	})
 
 	input, err := anypb.New(&wrapperspb.StringValue{Value: "input"})
@@ -182,6 +189,14 @@ func TestHandlerInvokeResult(t *testing.T) {
 	if err := proto.Unmarshal(payload[:n], res); err != nil {
 		t.Fatalf("unexpected error unmarshaling result: %v", err)
 	}
+
+	if res.CoroutineUri != unqualifiedFunctionARN {
+		t.Errorf("expected coroutine to return a result with coroutine URI %q, got %q", unqualifiedFunctionARN, res.CoroutineUri)
+	}
+	if res.CoroutineVersion != functionVersion {
+		t.Errorf("expected coroutine to return a result with coroutine version %q, got %q", functionVersion, res.CoroutineVersion)
+	}
+
 	switch coro := res.Coroutine.(type) {
 	case *coroutinev1.ExecuteResponse_Output:
 		if coro.Output.TypeUrl != "type.googleapis.com/google.protobuf.StringValue" {

@@ -69,7 +69,7 @@ func (h handlerFunc[Input, Output]) Invoke(ctx context.Context, payload []byte) 
 		functionName = lambdaContext.InvokedFunctionArn
 		functionName = strings.TrimSuffix(functionName, functionVersion)
 		functionName = strings.TrimSuffix(functionName, ":")
-	} else {
+	} else { // already an unqualified function ARN
 		functionName = lambdaContext.InvokedFunctionArn
 		functionVersion = awsLambdaFunctionVersion
 	}
@@ -98,10 +98,11 @@ func (h handlerFunc[Input, Output]) Invoke(ctx context.Context, payload []byte) 
 		}
 	}
 
-	// We don't need to pass these values back in the response, they are already
-	// known by the invoking client: the coroutine ID is the Lambda function ARN
-	// and the version is returned in the ExecutedVersion field of the response.
-	r.CoroutineUri, r.CoroutineVersion = "", ""
+	// When invoking an alias like $LATEST, Lambda returns the alias as the
+	// ExecutedVersion field in the respose. However, in order to attach the
+	// coroutine state to the version of the code that it was executed on, we
+	// need to return it explicitly in the response.
+	r.CoroutineUri, r.CoroutineVersion = functionName, functionVersion
 
 	rawResponse, err := proto.Marshal(r)
 	if err != nil {
