@@ -3,6 +3,7 @@ package dispatchlambda
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 	"os"
 	"strings"
 
@@ -103,6 +104,8 @@ func (h handlerFunc[Input, Output]) Invoke(ctx context.Context, payload []byte) 
 	// coroutine state to the version of the code that it was executed on, we
 	// need to return it explicitly in the response.
 	r.CoroutineUri, r.CoroutineVersion = functionName, functionVersion
+
+	fmt.Println("REPLY", functionName, functionVersion)
 
 	rawResponse, err := proto.Marshal(r)
 	if err != nil {
