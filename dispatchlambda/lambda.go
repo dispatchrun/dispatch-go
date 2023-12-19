@@ -18,6 +18,10 @@ import (
 
 var awsLambdaFunctionVersion = os.Getenv("AWS_LAMBDA_FUNCTION_VERSION")
 
+func init() {
+	fmt.Println("VERSION", awsLambdaFunctionVersion)
+}
+
 // Start is a shortcut to start a Lambda function handler executing the given
 // dispatch function when invoked.
 func Start[Input, Output proto.Message](f dispatch.Function[Input, Output]) {
@@ -57,6 +61,7 @@ func (h handlerFunc[Input, Output]) Invoke(ctx context.Context, payload []byte) 
 	if lambdaContext.InvokedFunctionArn == "" {
 		return nil, badRequest("missing function ARN")
 	}
+	fmt.Println("ARN", lambdaContext.InvokedFunctionArn)
 	functionArn, err := arn.Parse(lambdaContext.InvokedFunctionArn)
 	if err != nil {
 		return nil, badRequest("malformed function ARN")
