@@ -139,7 +139,7 @@ func TestHandlerInvokeError(t *testing.T) {
 	}
 }
 
-func TestHandlerInvokeResult(t *testing.T) {
+func TestHandlerInvokeQualifiedFunctionARN(t *testing.T) {
 	h := dispatchlambda.Handler(func(ctx context.Context, input *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
 		return wrapperspb.String("output"), nil
 	})
@@ -152,6 +152,83 @@ func TestHandlerInvokeResult(t *testing.T) {
 
 	ctx := lambdacontext.NewContext(context.Background(), &lambdacontext.LambdaContext{
 		InvokedFunctionArn: qualifiedFunctionARN,
+	})
+
+	input, err := anypb.New(&wrapperspb.StringValue{Value: "input"})
+	if err != nil {
+		t.Fatalf("unexpected error creating input: %v", err)
+	}
+
+	req := &coroutinev1.ExecuteRequest{
+		Coroutine: &coroutinev1.ExecuteRequest_Input{
+			Input: input,
+		},
+	}
+	b, err := proto.Marshal(req)
+	if err != nil {
+		t.Fatalf("unexpected error marshaling request: %v", err)
+	}
+
+	payload := make([]byte, 2+base64.StdEncoding.EncodedLen(len(b)))
+	payload[0] = '"'
+	payload[len(payload)-1] = '"'
+	base64.StdEncoding.Encode(payload[1:len(payload)-1], b)
+
+	b, err = h.Invoke(ctx, payload)
+	if err != nil {
+		t.Fatalf("unexpected error invoking function: %v", err)
+	}
+
+	payload = make([]byte, base64.StdEncoding.DecodedLen(len(b)-2))
+	n, err := base64.StdEncoding.Decode(payload, b[1:len(b)-1])
+	if err != nil {
+		t.Fatalf("unexpected error decoding payload: %v", err)
+	}
+
+	res := new(coroutinev1.ExecuteResponse)
+	if err := proto.Unmarshal(payload[:n], res); err != nil {
+		t.Fatalf("unexpected error unmarshaling result: %v", err)
+	}
+
+	if res.CoroutineUri != unqualifiedFunctionARN {
+		t.Errorf("expected coroutine to return a result with coroutine URI %q, got %q", unqualifiedFunctionARN, res.CoroutineUri)
+	}
+	if res.CoroutineVersion != functionVersion {
+		t.Errorf("expected coroutine to return a result with coroutine version %q, got %q", functionVersion, res.CoroutineVersion)
+	}
+
+	switch coro := res.Coroutine.(type) {
+	case *coroutinev1.ExecuteResponse_Output:
+		if coro.Output.TypeUrl != "type.googleapis.com/google.protobuf.StringValue" {
+			t.Errorf("expected coroutine to return an output of type %q, got %q", "type.googleapis.com/google.protobuf.StringValue", coro.Output.TypeUrl)
+		}
+		var output wrapperspb.StringValue
+		if err := coro.Output.UnmarshalTo(&output); err != nil {
+			t.Fatalf("unexpected error unmarshaling output: %v", err)
+		}
+		if output.Value != "output" {
+			t.Errorf("expected coroutine to return an output with value %q, got %q", "output", output.Value)
+		}
+	default:
+		t.Errorf("expected coroutine to return an error, got %T", coro)
+	}
+}
+
+func TestHandlerInvokeUnqualifiedFunctionARN(t *testing.T) {
+	h := dispatchlambda.Handler(func(ctx context.Context, input *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
+		return wrapperspb.String("output"), nil
+	})
+
+	const (
+		functionVersion        = "1"
+		unqualifiedFunctionARN = "arn:aws:lambda:us-east-1:123456789012:function:my-function"
+		qualifiedFunctionARN   = unqualifiedFunctionARN + ":" + functionVersion
+	)
+
+	dispatchlambda.SetDispatchCoroutineVersion(functionVersion)
+
+	ctx := lambdacontext.NewContext(context.Background(), &lambdacontext.LambdaContext{
+		InvokedFunctionArn: unqualifiedFunctionARN,
 	})
 
 	input, err := anypb.New(&wrapperspb.StringValue{Value: "input"})

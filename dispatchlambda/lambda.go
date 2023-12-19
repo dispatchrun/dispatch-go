@@ -16,11 +16,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-var awsLambdaFunctionVersion = os.Getenv("AWS_LAMBDA_FUNCTION_VERSION")
-
-func init() {
-	fmt.Println("VERSION", awsLambdaFunctionVersion)
-}
+var dispatchCoroutineVersion = os.Getenv("DISPATCH_COROUTINE_VERSION")
 
 // Start is a shortcut to start a Lambda function handler executing the given
 // dispatch function when invoked.
@@ -61,7 +57,6 @@ func (h handlerFunc[Input, Output]) Invoke(ctx context.Context, payload []byte) 
 	if lambdaContext.InvokedFunctionArn == "" {
 		return nil, badRequest("missing function ARN")
 	}
-	fmt.Println("ARN", lambdaContext.InvokedFunctionArn)
 	functionArn, err := arn.Parse(lambdaContext.InvokedFunctionArn)
 	if err != nil {
 		return nil, badRequest("malformed function ARN")
@@ -77,7 +72,7 @@ func (h handlerFunc[Input, Output]) Invoke(ctx context.Context, payload []byte) 
 		functionName = strings.TrimSuffix(functionName, ":")
 	} else { // already an unqualified function ARN
 		functionName = lambdaContext.InvokedFunctionArn
-		functionVersion = awsLambdaFunctionVersion
+		functionVersion = dispatchCoroutineVersion
 	}
 	if functionVersion == "" {
 		return nil, badRequest("function ARN is not a Lambda function ARN: missing version: " + functionArn.String())
