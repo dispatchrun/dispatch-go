@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	coroutinev1 "github.com/stealthrocket/ring/proto/go/ring/coroutine/v1"
 	"github.com/stealthrocket/dispatch/sdk/dispatch-go"
+	coroutinev1 "github.com/stealthrocket/ring/proto/go/ring/coroutine/v1"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
