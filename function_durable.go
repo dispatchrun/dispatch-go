@@ -9,9 +9,9 @@ import (
 	coroutinev1 "github.com/stealthrocket/ring/proto/go/ring/coroutine/v1"
 	durationpb "google.golang.org/protobuf/types/known/durationpb"
 	fmt "fmt"
-	httpv1 "github.com/stealthrocket/dispatch/proto/go/dispatch/http/v1"
 	proto "google.golang.org/protobuf/proto"
 	protowire "google.golang.org/protobuf/encoding/protowire"
+	recordv1 "github.com/stealthrocket/ring/proto/go/ring/record/v1"
 	reflect "reflect"
 	strings "strings"
 	time "time"
@@ -174,11 +174,11 @@ func init() {
 		X2 bool
 		D  uintptr
 	}]("github.com/stealthrocket/dispatch/sdk/dispatch-go.Function[go.shape.*uint8,go.shape.*uint8].Execute.func1")
-	_types.RegisterFunc[func(input *httpv1.Request) func() any]("github.com/stealthrocket/dispatch/sdk/dispatch-go.Function[go.shape.*uint8,go.shape.*uint8].entrypoint")
+	_types.RegisterFunc[func(input *recordv1.BlockTriggerRequest) func() any]("github.com/stealthrocket/dispatch/sdk/dispatch-go.Function[go.shape.*uint8,go.shape.*uint8].entrypoint")
 	_types.RegisterClosure[func() any, struct {
 		F  uintptr
-		X0 Function[*httpv1.Request, *httpv1.Response]
-		X1 *httpv1.Request
+		X0 Function[*recordv1.BlockTriggerRequest, *recordv1.BlockTriggerResponse]
+		X1 *recordv1.BlockTriggerRequest
 		D  uintptr
 	}]("github.com/stealthrocket/dispatch/sdk/dispatch-go.Function[go.shape.*uint8,go.shape.*uint8].entrypoint.func1")
 	_types.RegisterFunc[func(err error) string]("github.com/stealthrocket/dispatch/sdk/dispatch-go.errorTypeOf")

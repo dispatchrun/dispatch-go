@@ -69,6 +69,8 @@ func (h handlerFunc[Input, Output]) Invoke(ctx context.Context, payload []byte) 
 		functionName = lambdaContext.InvokedFunctionArn
 		functionName = strings.TrimSuffix(functionName, functionVersion)
 		functionName = strings.TrimSuffix(functionName, ":")
+	} else if functionArn.AccountID == "012345678912" { // local dev with emulator
+		functionVersion = "1"
 	} else { // already an unqualified function ARN
 		functionName = lambdaContext.InvokedFunctionArn
 		functionVersion = dispatchCoroutineVersion
@@ -83,7 +85,7 @@ func (h handlerFunc[Input, Output]) Invoke(ctx context.Context, payload []byte) 
 	}
 
 	// Those fields are ignored in the lambda dispatch handler, the Lambda
-	// function is the source of thruth defining the coroutine ID and version.
+	// function is the source of truth defining the coroutine ID and version.
 	req.CoroutineUri, req.CoroutineVersion = functionName, functionVersion
 
 	r, err := dispatch.Function[Input, Output](h).Execute(ctx, req)
