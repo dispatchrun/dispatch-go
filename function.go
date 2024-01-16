@@ -5,6 +5,8 @@ package dispatch
 import (
 	"context"
 	"fmt"
+	statusv1 "github.com/stealthrocket/ring/proto/go/ring/status/v1"
+	"google.golang.org/protobuf/types/known/durationpb"
 	"reflect"
 	"strings"
 	"time"
@@ -14,7 +16,6 @@ import (
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
-	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 // Func is a constructor for Function values. In most cases, it is useful to
@@ -39,6 +40,7 @@ type Function[Input, Output proto.Message] func(ctx context.Context, input Input
 // volatiles and the method acts as a simple invocation that runs the whole
 // function to completion.
 func (f Function[Input, Output]) Execute(ctx context.Context, req *coroutinev1.ExecuteRequest) (*coroutinev1.ExecuteResponse, error) {
+	fmt.Println("Executing function")
 	// TODO: since the coroutine yield and return values are the same the only
 	// common denominator is any. We could improve type safety if we were able
 	// to separate the two.
@@ -46,11 +48,12 @@ func (f Function[Input, Output]) Execute(ctx context.Context, req *coroutinev1.E
 	var zero Input
 
 	switch c := req.Coroutine.(type) {
-	case *coroutinev1.ExecuteRequest_Resume:
-		coro = coroutine.NewWithReturn[any, any](f.entrypoint(zero))
-		if err := coro.Context().Unmarshal(c.Resume.State); err != nil {
-			return nil, err
-		}
+	//
+	//case *coroutinev1.ExecuteRequest_Resume:
+	//	coro = coroutine.NewWithReturn[any, any](f.entrypoint(zero))
+	//	if err := coro.Context().Unmarshal(c.Resume.State); err != nil {
+	//		return nil, err
+	//	}
 
 	case *coroutinev1.ExecuteRequest_Input:
 		var input Input
@@ -105,10 +108,12 @@ func (f Function[Input, Output]) Execute(ctx context.Context, req *coroutinev1.E
 		}
 		switch yield := coro.Recv().(type) {
 		case sleep:
-			res.Coroutine = &coroutinev1.ExecuteResponse_Suspend{
-				Suspend: &coroutinev1.Suspend{
-					State: state,
-					Sleep: durationpb.New(time.Duration(yield)),
+			res.Status = statusv1.Status_STATUS_OK // TODO: missing STATUS_SUSPENDED?
+			res.Directive = &coroutinev1.ExecuteResponse_Poll{
+				Poll: &coroutinev1.Poll{
+					// TODO: how do we know if we need to pass Calls back?
+					State:   state,
+					MaxWait: durationpb.New(time.Duration(yield)),
 				},
 			}
 		default:
@@ -117,14 +122,22 @@ func (f Function[Input, Output]) Execute(ctx context.Context, req *coroutinev1.E
 	} else {
 		switch ret := coro.Result().(type) {
 		case *anypb.Any:
-			res.Coroutine = &coroutinev1.ExecuteResponse_Output{
-				Output: ret,
+			res.Directive = &coroutinev1.ExecuteResponse_Exit{
+				Exit: &coroutinev1.Exit{
+					Result: &coroutinev1.Result{
+						Output: ret,
+					},
+				},
 			}
 		case error:
-			res.Coroutine = &coroutinev1.ExecuteResponse_Error{
-				Error: &coroutinev1.Error{
-					Type:    errorTypeOf(ret),
-					Message: ret.Error(),
+			res.Directive = &coroutinev1.ExecuteResponse_Exit{
+				Exit: &coroutinev1.Exit{
+					Result: &coroutinev1.Result{
+						Error: &coroutinev1.Error{
+							Type:    errorTypeOf(ret),
+							Message: ret.Error(),
+						},
+					},
 				},
 			}
 		default:
