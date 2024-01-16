@@ -105,10 +105,9 @@ func (f Function[Input, Output]) Execute(ctx context.Context, req *coroutinev1.E
 		}
 		switch yield := coro.Recv().(type) {
 		case sleep:
-			res.Status = statusv1.Status_STATUS_OK // TODO: missing STATUS_SUSPENDED?
+			res.Status = statusv1.Status_STATUS_OK // TODO: is it the expected status for suspended coroutines?
 			res.Directive = &coroutinev1.ExecuteResponse_Poll{
 				Poll: &coroutinev1.Poll{
-					// TODO: how do we know if we need to pass Calls back?
 					State:   state,
 					MaxWait: durationpb.New(time.Duration(yield)),
 				},
@@ -119,6 +118,7 @@ func (f Function[Input, Output]) Execute(ctx context.Context, req *coroutinev1.E
 	} else {
 		switch ret := coro.Result().(type) {
 		case *anypb.Any:
+			res.Status = statusv1.Status_STATUS_OK
 			res.Directive = &coroutinev1.ExecuteResponse_Exit{
 				Exit: &coroutinev1.Exit{
 					Result: &coroutinev1.Result{
@@ -127,6 +127,7 @@ func (f Function[Input, Output]) Execute(ctx context.Context, req *coroutinev1.E
 				},
 			}
 		case error:
+			res.Status = statusv1.Status_STATUS_PERMANENT_ERROR // TODO: how do we categorize errors?
 			res.Directive = &coroutinev1.ExecuteResponse_Exit{
 				Exit: &coroutinev1.Exit{
 					Result: &coroutinev1.Result{
