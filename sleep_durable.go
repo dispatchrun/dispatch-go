@@ -3,8 +3,8 @@
 package dispatch
 
 import (
-	coroutine "github.com/stealthrocket/coroutine"
 	time "time"
+	coroutine "github.com/stealthrocket/coroutine"
 )
 import _types "github.com/stealthrocket/coroutine/types"
 

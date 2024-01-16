@@ -3,18 +3,19 @@
 package dispatch
 
 import (
+	durationpb "google.golang.org/protobuf/types/known/durationpb"
 	anypb "google.golang.org/protobuf/types/known/anypb"
 	context "context"
-	coroutine "github.com/stealthrocket/coroutine"
-	coroutinev1 "github.com/stealthrocket/ring/proto/go/ring/coroutine/v1"
-	durationpb "google.golang.org/protobuf/types/known/durationpb"
-	fmt "fmt"
-	proto "google.golang.org/protobuf/proto"
-	protowire "google.golang.org/protobuf/encoding/protowire"
-	recordv1 "github.com/stealthrocket/ring/proto/go/ring/record/v1"
 	reflect "reflect"
 	strings "strings"
+	httpv1 "github.com/stealthrocket/dispatch/proto/go/dispatch/http/v1"
+	fmt "fmt"
+	coroutine "github.com/stealthrocket/coroutine"
 	time "time"
+	coroutinev1 "github.com/stealthrocket/ring/proto/go/ring/coroutine/v1"
+	protowire "google.golang.org/protobuf/encoding/protowire"
+	statusv1 "github.com/stealthrocket/ring/proto/go/ring/status/v1"
+	proto "google.golang.org/protobuf/proto"
 )
 import _types "github.com/stealthrocket/coroutine/types"
 
@@ -47,12 +48,11 @@ func (f Function[Input, Output]) Execute(ctx context.Context, req *coroutinev1.E
 	var zero Input
 
 	switch c := req.Coroutine.(type) {
-	case *coroutinev1.ExecuteRequest_Resume:
+	case *coroutinev1.ExecuteRequest_PollResponse:
 		coro = coroutine.NewWithReturn[any, any](f.entrypoint(zero))
-		if err := coro.Context().Unmarshal(c.Resume.State); err != nil {
+		if err := coro.Context().Unmarshal(c.PollResponse.GetState()); err != nil {
 			return nil, err
 		}
-
 	case *coroutinev1.ExecuteRequest_Input:
 		var input Input
 		if c.Input != nil {
@@ -103,10 +103,11 @@ func (f Function[Input, Output]) Execute(ctx context.Context, req *coroutinev1.E
 		}
 		switch yield := coro.Recv().(type) {
 		case sleep:
-			res.Coroutine = &coroutinev1.ExecuteResponse_Suspend{
-				Suspend: &coroutinev1.Suspend{
-					State: state,
-					Sleep: durationpb.New(time.Duration(yield)),
+			res.Status = statusv1.Status_STATUS_OK
+			res.Directive = &coroutinev1.ExecuteResponse_Poll{
+				Poll: &coroutinev1.Poll{
+					State:   state,
+					MaxWait: durationpb.New(time.Duration(yield)),
 				},
 			}
 		default:
@@ -115,14 +116,24 @@ func (f Function[Input, Output]) Execute(ctx context.Context, req *coroutinev1.E
 	} else {
 		switch ret := coro.Result().(type) {
 		case *anypb.Any:
-			res.Coroutine = &coroutinev1.ExecuteResponse_Output{
-				Output: ret,
+			res.Status = statusv1.Status_STATUS_OK
+			res.Directive = &coroutinev1.ExecuteResponse_Exit{
+				Exit: &coroutinev1.Exit{
+					Result: &coroutinev1.Result{
+						Output: ret,
+					},
+				},
 			}
 		case error:
-			res.Coroutine = &coroutinev1.ExecuteResponse_Error{
-				Error: &coroutinev1.Error{
-					Type:    errorTypeOf(ret),
-					Message: ret.Error(),
+			res.Status = statusv1.Status_STATUS_PERMANENT_ERROR
+			res.Directive = &coroutinev1.ExecuteResponse_Exit{
+				Exit: &coroutinev1.Exit{
+					Result: &coroutinev1.Result{
+						Error: &coroutinev1.Error{
+							Type:    errorTypeOf(ret),
+							Message: ret.Error(),
+						},
+					},
 				},
 			}
 		default:
@@ -174,11 +185,11 @@ func init() {
 		X2 bool
 		D  uintptr
 	}]("github.com/stealthrocket/dispatch/sdk/dispatch-go.Function[go.shape.*uint8,go.shape.*uint8].Execute.func1")
-	_types.RegisterFunc[func(input *recordv1.BlockTriggerRequest) func() any]("github.com/stealthrocket/dispatch/sdk/dispatch-go.Function[go.shape.*uint8,go.shape.*uint8].entrypoint")
+	_types.RegisterFunc[func(input *httpv1.Request) func() any]("github.com/stealthrocket/dispatch/sdk/dispatch-go.Function[go.shape.*uint8,go.shape.*uint8].entrypoint")
 	_types.RegisterClosure[func() any, struct {
 		F  uintptr
-		X0 Function[*recordv1.BlockTriggerRequest, *recordv1.BlockTriggerResponse]
-		X1 *recordv1.BlockTriggerRequest
+		X0 Function[*httpv1.Request, *httpv1.Response]
+		X1 *httpv1.Request
 		D  uintptr
 	}]("github.com/stealthrocket/dispatch/sdk/dispatch-go.Function[go.shape.*uint8,go.shape.*uint8].entrypoint.func1")
 	_types.RegisterFunc[func(err error) string]("github.com/stealthrocket/dispatch/sdk/dispatch-go.errorTypeOf")
