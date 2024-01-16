@@ -126,13 +126,14 @@ func TestHandlerInvokeError(t *testing.T) {
 	if err := proto.Unmarshal(payload[:n], res); err != nil {
 		t.Fatalf("unexpected error unmarshaling result: %v", err)
 	}
-	switch coro := res.Coroutine.(type) {
-	case *coroutinev1.ExecuteResponse_Error:
-		if coro.Error.Type != "errorString" {
-			t.Errorf("expected coroutine to return an invoke error, got %q", coro.Error.Type)
+	switch coro := res.Directive.(type) {
+	case *coroutinev1.ExecuteResponse_Exit:
+		err := coro.Exit.GetResult().GetError()
+		if err.Type != "errorString" {
+			t.Errorf("expected coroutine to return an invoke error, got %q", err.Type)
 		}
-		if coro.Error.Message != "invoke error" {
-			t.Errorf("expected coroutine to return an invoke error with message %q, got %q", "invoke error", coro.Error.Message)
+		if err.Message != "invoke error" {
+			t.Errorf("expected coroutine to return an invoke error with message %q, got %q", "invoke error", err.Message)
 		}
 	default:
 		t.Errorf("expected coroutine to return an error, got %T", coro)
@@ -197,13 +198,14 @@ func TestHandlerInvokeQualifiedFunctionARN(t *testing.T) {
 		t.Errorf("expected coroutine to return a result with coroutine version %q, got %q", functionVersion, res.CoroutineVersion)
 	}
 
-	switch coro := res.Coroutine.(type) {
-	case *coroutinev1.ExecuteResponse_Output:
-		if coro.Output.TypeUrl != "type.googleapis.com/google.protobuf.StringValue" {
-			t.Errorf("expected coroutine to return an output of type %q, got %q", "type.googleapis.com/google.protobuf.StringValue", coro.Output.TypeUrl)
+	switch coro := res.Directive.(type) {
+	case *coroutinev1.ExecuteResponse_Exit:
+		out := coro.Exit.GetResult().GetOutput()
+		if out.TypeUrl != "type.googleapis.com/google.protobuf.StringValue" {
+			t.Errorf("expected coroutine to return an output of type %q, got %q", "type.googleapis.com/google.protobuf.StringValue", out.TypeUrl)
 		}
 		var output wrapperspb.StringValue
-		if err := coro.Output.UnmarshalTo(&output); err != nil {
+		if err := out.UnmarshalTo(&output); err != nil {
 			t.Fatalf("unexpected error unmarshaling output: %v", err)
 		}
 		if output.Value != "output" {
@@ -274,13 +276,14 @@ func TestHandlerInvokeUnqualifiedFunctionARN(t *testing.T) {
 		t.Errorf("expected coroutine to return a result with coroutine version %q, got %q", functionVersion, res.CoroutineVersion)
 	}
 
-	switch coro := res.Coroutine.(type) {
-	case *coroutinev1.ExecuteResponse_Output:
-		if coro.Output.TypeUrl != "type.googleapis.com/google.protobuf.StringValue" {
-			t.Errorf("expected coroutine to return an output of type %q, got %q", "type.googleapis.com/google.protobuf.StringValue", coro.Output.TypeUrl)
+	switch coro := res.Directive.(type) {
+	case *coroutinev1.ExecuteResponse_Exit:
+		out := coro.Exit.GetResult().GetOutput()
+		if out.TypeUrl != "type.googleapis.com/google.protobuf.StringValue" {
+			t.Errorf("expected coroutine to return an output of type %q, got %q", "type.googleapis.com/google.protobuf.StringValue", out.TypeUrl)
 		}
 		var output wrapperspb.StringValue
-		if err := coro.Output.UnmarshalTo(&output); err != nil {
+		if err := out.UnmarshalTo(&output); err != nil {
 			t.Fatalf("unexpected error unmarshaling output: %v", err)
 		}
 		if output.Value != "output" {

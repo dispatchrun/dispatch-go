@@ -3,6 +3,7 @@ package dispatchlambda
 import (
 	"context"
 	"encoding/base64"
+	statusv1 "github.com/stealthrocket/ring/proto/go/ring/status/v1"
 	"os"
 	"strings"
 
@@ -91,10 +92,17 @@ func (h handlerFunc[Input, Output]) Invoke(ctx context.Context, payload []byte) 
 	r, err := dispatch.Function[Input, Output](h).Execute(ctx, req)
 	if err != nil {
 		r = &coroutinev1.ExecuteResponse{
-			Coroutine: &coroutinev1.ExecuteResponse_Error{
-				Error: &coroutinev1.Error{
-					Type:    "invoke",
-					Message: err.Error(),
+			CoroutineUri:     functionName,
+			CoroutineVersion: functionVersion,
+			Status:           statusv1.Status_STATUS_PERMANENT_ERROR, // FIXME
+			Directive: &coroutinev1.ExecuteResponse_Exit{
+				Exit: &coroutinev1.Exit{
+					Result: &coroutinev1.Result{
+						Error: &coroutinev1.Error{
+							Type:    "invoke",
+							Message: err.Error(),
+						},
+					},
 				},
 			},
 		}

@@ -47,13 +47,14 @@ func TestFunctionExecuteError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	switch coro := r.Coroutine.(type) {
-	case *coroutinev1.ExecuteResponse_Error:
-		if coro.Error.Type != "errorString" {
-			t.Fatalf("unexpected coroutine error type: %s", coro.Error.Type)
+	switch coro := r.Directive.(type) {
+	case *coroutinev1.ExecuteResponse_Exit:
+		err := coro.Exit.GetResult().GetError()
+		if err.Type != "errorString" {
+			t.Fatalf("unexpected coroutine error type: %s", err.Type)
 		}
-		if coro.Error.Message != "oops" {
-			t.Fatalf("unexpected coroutine error message: %s", coro.Error.Message)
+		if err.Message != "oops" {
+			t.Fatalf("unexpected coroutine error message: %s", err.Message)
 		}
 	default:
 		t.Fatalf("unexpected coroutine response type: %T", coro)
@@ -79,13 +80,14 @@ func TestFunctionExecuteResult(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	switch coro := r.Coroutine.(type) {
-	case *coroutinev1.ExecuteResponse_Output:
-		if coro.Output.TypeUrl != "type.googleapis.com/google.protobuf.StringValue" {
-			t.Fatalf("unexpected coroutine output type: %s", coro.Output.TypeUrl)
+	switch coro := r.Directive.(type) {
+	case *coroutinev1.ExecuteResponse_Exit:
+		out := coro.Exit.GetResult().GetOutput()
+		if out.TypeUrl != "type.googleapis.com/google.protobuf.StringValue" {
+			t.Fatalf("unexpected coroutine output type: %s", out.TypeUrl)
 		}
 		var output wrapperspb.StringValue
-		if err := coro.Output.UnmarshalTo(&output); err != nil {
+		if err := out.UnmarshalTo(&output); err != nil {
 			t.Fatal(err)
 		}
 		if output.Value != "world" {

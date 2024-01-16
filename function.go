@@ -48,13 +48,11 @@ func (f Function[Input, Output]) Execute(ctx context.Context, req *coroutinev1.E
 	var zero Input
 
 	switch c := req.Coroutine.(type) {
-	//
-	//case *coroutinev1.ExecuteRequest_Resume:
-	//	coro = coroutine.NewWithReturn[any, any](f.entrypoint(zero))
-	//	if err := coro.Context().Unmarshal(c.Resume.State); err != nil {
-	//		return nil, err
-	//	}
-
+	case *coroutinev1.ExecuteRequest_PollResponse:
+		coro = coroutine.NewWithReturn[any, any](f.entrypoint(zero))
+		if err := coro.Context().Unmarshal(c.PollResponse.GetState()); err != nil {
+			return nil, err
+		}
 	case *coroutinev1.ExecuteRequest_Input:
 		var input Input
 		if c.Input != nil {
