@@ -40,7 +40,6 @@ type Function[Input, Output proto.Message] func(ctx context.Context, input Input
 // volatiles and the method acts as a simple invocation that runs the whole
 // function to completion.
 func (f Function[Input, Output]) Execute(ctx context.Context, req *coroutinev1.ExecuteRequest) (*coroutinev1.ExecuteResponse, error) {
-	fmt.Println("Executing function")
 	// TODO: since the coroutine yield and return values are the same the only
 	// common denominator is any. We could improve type safety if we were able
 	// to separate the two.
