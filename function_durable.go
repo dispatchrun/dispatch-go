@@ -3,19 +3,19 @@
 package dispatch
 
 import (
-	durationpb "google.golang.org/protobuf/types/known/durationpb"
-	anypb "google.golang.org/protobuf/types/known/anypb"
 	context "context"
-	reflect "reflect"
-	strings "strings"
-	httpv1 "github.com/stealthrocket/dispatch/proto/go/dispatch/http/v1"
 	fmt "fmt"
 	coroutine "github.com/stealthrocket/coroutine"
-	time "time"
+	httpv1 "github.com/stealthrocket/dispatch/proto/go/dispatch/http/v1"
 	coroutinev1 "github.com/stealthrocket/ring/proto/go/ring/coroutine/v1"
-	protowire "google.golang.org/protobuf/encoding/protowire"
 	statusv1 "github.com/stealthrocket/ring/proto/go/ring/status/v1"
+	protowire "google.golang.org/protobuf/encoding/protowire"
 	proto "google.golang.org/protobuf/proto"
+	anypb "google.golang.org/protobuf/types/known/anypb"
+	durationpb "google.golang.org/protobuf/types/known/durationpb"
+	reflect "reflect"
+	strings "strings"
+	time "time"
 )
 import _types "github.com/stealthrocket/coroutine/types"
 
