@@ -5,17 +5,18 @@ package dispatch
 import (
 	"context"
 	"fmt"
-	statusv1 "github.com/stealthrocket/ring/proto/go/ring/status/v1"
-	"google.golang.org/protobuf/types/known/durationpb"
 	"reflect"
 	"strings"
 	"time"
+
+	statusv1 "github.com/stealthrocket/ring/proto/go/ring/status/v1"
 
 	"github.com/stealthrocket/coroutine"
 	coroutinev1 "github.com/stealthrocket/ring/proto/go/ring/coroutine/v1"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 // Func is a constructor for Function values. In most cases, it is useful to
