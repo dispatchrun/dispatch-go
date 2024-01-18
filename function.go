@@ -5,8 +5,6 @@ package dispatch
 import (
 	"context"
 	"fmt"
-	"reflect"
-	"strings"
 	"time"
 
 	"github.com/stealthrocket/coroutine"
@@ -128,7 +126,7 @@ func (f Function[Input, Output]) Execute(ctx context.Context, req *coroutinev1.E
 				},
 			}
 		case error:
-			res.Status = statusv1.Status_STATUS_PERMANENT_ERROR // TODO: how do we categorize errors?
+			res.Status = errorStatusOf(ret)
 			res.Directive = &coroutinev1.ExecuteResponse_Exit{
 				Exit: &coroutinev1.Exit{
 					Result: &coroutinev1.Result{
@@ -170,19 +168,4 @@ func statusOf(msg proto.Message) statusv1.Status {
 		return m.Status()
 	}
 	return statusv1.Status_STATUS_OK
-}
-
-func errorTypeOf(err error) string {
-	if err == nil {
-		return ""
-	}
-	typ := reflect.TypeOf(err)
-	if name := typ.Name(); name != "" {
-		return name
-	}
-	str := typ.String()
-	if i := strings.LastIndexByte(str, '.'); i >= 0 {
-		return str[i+1:]
-	}
-	return str
 }
