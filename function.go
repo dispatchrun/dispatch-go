@@ -9,10 +9,9 @@ import (
 	"strings"
 	"time"
 
-	statusv1 "github.com/stealthrocket/ring/proto/go/ring/status/v1"
-
 	"github.com/stealthrocket/coroutine"
 	coroutinev1 "github.com/stealthrocket/ring/proto/go/ring/coroutine/v1"
+	statusv1 "github.com/stealthrocket/ring/proto/go/ring/status/v1"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -118,12 +117,13 @@ func (f Function[Input, Output]) Execute(ctx context.Context, req *coroutinev1.E
 		}
 	} else {
 		switch ret := coro.Result().(type) {
-		case *anypb.Any:
-			res.Status = statusv1.Status_STATUS_OK
+		case proto.Message:
+			output, _ := anypb.New(ret)
+			res.Status = statusOf(ret)
 			res.Directive = &coroutinev1.ExecuteResponse_Exit{
 				Exit: &coroutinev1.Exit{
 					Result: &coroutinev1.Result{
-						Output: ret,
+						Output: output,
 					},
 				},
 			}
@@ -157,16 +157,19 @@ func (f Function[Input, Output]) entrypoint(input Input) func() any {
 		// parent context passed to the Execute method. This is difficult to
 		// do right in durable mode because we shouldn't capture the parent
 		// context in the coroutine state.
-		v, err := f(context.TODO(), input)
-		if err != nil {
+		if res, err := f(context.TODO(), input); err != nil {
 			return err
+		} else {
+			return res
 		}
-		r, err := anypb.New(v)
-		if err != nil {
-			return err
-		}
-		return r
 	}
+}
+
+func statusOf(msg proto.Message) statusv1.Status {
+	if m, ok := msg.(interface{ Status() statusv1.Status }); ok {
+		return m.Status()
+	}
+	return statusv1.Status_STATUS_OK
 }
 
 func errorTypeOf(err error) string {
