@@ -9,7 +9,7 @@ import (
 	"github.com/aws/aws-lambda-go/lambda/messages"
 	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/stealthrocket/dispatch/sdk/dispatch-go/dispatchlambda"
-	coroutinev1 "github.com/stealthrocket/ring/proto/go/ring/coroutine/v1"
+	coroutinev1 "buf.build/gen/go/stealthrocket/ring/protocolbuffers/go/ring/coroutine/v1"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"

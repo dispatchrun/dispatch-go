@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"strings"
 
-	statusv1 "github.com/stealthrocket/ring/proto/go/ring/status/v1"
+	statusv1 "buf.build/gen/go/stealthrocket/ring/protocolbuffers/go/ring/status/v1"
 )
 
 func errorTypeOf(err error) string {

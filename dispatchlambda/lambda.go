@@ -11,7 +11,7 @@ import (
 	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/aws/aws-sdk-go/aws/arn"
 	"github.com/stealthrocket/dispatch/sdk/dispatch-go"
-	coroutinev1 "github.com/stealthrocket/ring/proto/go/ring/coroutine/v1"
+	coroutinev1 "buf.build/gen/go/stealthrocket/ring/protocolbuffers/go/ring/coroutine/v1"
 	"google.golang.org/protobuf/proto"
 )
 
