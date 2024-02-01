@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"strings"
 
-	statusv1 "buf.build/gen/go/stealthrocket/ring/protocolbuffers/go/ring/status/v1"
+	sdkv1 "github.com/stealthrocket/dispatch/gen/go/dispatch/sdk/v1"
 )
 
 func errorTypeOf(err error) string {
@@ -23,17 +23,17 @@ func errorTypeOf(err error) string {
 	return str
 }
 
-func errorStatusOf(err error) statusv1.Status {
+func errorStatusOf(err error) sdkv1.Status {
 	if err == nil {
-		return statusv1.Status_STATUS_OK
+		return sdkv1.Status_STATUS_OK
 	}
 	if isTimeout(err) {
-		return statusv1.Status_STATUS_TIMEOUT
+		return sdkv1.Status_STATUS_TIMEOUT
 	}
 	if isTemporary(err) {
-		return statusv1.Status_STATUS_TEMPORARY_ERROR
+		return sdkv1.Status_STATUS_TEMPORARY_ERROR
 	}
-	return statusv1.Status_STATUS_PERMANENT_ERROR
+	return sdkv1.Status_STATUS_PERMANENT_ERROR
 }
 
 func isTemporary(err error) bool {

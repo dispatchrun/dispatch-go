@@ -10,8 +10,8 @@ import (
 	"github.com/aws/aws-lambda-go/lambda/messages"
 	"github.com/aws/aws-lambda-go/lambdacontext"
 	"github.com/aws/aws-sdk-go/aws/arn"
+	sdkv1 "github.com/stealthrocket/dispatch/gen/go/dispatch/sdk/v1"
 	"github.com/stealthrocket/dispatch/sdk/dispatch-go"
-	coroutinev1 "buf.build/gen/go/stealthrocket/ring/protocolbuffers/go/ring/coroutine/v1"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -79,7 +79,7 @@ func (h handlerFunc[Input, Output]) Invoke(ctx context.Context, payload []byte) 
 		return nil, badRequest("function ARN is not a Lambda function ARN: missing version: " + functionArn.String())
 	}
 
-	req := new(coroutinev1.ExecuteRequest)
+	req := new(sdkv1.ExecuteRequest)
 	if err := proto.Unmarshal(rawPayload[:n], req); err != nil {
 		return nil, badRequest("raw payload did not contain a protobuf encoded execution request")
 	}

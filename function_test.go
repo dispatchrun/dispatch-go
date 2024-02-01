@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
+	sdkv1 "github.com/stealthrocket/dispatch/gen/go/dispatch/sdk/v1"
 	"github.com/stealthrocket/dispatch/sdk/dispatch-go"
-	coroutinev1 "buf.build/gen/go/stealthrocket/ring/protocolbuffers/go/ring/coroutine/v1"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -17,7 +17,7 @@ func TestFunctionExecuteInvalidCoroutineType(t *testing.T) {
 		return nil, nil
 	})
 
-	_, err := f.Execute(context.Background(), &coroutinev1.ExecuteRequest{})
+	_, err := f.Execute(context.Background(), &sdkv1.ExecuteRequest{})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -38,8 +38,8 @@ func TestFunctionExecuteError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r, err := f.Execute(context.Background(), &coroutinev1.ExecuteRequest{
-		Coroutine: &coroutinev1.ExecuteRequest_Input{
+	r, err := f.Execute(context.Background(), &sdkv1.ExecuteRequest{
+		Coroutine: &sdkv1.ExecuteRequest_Input{
 			Input: input,
 		},
 	})
@@ -48,7 +48,7 @@ func TestFunctionExecuteError(t *testing.T) {
 	}
 
 	switch coro := r.Directive.(type) {
-	case *coroutinev1.ExecuteResponse_Exit:
+	case *sdkv1.ExecuteResponse_Exit:
 		err := coro.Exit.GetResult().GetError()
 		if err.Type != "errorString" {
 			t.Fatalf("unexpected coroutine error type: %s", err.Type)
@@ -71,8 +71,8 @@ func TestFunctionExecuteResult(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r, err := f.Execute(context.Background(), &coroutinev1.ExecuteRequest{
-		Coroutine: &coroutinev1.ExecuteRequest_Input{
+	r, err := f.Execute(context.Background(), &sdkv1.ExecuteRequest{
+		Coroutine: &sdkv1.ExecuteRequest_Input{
 			Input: input,
 		},
 	})
@@ -81,7 +81,7 @@ func TestFunctionExecuteResult(t *testing.T) {
 	}
 
 	switch coro := r.Directive.(type) {
-	case *coroutinev1.ExecuteResponse_Exit:
+	case *sdkv1.ExecuteResponse_Exit:
 		out := coro.Exit.GetResult().GetOutput()
 		if out.TypeUrl != "type.googleapis.com/google.protobuf.StringValue" {
 			t.Fatalf("unexpected coroutine output type: %s", out.TypeUrl)
@@ -107,8 +107,8 @@ func TestFunctionExecuteSleep(t *testing.T) {
 	})
 
 	start := time.Now()
-	_, err := f.Execute(context.Background(), &coroutinev1.ExecuteRequest{
-		Coroutine: &coroutinev1.ExecuteRequest_Input{},
+	_, err := f.Execute(context.Background(), &sdkv1.ExecuteRequest{
+		Coroutine: &sdkv1.ExecuteRequest_Input{},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -128,8 +128,8 @@ func TestFunctionExecuteCancel(t *testing.T) {
 	cause := errors.New("oops")
 	cancel(cause)
 
-	_, err := f.Execute(ctx, &coroutinev1.ExecuteRequest{
-		Coroutine: &coroutinev1.ExecuteRequest_Input{},
+	_, err := f.Execute(ctx, &sdkv1.ExecuteRequest{
+		Coroutine: &sdkv1.ExecuteRequest_Input{},
 	})
 	if !errors.Is(err, cause) {
 		t.Fatalf("expected coroutine to return an error: %v", err)

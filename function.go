@@ -8,8 +8,7 @@ import (
 	"time"
 
 	"github.com/stealthrocket/coroutine"
-	coroutinev1 "buf.build/gen/go/stealthrocket/ring/protocolbuffers/go/ring/coroutine/v1"
-	statusv1 "buf.build/gen/go/stealthrocket/ring/protocolbuffers/go/ring/status/v1"
+	sdkv1 "github.com/stealthrocket/dispatch/gen/go/dispatch/sdk/v1"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -30,14 +29,14 @@ type Function[Input, Output proto.Message] func(ctx context.Context, input Input
 // Execute implements the executor contract on a dispatch function. The request
 // passed as argument is interpreted to either start a new coroutine or resume
 // from a previous state. If the coroutine yields, the returned response embeds
-// a coroutinev1.Suspend message capturing its state; otherwise, the response
+// a sdkv1.PollRequest message capturing its state; otherwise, the response
 // contains either the result of the execution or an error.
 //
 // Note that the ability to execute durable coroutines relies on the program
 // being compiled with -tags=durable. Without this build tag, coroutines are
 // volatiles and the method acts as a simple invocation that runs the whole
 // function to completion.
-func (f Function[Input, Output]) Execute(ctx context.Context, req *coroutinev1.ExecuteRequest) (*coroutinev1.ExecuteResponse, error) {
+func (f Function[Input, Output]) Execute(ctx context.Context, req *sdkv1.ExecuteRequest) (*sdkv1.ExecuteResponse, error) {
 	// TODO: since the coroutine yield and return values are the same the only
 	// common denominator is any. We could improve type safety if we were able
 	// to separate the two.
@@ -45,12 +44,12 @@ func (f Function[Input, Output]) Execute(ctx context.Context, req *coroutinev1.E
 	var zero Input
 
 	switch c := req.Coroutine.(type) {
-	case *coroutinev1.ExecuteRequest_PollResponse:
+	case *sdkv1.ExecuteRequest_PollResponse:
 		coro = coroutine.NewWithReturn[any, any](f.entrypoint(zero))
 		if err := coro.Context().Unmarshal(c.PollResponse.GetState()); err != nil {
 			return nil, err
 		}
-	case *coroutinev1.ExecuteRequest_Input:
+	case *sdkv1.ExecuteRequest_Input:
 		var input Input
 		if c.Input != nil {
 			message := zero.ProtoReflect().New()
@@ -69,7 +68,7 @@ func (f Function[Input, Output]) Execute(ctx context.Context, req *coroutinev1.E
 		return nil, fmt.Errorf("unsupported coroutine type: %T", c)
 	}
 
-	res := &coroutinev1.ExecuteResponse{
+	res := &sdkv1.ExecuteResponse{
 		CoroutineUri:     req.CoroutineUri,
 		CoroutineVersion: req.CoroutineVersion,
 	}
@@ -103,9 +102,9 @@ func (f Function[Input, Output]) Execute(ctx context.Context, req *coroutinev1.E
 		}
 		switch yield := coro.Recv().(type) {
 		case sleep:
-			res.Status = statusv1.Status_STATUS_OK // TODO: is it the expected status for suspended coroutines?
-			res.Directive = &coroutinev1.ExecuteResponse_Poll{
-				Poll: &coroutinev1.Poll{
+			res.Status = sdkv1.Status_STATUS_OK // TODO: is it the expected status for suspended coroutines?
+			res.Directive = &sdkv1.ExecuteResponse_Poll{
+				Poll: &sdkv1.Poll{
 					State:   state,
 					MaxWait: durationpb.New(time.Duration(yield)),
 				},
@@ -118,19 +117,19 @@ func (f Function[Input, Output]) Execute(ctx context.Context, req *coroutinev1.E
 		case proto.Message:
 			output, _ := anypb.New(ret)
 			res.Status = statusOf(ret)
-			res.Directive = &coroutinev1.ExecuteResponse_Exit{
-				Exit: &coroutinev1.Exit{
-					Result: &coroutinev1.Result{
+			res.Directive = &sdkv1.ExecuteResponse_Exit{
+				Exit: &sdkv1.Exit{
+					Result: &sdkv1.Result{
 						Output: output,
 					},
 				},
 			}
 		case error:
 			res.Status = errorStatusOf(ret)
-			res.Directive = &coroutinev1.ExecuteResponse_Exit{
-				Exit: &coroutinev1.Exit{
-					Result: &coroutinev1.Result{
-						Error: &coroutinev1.Error{
+			res.Directive = &sdkv1.ExecuteResponse_Exit{
+				Exit: &sdkv1.Exit{
+					Result: &sdkv1.Result{
+						Error: &sdkv1.Error{
 							Type:    errorTypeOf(ret),
 							Message: ret.Error(),
 						},
@@ -163,9 +162,9 @@ func (f Function[Input, Output]) entrypoint(input Input) func() any {
 	}
 }
 
-func statusOf(msg proto.Message) statusv1.Status {
-	if m, ok := msg.(interface{ Status() statusv1.Status }); ok {
+func statusOf(msg proto.Message) sdkv1.Status {
+	if m, ok := msg.(interface{ Status() sdkv1.Status }); ok {
 		return m.Status()
 	}
-	return statusv1.Status_STATUS_OK
+	return sdkv1.Status_STATUS_OK
 }

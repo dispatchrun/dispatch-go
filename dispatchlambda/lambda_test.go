@@ -8,8 +8,8 @@ import (
 
 	"github.com/aws/aws-lambda-go/lambda/messages"
 	"github.com/aws/aws-lambda-go/lambdacontext"
+	sdkv1 "github.com/stealthrocket/dispatch/gen/go/dispatch/sdk/v1"
 	"github.com/stealthrocket/dispatch/sdk/dispatch-go/dispatchlambda"
-	coroutinev1 "buf.build/gen/go/stealthrocket/ring/protocolbuffers/go/ring/coroutine/v1"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
@@ -96,8 +96,8 @@ func TestHandlerInvokeError(t *testing.T) {
 		t.Fatalf("unexpected error creating input: %v", err)
 	}
 
-	req := &coroutinev1.ExecuteRequest{
-		Coroutine: &coroutinev1.ExecuteRequest_Input{
+	req := &sdkv1.ExecuteRequest{
+		Coroutine: &sdkv1.ExecuteRequest_Input{
 			Input: input,
 		},
 	}
@@ -122,12 +122,12 @@ func TestHandlerInvokeError(t *testing.T) {
 		t.Fatalf("unexpected error decoding payload: %v", err)
 	}
 
-	res := new(coroutinev1.ExecuteResponse)
+	res := new(sdkv1.ExecuteResponse)
 	if err := proto.Unmarshal(payload[:n], res); err != nil {
 		t.Fatalf("unexpected error unmarshaling result: %v", err)
 	}
 	switch coro := res.Directive.(type) {
-	case *coroutinev1.ExecuteResponse_Exit:
+	case *sdkv1.ExecuteResponse_Exit:
 		err := coro.Exit.GetResult().GetError()
 		if err.Type != "errorString" {
 			t.Errorf("expected coroutine to return an invoke error, got %q", err.Type)
@@ -160,8 +160,8 @@ func TestHandlerInvokeQualifiedFunctionARN(t *testing.T) {
 		t.Fatalf("unexpected error creating input: %v", err)
 	}
 
-	req := &coroutinev1.ExecuteRequest{
-		Coroutine: &coroutinev1.ExecuteRequest_Input{
+	req := &sdkv1.ExecuteRequest{
+		Coroutine: &sdkv1.ExecuteRequest_Input{
 			Input: input,
 		},
 	}
@@ -186,7 +186,7 @@ func TestHandlerInvokeQualifiedFunctionARN(t *testing.T) {
 		t.Fatalf("unexpected error decoding payload: %v", err)
 	}
 
-	res := new(coroutinev1.ExecuteResponse)
+	res := new(sdkv1.ExecuteResponse)
 	if err := proto.Unmarshal(payload[:n], res); err != nil {
 		t.Fatalf("unexpected error unmarshaling result: %v", err)
 	}
@@ -199,7 +199,7 @@ func TestHandlerInvokeQualifiedFunctionARN(t *testing.T) {
 	}
 
 	switch coro := res.Directive.(type) {
-	case *coroutinev1.ExecuteResponse_Exit:
+	case *sdkv1.ExecuteResponse_Exit:
 		out := coro.Exit.GetResult().GetOutput()
 		if out.TypeUrl != "type.googleapis.com/google.protobuf.StringValue" {
 			t.Errorf("expected coroutine to return an output of type %q, got %q", "type.googleapis.com/google.protobuf.StringValue", out.TypeUrl)
@@ -238,8 +238,8 @@ func TestHandlerInvokeUnqualifiedFunctionARN(t *testing.T) {
 		t.Fatalf("unexpected error creating input: %v", err)
 	}
 
-	req := &coroutinev1.ExecuteRequest{
-		Coroutine: &coroutinev1.ExecuteRequest_Input{
+	req := &sdkv1.ExecuteRequest{
+		Coroutine: &sdkv1.ExecuteRequest_Input{
 			Input: input,
 		},
 	}
@@ -264,7 +264,7 @@ func TestHandlerInvokeUnqualifiedFunctionARN(t *testing.T) {
 		t.Fatalf("unexpected error decoding payload: %v", err)
 	}
 
-	res := new(coroutinev1.ExecuteResponse)
+	res := new(sdkv1.ExecuteResponse)
 	if err := proto.Unmarshal(payload[:n], res); err != nil {
 		t.Fatalf("unexpected error unmarshaling result: %v", err)
 	}
@@ -277,7 +277,7 @@ func TestHandlerInvokeUnqualifiedFunctionARN(t *testing.T) {
 	}
 
 	switch coro := res.Directive.(type) {
-	case *coroutinev1.ExecuteResponse_Exit:
+	case *sdkv1.ExecuteResponse_Exit:
 		out := coro.Exit.GetResult().GetOutput()
 		if out.TypeUrl != "type.googleapis.com/google.protobuf.StringValue" {
 			t.Errorf("expected coroutine to return an output of type %q, got %q", "type.googleapis.com/google.protobuf.StringValue", out.TypeUrl)

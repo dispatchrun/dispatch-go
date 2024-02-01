@@ -5,18 +5,18 @@ import (
 	"fmt"
 	"testing"
 
-	statusv1 "buf.build/gen/go/stealthrocket/ring/protocolbuffers/go/ring/status/v1"
+	sdkv1 "github.com/stealthrocket/dispatch/gen/go/dispatch/sdk/v1"
 )
 
 func TestErrorStatusOf(t *testing.T) {
 	tests := []struct {
 		error  error
-		status statusv1.Status
+		status sdkv1.Status
 	}{
-		{nil, statusv1.Status_STATUS_OK},
-		{temporaryError{}, statusv1.Status_STATUS_TEMPORARY_ERROR},
-		{timeoutError{}, statusv1.Status_STATUS_TIMEOUT},
-		{errors.New("permanent"), statusv1.Status_STATUS_PERMANENT_ERROR},
+		{nil, sdkv1.Status_STATUS_OK},
+		{temporaryError{}, sdkv1.Status_STATUS_TEMPORARY_ERROR},
+		{timeoutError{}, sdkv1.Status_STATUS_TIMEOUT},
+		{errors.New("permanent"), sdkv1.Status_STATUS_PERMANENT_ERROR},
 	}
 
 	for _, test := range tests {
