@@ -12,12 +12,12 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-func TestFunctionExecuteInvalidCoroutineType(t *testing.T) {
+func TestFunctionRunInvalidCoroutineType(t *testing.T) {
 	f := dispatch.Func(func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
 		return nil, nil
 	})
 
-	_, err := f.Execute(context.Background(), &sdkv1.ExecuteRequest{})
+	_, err := f.Run(context.Background(), &sdkv1.RunRequest{})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -26,7 +26,7 @@ func TestFunctionExecuteInvalidCoroutineType(t *testing.T) {
 	}
 }
 
-func TestFunctionExecuteError(t *testing.T) {
+func TestFunctionRunError(t *testing.T) {
 	oops := errors.New("oops")
 
 	f := dispatch.Func(func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
@@ -38,8 +38,8 @@ func TestFunctionExecuteError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r, err := f.Execute(context.Background(), &sdkv1.ExecuteRequest{
-		Coroutine: &sdkv1.ExecuteRequest_Input{
+	r, err := f.Run(context.Background(), &sdkv1.RunRequest{
+		Directive: &sdkv1.RunRequest_Input{
 			Input: input,
 		},
 	})
@@ -48,7 +48,7 @@ func TestFunctionExecuteError(t *testing.T) {
 	}
 
 	switch coro := r.Directive.(type) {
-	case *sdkv1.ExecuteResponse_Exit:
+	case *sdkv1.RunResponse_Exit:
 		err := coro.Exit.GetResult().GetError()
 		if err.Type != "errorString" {
 			t.Fatalf("unexpected coroutine error type: %s", err.Type)
@@ -61,7 +61,7 @@ func TestFunctionExecuteError(t *testing.T) {
 	}
 }
 
-func TestFunctionExecuteResult(t *testing.T) {
+func TestFunctionRunResult(t *testing.T) {
 	f := dispatch.Func(func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
 		return wrapperspb.String("world"), nil
 	})
@@ -71,8 +71,8 @@ func TestFunctionExecuteResult(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r, err := f.Execute(context.Background(), &sdkv1.ExecuteRequest{
-		Coroutine: &sdkv1.ExecuteRequest_Input{
+	r, err := f.Run(context.Background(), &sdkv1.RunRequest{
+		Directive: &sdkv1.RunRequest_Input{
 			Input: input,
 		},
 	})
@@ -81,7 +81,7 @@ func TestFunctionExecuteResult(t *testing.T) {
 	}
 
 	switch coro := r.Directive.(type) {
-	case *sdkv1.ExecuteResponse_Exit:
+	case *sdkv1.RunResponse_Exit:
 		out := coro.Exit.GetResult().GetOutput()
 		if out.TypeUrl != "type.googleapis.com/google.protobuf.StringValue" {
 			t.Fatalf("unexpected coroutine output type: %s", out.TypeUrl)
@@ -98,7 +98,7 @@ func TestFunctionExecuteResult(t *testing.T) {
 	}
 }
 
-func TestFunctionExecuteSleep(t *testing.T) {
+func TestFunctionRunSleep(t *testing.T) {
 	const sleep = 20 * time.Millisecond
 
 	f := dispatch.Func(func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
@@ -107,8 +107,8 @@ func TestFunctionExecuteSleep(t *testing.T) {
 	})
 
 	start := time.Now()
-	_, err := f.Execute(context.Background(), &sdkv1.ExecuteRequest{
-		Coroutine: &sdkv1.ExecuteRequest_Input{},
+	_, err := f.Run(context.Background(), &sdkv1.RunRequest{
+		Directive: &sdkv1.RunRequest_Input{},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -118,7 +118,7 @@ func TestFunctionExecuteSleep(t *testing.T) {
 	}
 }
 
-func TestFunctionExecuteCancel(t *testing.T) {
+func TestFunctionRunCancel(t *testing.T) {
 	f := dispatch.Func(func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
 		dispatch.Sleep(10 * time.Second) // won't wait for that long beccause the context is canceled
 		return req, nil
@@ -128,8 +128,8 @@ func TestFunctionExecuteCancel(t *testing.T) {
 	cause := errors.New("oops")
 	cancel(cause)
 
-	_, err := f.Execute(ctx, &sdkv1.ExecuteRequest{
-		Coroutine: &sdkv1.ExecuteRequest_Input{},
+	_, err := f.Run(ctx, &sdkv1.RunRequest{
+		Directive: &sdkv1.RunRequest_Input{},
 	})
 	if !errors.Is(err, cause) {
 		t.Fatalf("expected coroutine to return an error: %v", err)

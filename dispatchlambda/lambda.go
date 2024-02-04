@@ -3,19 +3,13 @@ package dispatchlambda
 import (
 	"context"
 	"encoding/base64"
-	"os"
-	"strings"
 
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-lambda-go/lambda/messages"
-	"github.com/aws/aws-lambda-go/lambdacontext"
-	"github.com/aws/aws-sdk-go/aws/arn"
 	sdkv1 "github.com/stealthrocket/dispatch/gen/go/dispatch/sdk/v1"
 	"github.com/stealthrocket/dispatch/sdk/dispatch-go"
 	"google.golang.org/protobuf/proto"
 )
-
-var dispatchCoroutineVersion = os.Getenv("DISPATCH_COROUTINE_VERSION")
 
 // Start is a shortcut to start a Lambda function handler executing the given
 // dispatch function when invoked.
@@ -49,55 +43,15 @@ func (h handlerFunc[Input, Output]) Invoke(ctx context.Context, payload []byte) 
 		return nil, badRequest("payload is not base64 encoded")
 	}
 
-	lambdaContext, ok := lambdacontext.FromContext(ctx)
-	if !ok {
-		lambdaContext = new(lambdacontext.LambdaContext)
-	}
-	if lambdaContext.InvokedFunctionArn == "" {
-		return nil, badRequest("missing function ARN")
-	}
-	functionArn, err := arn.Parse(lambdaContext.InvokedFunctionArn)
-	if err != nil {
-		return nil, badRequest("malformed function ARN")
-	}
-	if !strings.HasPrefix(functionArn.Resource, "function:") {
-		return nil, badRequest("function ARN is not a Lambda function ARN: invalid prefix: " + functionArn.String())
-	}
-	functionName := strings.TrimPrefix(functionArn.Resource, "function:")
-	_, functionVersion, ok := strings.Cut(functionName, ":")
-	if ok { // turn the function ARN into an unqualified version
-		functionName = lambdaContext.InvokedFunctionArn
-		functionName = strings.TrimSuffix(functionName, functionVersion)
-		functionName = strings.TrimSuffix(functionName, ":")
-	} else if functionArn.AccountID == "012345678912" { // local dev with emulator
-		functionVersion = "1"
-	} else { // already an unqualified function ARN
-		functionName = lambdaContext.InvokedFunctionArn
-		functionVersion = dispatchCoroutineVersion
-	}
-	if functionVersion == "" {
-		return nil, badRequest("function ARN is not a Lambda function ARN: missing version: " + functionArn.String())
-	}
-
-	req := new(sdkv1.ExecuteRequest)
+	req := new(sdkv1.RunRequest)
 	if err := proto.Unmarshal(rawPayload[:n], req); err != nil {
 		return nil, badRequest("raw payload did not contain a protobuf encoded execution request")
 	}
 
-	// Those fields are ignored in the lambda dispatch handler, the Lambda
-	// function is the source of truth defining the coroutine ID and version.
-	req.CoroutineUri, req.CoroutineVersion = functionName, functionVersion
-
-	r, err := dispatch.Function[Input, Output](h).Execute(ctx, req)
+	r, err := dispatch.Function[Input, Output](h).Run(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-
-	// When invoking an alias like $LATEST, Lambda returns the alias as the
-	// ExecutedVersion field in the respose. However, in order to attach the
-	// coroutine state to the version of the code that it was executed on, we
-	// need to return it explicitly in the response.
-	r.CoroutineUri, r.CoroutineVersion = functionName, functionVersion
 
 	rawResponse, err := proto.Marshal(r)
 	if err != nil {

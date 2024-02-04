@@ -26,30 +26,31 @@ func Func[Input, Output proto.Message](f func(context.Context, Input) (Output, e
 // durable coroutine.
 type Function[Input, Output proto.Message] func(ctx context.Context, input Input) (Output, error)
 
-// Execute implements the executor contract on a dispatch function. The request
-// passed as argument is interpreted to either start a new coroutine or resume
-// from a previous state. If the coroutine yields, the returned response embeds
-// a sdkv1.PollRequest message capturing its state; otherwise, the response
-// contains either the result of the execution or an error.
+// Run implements a dispatch function.
+//
+// The request passed as argument is interpreted to either start a new coroutine
+// or resume from a previous state. If the coroutine yields, the returned
+// response embeds a sdkv1.Poll message capturing its state; otherwise, the
+// response contains either the result of the execution or an error.
 //
 // Note that the ability to execute durable coroutines relies on the program
 // being compiled with -tags=durable. Without this build tag, coroutines are
 // volatiles and the method acts as a simple invocation that runs the whole
 // function to completion.
-func (f Function[Input, Output]) Execute(ctx context.Context, req *sdkv1.ExecuteRequest) (*sdkv1.ExecuteResponse, error) {
+func (f Function[Input, Output]) Run(ctx context.Context, req *sdkv1.RunRequest) (*sdkv1.RunResponse, error) {
 	// TODO: since the coroutine yield and return values are the same the only
 	// common denominator is any. We could improve type safety if we were able
 	// to separate the two.
 	var coro coroutine.Coroutine[any, any]
 	var zero Input
 
-	switch c := req.Coroutine.(type) {
-	case *sdkv1.ExecuteRequest_PollResponse:
+	switch c := req.Directive.(type) {
+	case *sdkv1.RunRequest_PollResult:
 		coro = coroutine.NewWithReturn[any, any](f.entrypoint(zero))
-		if err := coro.Context().Unmarshal(c.PollResponse.GetState()); err != nil {
+		if err := coro.Context().Unmarshal(c.PollResult.GetCoroutineState()); err != nil {
 			return nil, err
 		}
-	case *sdkv1.ExecuteRequest_Input:
+	case *sdkv1.RunRequest_Input:
 		var input Input
 		if c.Input != nil {
 			message := zero.ProtoReflect().New()
@@ -68,9 +69,8 @@ func (f Function[Input, Output]) Execute(ctx context.Context, req *sdkv1.Execute
 		return nil, fmt.Errorf("unsupported coroutine type: %T", c)
 	}
 
-	res := &sdkv1.ExecuteResponse{
-		CoroutineUri:     req.CoroutineUri,
-		CoroutineVersion: req.CoroutineVersion,
+	res := &sdkv1.RunResponse{
+		Status: sdkv1.Status_STATUS_OK,
 	}
 
 	// When running in volatile mode, we cannot snapshot the coroutine state
@@ -96,17 +96,17 @@ func (f Function[Input, Output]) Execute(ctx context.Context, req *sdkv1.Execute
 	}
 
 	if coro.Next() {
-		state, err := coro.Context().Marshal()
+		coroutineState, err := coro.Context().Marshal()
 		if err != nil {
 			return nil, err
 		}
 		switch yield := coro.Recv().(type) {
 		case sleep:
 			res.Status = sdkv1.Status_STATUS_OK // TODO: is it the expected status for suspended coroutines?
-			res.Directive = &sdkv1.ExecuteResponse_Poll{
+			res.Directive = &sdkv1.RunResponse_Poll{
 				Poll: &sdkv1.Poll{
-					State:   state,
-					MaxWait: durationpb.New(time.Duration(yield)),
+					CoroutineState: coroutineState,
+					MaxWait:        durationpb.New(time.Duration(yield)),
 				},
 			}
 		default:
@@ -117,18 +117,18 @@ func (f Function[Input, Output]) Execute(ctx context.Context, req *sdkv1.Execute
 		case proto.Message:
 			output, _ := anypb.New(ret)
 			res.Status = statusOf(ret)
-			res.Directive = &sdkv1.ExecuteResponse_Exit{
+			res.Directive = &sdkv1.RunResponse_Exit{
 				Exit: &sdkv1.Exit{
-					Result: &sdkv1.Result{
+					Result: &sdkv1.CallResult{
 						Output: output,
 					},
 				},
 			}
 		case error:
 			res.Status = errorStatusOf(ret)
-			res.Directive = &sdkv1.ExecuteResponse_Exit{
+			res.Directive = &sdkv1.RunResponse_Exit{
 				Exit: &sdkv1.Exit{
-					Result: &sdkv1.Result{
+					Result: &sdkv1.CallResult{
 						Error: &sdkv1.Error{
 							Type:    errorTypeOf(ret),
 							Message: ret.Error(),
@@ -151,7 +151,7 @@ func (f Function[Input, Output]) entrypoint(input Input) func() any {
 	return func() any {
 		// The context that gets passed as argument here should be recreated
 		// each time the coroutine is resumed, ideally inheriting from the
-		// parent context passed to the Execute method. This is difficult to
+		// parent context passed to the Run method. This is difficult to
 		// do right in durable mode because we shouldn't capture the parent
 		// context in the coroutine state.
 		if res, err := f(context.TODO(), input); err != nil {
