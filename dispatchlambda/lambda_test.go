@@ -6,9 +6,9 @@ import (
 	"errors"
 	"testing"
 
+	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-sdk/protocolbuffers/go/dispatch/sdk/v1"
 	"github.com/aws/aws-lambda-go/lambda/messages"
 	"github.com/aws/aws-lambda-go/lambdacontext"
-	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-sdk/protocolbuffers/go/dispatch/sdk/v1"
 	"github.com/stealthrocket/dispatch/sdk/dispatch-go/dispatchlambda"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"

@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/base64"
 
+	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-sdk/protocolbuffers/go/dispatch/sdk/v1"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-lambda-go/lambda/messages"
-	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-sdk/protocolbuffers/go/dispatch/sdk/v1"
 	"github.com/stealthrocket/dispatch/sdk/dispatch-go"
 	"google.golang.org/protobuf/proto"
 )
