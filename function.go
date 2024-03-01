@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-sdk/protocolbuffers/go/dispatch/sdk/v1"
+	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
 	"github.com/stealthrocket/coroutine"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"

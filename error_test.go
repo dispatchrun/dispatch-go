@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-sdk/protocolbuffers/go/dispatch/sdk/v1"
+	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
 )
 
 func TestErrorStatusOf(t *testing.T) {
