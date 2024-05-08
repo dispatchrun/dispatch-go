@@ -7,7 +7,7 @@ import (
 	"time"
 
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
-	"github.com/stealthrocket/dataplane/sdk/dispatch-go"
+	"github.com/dispatchrun/dispatch-go"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )

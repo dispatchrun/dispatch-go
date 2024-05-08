@@ -13,8 +13,6 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/stealthrocket/coroutine v0.7.0 h1:7zdUw1JKy50gDcY8UYXYoyFBRmdfTBJhRLVxrEahMIg=
 github.com/stealthrocket/coroutine v0.7.0/go.mod h1:Hjg/Wcmn8ybpji5FQnxuY5D+eU8lUV0eD0bV0GMvUwI=
-github.com/stealthrocket/dataplane v0.0.0-20240429041713-e5b6a2ec128c h1:fHI9aUYctsUDUX3n7ijRL7PgzT4Il74tC1QJh16qE9I=
-github.com/stealthrocket/dataplane v0.0.0-20240429041713-e5b6a2ec128c/go.mod h1:mSuEIpETkpBh221CuZmjvWbztkTP/36UqmxspffR/jM=
 github.com/stretchr/testify v1.7.2 h1:4jaiDzPyXQvSd7D0EjG45355tLlV3VOECpq10pLC+8s=
 github.com/stretchr/testify v1.7.2/go.mod h1:R6va5+xMeoiuVRoj+gSkQ7d3FALtqAAGI1FQKckRals=
 golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543 h1:E7g+9GITq07hpfrRu66IVDexMakfv52eLZ2CXBWiKr4=
