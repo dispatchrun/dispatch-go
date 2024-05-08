@@ -9,7 +9,7 @@ import (
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
 	"github.com/aws/aws-lambda-go/lambda/messages"
 	"github.com/aws/aws-lambda-go/lambdacontext"
-	"github.com/stealthrocket/dataplane/sdk/dispatch-go/dispatchlambda"
+	"github.com/dispatchrun/dispatch-go/dispatchlambda"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"

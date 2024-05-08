@@ -7,7 +7,7 @@ import (
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-lambda-go/lambda/messages"
-	"github.com/stealthrocket/dataplane/sdk/dispatch-go"
+	"github.com/dispatchrun/dispatch-go"
 	"google.golang.org/protobuf/proto"
 )
 
