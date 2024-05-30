@@ -13,17 +13,19 @@ import (
 
 // Start is a shortcut to start a Lambda function handler executing the given
 // dispatch function when invoked.
-func Start[Input, Output proto.Message](f dispatch.Function[Input, Output]) {
+func Start[Input, Output proto.Message](f *dispatch.Function[Input, Output]) {
 	lambda.Start(Handler(f))
 }
 
 // Handler creates a lambda function handler executing the given dispatch
 // function when invoked.
-func Handler[Input, Output proto.Message](f dispatch.Function[Input, Output]) lambda.Handler {
-	return handlerFunc[Input, Output](f)
+func Handler[Input, Output proto.Message](fn *dispatch.Function[Input, Output]) lambda.Handler {
+	return &handlerFunc[Input, Output]{fn}
 }
 
-type handlerFunc[Input, Output proto.Message] dispatch.Function[Input, Output]
+type handlerFunc[Input, Output proto.Message] struct {
+	fn *dispatch.Function[Input, Output]
+}
 
 func (h handlerFunc[Input, Output]) Invoke(ctx context.Context, payload []byte) ([]byte, error) {
 	if len(payload) == 0 {
@@ -48,12 +50,9 @@ func (h handlerFunc[Input, Output]) Invoke(ctx context.Context, payload []byte) 
 		return nil, badRequest("raw payload did not contain a protobuf encoded execution request")
 	}
 
-	r, err := dispatch.Function[Input, Output](h).Run(ctx, req)
-	if err != nil {
-		return nil, err
-	}
+	res := h.fn.Run(ctx, req)
 
-	rawResponse, err := proto.Marshal(r)
+	rawResponse, err := proto.Marshal(res)
 	if err != nil {
 		return nil, err
 	}

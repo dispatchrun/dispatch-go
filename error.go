@@ -72,3 +72,22 @@ type temporary interface {
 type timeout interface {
 	Timeout() bool
 }
+
+func errResponse(status sdkv1.Status, err error) *sdkv1.RunResponse {
+	if status == sdkv1.Status_STATUS_UNSPECIFIED {
+		status = errorStatusOf(err)
+	}
+	return &sdkv1.RunResponse{
+		Status: status,
+		Directive: &sdkv1.RunResponse_Exit{
+			Exit: &sdkv1.Exit{
+				Result: &sdkv1.CallResult{
+					Error: &sdkv1.Error{
+						Type:    errorTypeOf(err),
+						Message: err.Error(),
+					},
+				},
+			},
+		},
+	}
+}

@@ -13,23 +13,20 @@ import (
 )
 
 func TestFunctionRunInvalidCoroutineType(t *testing.T) {
-	f := dispatch.Func(func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
+	fn := dispatch.NewFunction("foo", func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
 		return nil, nil
 	})
 
-	_, err := f.Run(context.Background(), &sdkv1.RunRequest{})
-	if err == nil {
-		t.Fatal("expected error")
-	}
-	if err.Error() != "unsupported coroutine type: <nil>" {
-		t.Fatalf("unexpected error: %s", err)
+	res := fn.Run(context.Background(), &sdkv1.RunRequest{})
+	if err := res.GetExit().GetResult().GetError(); err == nil || err.Message != "unsupported coroutine directive: <nil>" {
+		t.Fatalf("unexpected error: %#v", err)
 	}
 }
 
 func TestFunctionRunError(t *testing.T) {
 	oops := errors.New("oops")
 
-	f := dispatch.Func(func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
+	fn := dispatch.NewFunction("foo", func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
 		return nil, oops
 	})
 
@@ -38,16 +35,13 @@ func TestFunctionRunError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r, err := f.Run(context.Background(), &sdkv1.RunRequest{
+	res := fn.Run(context.Background(), &sdkv1.RunRequest{
 		Directive: &sdkv1.RunRequest_Input{
 			Input: input,
 		},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	switch coro := r.Directive.(type) {
+	switch coro := res.Directive.(type) {
 	case *sdkv1.RunResponse_Exit:
 		err := coro.Exit.GetResult().GetError()
 		if err.Type != "errorString" {
@@ -62,7 +56,7 @@ func TestFunctionRunError(t *testing.T) {
 }
 
 func TestFunctionRunResult(t *testing.T) {
-	f := dispatch.Func(func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
+	fn := dispatch.NewFunction("foo", func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
 		return wrapperspb.String("world"), nil
 	})
 
@@ -71,16 +65,13 @@ func TestFunctionRunResult(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r, err := f.Run(context.Background(), &sdkv1.RunRequest{
+	res := fn.Run(context.Background(), &sdkv1.RunRequest{
 		Directive: &sdkv1.RunRequest_Input{
 			Input: input,
 		},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	switch coro := r.Directive.(type) {
+	switch coro := res.Directive.(type) {
 	case *sdkv1.RunResponse_Exit:
 		out := coro.Exit.GetResult().GetOutput()
 		if out.TypeUrl != "type.googleapis.com/google.protobuf.StringValue" {
@@ -101,17 +92,18 @@ func TestFunctionRunResult(t *testing.T) {
 func TestFunctionRunSleep(t *testing.T) {
 	const sleep = 20 * time.Millisecond
 
-	f := dispatch.Func(func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
+	fn := dispatch.NewFunction("sleeper", func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
 		dispatch.Sleep(sleep)
 		return req, nil
 	})
 
 	start := time.Now()
-	_, err := f.Run(context.Background(), &sdkv1.RunRequest{
+	res := fn.Run(context.Background(), &sdkv1.RunRequest{
 		Directive: &sdkv1.RunRequest_Input{},
 	})
-	if err != nil {
-		t.Fatal(err)
+	result := res.GetExit().GetResult()
+	if err := result.GetError(); err != nil {
+		t.Fatalf("unexpected error: %s %s", err.Type, err.Message)
 	}
 	if delay := time.Since(start); delay < sleep {
 		t.Fatalf("expected coroutine to sleep for at least %s, slept for %s", sleep, delay)
@@ -119,7 +111,7 @@ func TestFunctionRunSleep(t *testing.T) {
 }
 
 func TestFunctionRunCancel(t *testing.T) {
-	f := dispatch.Func(func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
+	fn := dispatch.NewFunction("sleeper", func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
 		dispatch.Sleep(10 * time.Second) // won't wait for that long beccause the context is canceled
 		return req, nil
 	})
@@ -128,10 +120,10 @@ func TestFunctionRunCancel(t *testing.T) {
 	cause := errors.New("oops")
 	cancel(cause)
 
-	_, err := f.Run(ctx, &sdkv1.RunRequest{
+	res := fn.Run(ctx, &sdkv1.RunRequest{
 		Directive: &sdkv1.RunRequest_Input{},
 	})
-	if !errors.Is(err, cause) {
-		t.Fatalf("expected coroutine to return an error: %v", err)
+	if err := res.GetExit().GetResult().GetError(); err == nil || err.Message != "oops" {
+		t.Fatalf("unexpected error: %#v", err)
 	}
 }

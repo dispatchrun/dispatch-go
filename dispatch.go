@@ -22,6 +22,9 @@ type Dispatch struct {
 	// from. If nil, environment variables are read from
 	// os.Environ().
 	Env []string
+
+	// Registry is the registry of functions to dispatch calls to.
+	Registry
 }
 
 var _ sdkv1connect.FunctionServiceHandler = (*Dispatch)(nil)
@@ -30,7 +33,8 @@ var _ sdkv1connect.FunctionServiceHandler = (*Dispatch)(nil)
 //
 // Run implements the FunctionServiceHandler interface.
 func (d *Dispatch) Run(ctx context.Context, req *connect.Request[sdkv1.RunRequest]) (*connect.Response[sdkv1.RunResponse], error) {
-	panic("not implemented")
+	res := d.Registry.Run(ctx, req.Msg)
+	return connect.NewResponse(res), nil
 }
 
 // Handler returns an HTTP handler for Dispatch, along with the path
