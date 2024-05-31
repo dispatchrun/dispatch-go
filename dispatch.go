@@ -13,11 +13,11 @@ import (
 
 // Dispatch is a Dispatch endpoint.
 type Dispatch struct {
-	// Endpoint is the URL that this Dispatch endpoint
+	// EndpointUrl is the URL that this Dispatch endpoint
 	// is accessible from.
 	//
-	// If omitted
-	Endpoint string
+	// If omitted, the value of DISPATCH_ENDPOINT_URL is used.
+	EndpointUrl string
 
 	// Env are environment variables to parse configuration
 	// from. If nil, environment variables are read from
@@ -83,8 +83,8 @@ func (d *Dispatch) endpoint() string {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	if d.Endpoint == "" {
-		d.Endpoint, _ = getenv(d.Env, "DISPATCH_ENDPOINT")
+	if d.EndpointUrl == "" {
+		d.EndpointUrl, _ = getenv(d.Env, "DISPATCH_ENDPOINT_URL")
 	}
-	return d.Endpoint
+	return d.EndpointUrl
 }
