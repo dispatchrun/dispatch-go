@@ -3,6 +3,7 @@ package dispatch
 import (
 	"context"
 	"net/http"
+	"sync"
 
 	"buf.build/gen/go/stealthrocket/dispatch-proto/connectrpc/go/dispatch/sdk/v1/sdkv1connect"
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
@@ -25,6 +26,11 @@ type Dispatch struct {
 
 	// Registry is the registry of functions to dispatch calls to.
 	Registry
+
+	// Client is the client to use when dispatching function calls.
+	Client
+
+	mu sync.Mutex
 }
 
 var _ sdkv1connect.FunctionServiceHandler = (*Dispatch)(nil)
@@ -58,4 +64,27 @@ func (d *Dispatch) ListenAndServe(addr string) error {
 		Handler: handler,
 	}
 	return server.ListenAndServe()
+}
+
+// Dispatch dispatches a batch of function calls.
+func (d *Dispatch) Dispatch(ctx context.Context, calls []*sdkv1.Call) ([]DispatchID, error) {
+	d.Client.Env = d.Env
+
+	defaultEndpoint := d.endpoint()
+	for _, c := range calls {
+		if c.Endpoint == "" {
+			c.Endpoint = defaultEndpoint
+		}
+	}
+	return d.Client.Dispatch(ctx, calls)
+}
+
+func (d *Dispatch) endpoint() string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if d.Endpoint == "" {
+		d.Endpoint, _ = getenv(d.Env, "DISPATCH_ENDPOINT")
+	}
+	return d.Endpoint
 }
