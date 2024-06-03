@@ -25,21 +25,22 @@ type Dispatch struct {
 	// EndpointUrl is the URL that this Dispatch endpoint
 	// is accessible from.
 	//
-	// If omitted, the value of DISPATCH_ENDPOINT_URL is used.
+	// If omitted, the value of the DISPATCH_ENDPOINT_URL environment
+	// variable is used.
 	EndpointUrl string
 
 	// VerificationKey is the ed25519 public key to use when verifying
 	// Dispatch request signatures.
 	//
-	// If omitted, the value of DISPATCH_VERIFICATION_KEY is used.
+	// If omitted, the value of the DISPATCH_VERIFICATION_KEY environment
+	// variable is used.
 	//
 	// If a verification key is not provided, request signatures will
-	// not be checked.
+	// not be validated.
 	VerificationKey string
 
-	// Env are environment variables to parse configuration
-	// from. If nil, environment variables are read from
-	// os.Environ().
+	// Env are environment variables to parse configuration from.
+	// If nil, environment variables are read from os.Environ().
 	Env []string
 
 	// Registry is the registry of functions to dispatch calls to.

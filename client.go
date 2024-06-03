@@ -25,21 +25,18 @@ type Client struct {
 	// DISPATCH_API_KEY environment variable is used.
 	ApiKey string
 
-	// ApiUrl is the URL of Dispatch. If omitted,
-	//
-	// ApiURL is the URL of the Dispatch API to use when dispatching calls
+	// ApiUrl is the URL of the Dispatch API to use when dispatching calls
 	// to functions. If omitted, the value of the DISPATCH_API_URL
-	// environment variable is used. If that is unset, the default URL
+	// environment variable is used. If both are unset/empty, the default URL
 	// (DefaultApiUrl) is used.
 	ApiUrl string
 
-	// Env are environment variables to parse configuration
-	// from. If nil, environment variables are read from
-	// os.Environ().
+	// Env are environment variables to parse configuration from.
+	// If nil, environment variables are read from os.Environ().
 	Env []string
 
 	// Client is the HTTP client to use when making requests to Dispatch.
-	// If nil, http.DefaultClient is used instead.
+	// If nil, http.DefaultClient is used.
 	Client *http.Client
 
 	client sdkv1connect.DispatchServiceClient
