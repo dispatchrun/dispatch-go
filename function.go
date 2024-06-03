@@ -47,7 +47,7 @@ func (r *Registry) Lookup(name string) NamedFunction {
 func (r *Registry) Run(ctx context.Context, req *sdkv1.RunRequest) *sdkv1.RunResponse {
 	fn := r.Lookup(req.Function)
 	if fn == nil {
-		return errResponse(sdkv1.Status_STATUS_NOT_FOUND, fmt.Errorf("function %q not found", req.Function))
+		return ErrorResponse(sdkv1.Status_STATUS_NOT_FOUND, fmt.Errorf("function %q not found", req.Function))
 	}
 	return fn.Run(ctx, req)
 }
@@ -119,7 +119,7 @@ func (f *Function[Input, Output]) Run(ctx context.Context, req *sdkv1.RunRequest
 	case *sdkv1.RunRequest_PollResult:
 		coro = coroutine.NewWithReturn[any, any](f.entrypoint(zero))
 		if err := coro.Context().Unmarshal(c.PollResult.GetCoroutineState()); err != nil {
-			return errResponse(sdkv1.Status_STATUS_INCOMPATIBLE_STATE, fmt.Errorf("invalid coroutine state: %w", err))
+			return ErrorResponse(sdkv1.Status_STATUS_INCOMPATIBLE_STATE, fmt.Errorf("invalid coroutine state: %w", err))
 		}
 	case *sdkv1.RunRequest_Input:
 		var input Input
@@ -130,14 +130,14 @@ func (f *Function[Input, Output]) Run(ctx context.Context, req *sdkv1.RunRequest
 				RecursionLimit: protowire.DefaultRecursionLimit,
 			}
 			if err := options.Unmarshal(c.Input.Value, message.Interface()); err != nil {
-				return errResponse(sdkv1.Status_STATUS_INVALID_ARGUMENT, fmt.Errorf("invalid function input: %w", err))
+				return ErrorResponse(sdkv1.Status_STATUS_INVALID_ARGUMENT, fmt.Errorf("invalid function input: %w", err))
 			}
 			input = message.Interface().(Input)
 		}
 		coro = coroutine.NewWithReturn[any, any](f.entrypoint(input))
 
 	default:
-		return errResponse(sdkv1.Status_STATUS_INVALID_ARGUMENT, fmt.Errorf("unsupported coroutine directive: %T", c))
+		return ErrorResponse(sdkv1.Status_STATUS_INVALID_ARGUMENT, fmt.Errorf("unsupported coroutine directive: %T", c))
 	}
 
 	res := &sdkv1.RunResponse{
@@ -162,14 +162,14 @@ func (f *Function[Input, Output]) Run(ctx context.Context, req *sdkv1.RunRequest
 			return nil
 		})
 		if canceled {
-			return errResponse(sdkv1.Status_STATUS_UNSPECIFIED, context.Cause(ctx))
+			return ErrorResponse(sdkv1.Status_STATUS_UNSPECIFIED, context.Cause(ctx))
 		}
 	}
 
 	if coro.Next() {
 		coroutineState, err := coro.Context().Marshal()
 		if err != nil {
-			return errResponse(sdkv1.Status_STATUS_PERMANENT_ERROR, fmt.Errorf("cannot serialize coroutine: %w", err))
+			return ErrorResponse(sdkv1.Status_STATUS_PERMANENT_ERROR, fmt.Errorf("cannot serialize coroutine: %w", err))
 		}
 		switch yield := coro.Recv().(type) {
 		case sleep:
@@ -181,7 +181,7 @@ func (f *Function[Input, Output]) Run(ctx context.Context, req *sdkv1.RunRequest
 				},
 			}
 		default:
-			res = errResponse(sdkv1.Status_STATUS_INVALID_RESPONSE, fmt.Errorf("unsupported coroutine yield: %T", yield))
+			res = ErrorResponse(sdkv1.Status_STATUS_INVALID_RESPONSE, fmt.Errorf("unsupported coroutine yield: %T", yield))
 		}
 	} else {
 		switch ret := coro.Result().(type) {
@@ -196,9 +196,9 @@ func (f *Function[Input, Output]) Run(ctx context.Context, req *sdkv1.RunRequest
 				},
 			}
 		case error:
-			res = errResponse(sdkv1.Status_STATUS_UNSPECIFIED, ret)
+			res = ErrorResponse(sdkv1.Status_STATUS_UNSPECIFIED, ret)
 		default:
-			res = errResponse(sdkv1.Status_STATUS_INVALID_RESPONSE, fmt.Errorf("unsupported coroutine return: %T", ret))
+			res = ErrorResponse(sdkv1.Status_STATUS_INVALID_RESPONSE, fmt.Errorf("unsupported coroutine return: %T", ret))
 		}
 	}
 

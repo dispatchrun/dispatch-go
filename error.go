@@ -73,7 +73,8 @@ type timeout interface {
 	Timeout() bool
 }
 
-func errResponse(status sdkv1.Status, err error) *sdkv1.RunResponse {
+// ErrorResponse creates a RunResponse for the specified error.
+func ErrorResponse(status sdkv1.Status, err error) *sdkv1.RunResponse {
 	if status == sdkv1.Status_STATUS_UNSPECIFIED {
 		status = errorStatusOf(err)
 	}

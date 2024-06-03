@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/offblocks/httpsig"
 )
 
@@ -115,13 +116,13 @@ func (v *Verifier) Middleware(next http.Handler) http.Handler {
 }
 
 // Client wraps an HTTP client in order to sign requests.
-func (s *Signer) Client(client *http.Client) *SigningClient {
+func (s *Signer) Client(client connect.HTTPClient) *SigningClient {
 	return &SigningClient{client, s}
 }
 
 // SigningClient is an HTTP client that automatically signs requests.
 type SigningClient struct {
-	client *http.Client
+	client connect.HTTPClient
 	signer *Signer
 }
 
