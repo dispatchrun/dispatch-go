@@ -101,7 +101,7 @@ func TestDispatch(t *testing.T) {
 	// Try with a client that does not sign requests. The Dispatch
 	// instance should reject the request.
 	nonSigningClient := dispatchtest.NewEndpointClient(server.URL)
-	res, err = nonSigningClient.Run(context.Background(), &sdkv1.RunRequest{
+	_, err = nonSigningClient.Run(context.Background(), &sdkv1.RunRequest{
 		Function:  "identity",
 		Directive: &sdkv1.RunRequest_Input{Input: input},
 	})

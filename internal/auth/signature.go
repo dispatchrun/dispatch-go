@@ -59,14 +59,33 @@ func (s *Signer) Sign(req *http.Request) error {
 	return nil
 }
 
+// Client wraps an HTTP client to automatically sign requests.
+func (s *Signer) Client(client connect.HTTPClient) *SigningClient {
+	return &SigningClient{client, s}
+}
+
+// SigningClient is an HTTP client that automatically signs requests.
+type SigningClient struct {
+	client connect.HTTPClient
+	signer *Signer
+}
+
+// Do signs and sends an HTTP request, and returns the HTTP response.
+func (c *SigningClient) Do(req *http.Request) (*http.Response, error) {
+	if err := c.signer.Sign(req); err != nil {
+		return nil, fmt.Errorf("failed to sign request: %w", err)
+	}
+	return c.client.Do(req)
+}
+
 // Verifier verifies that requests were signed by Dispatch.
 type Verifier struct {
 	verifier *httpsig.Verifier
 }
 
 // NewVerifier creates a Verifier that verifies that requests were
-// by Dispatch using the private key associated with this public
-// verification key.
+// signed by Dispatch using the private key associated with this
+// public verification key.
 func NewVerifier(verificationKey ed25519.PublicKey) *Verifier {
 	verifier := httpsig.NewVerifier(
 		httpsig.WithVerifyEd25519("default", verificationKey),
@@ -113,23 +132,4 @@ func (v *Verifier) Middleware(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
-}
-
-// Client wraps an HTTP client in order to sign requests.
-func (s *Signer) Client(client connect.HTTPClient) *SigningClient {
-	return &SigningClient{client, s}
-}
-
-// SigningClient is an HTTP client that automatically signs requests.
-type SigningClient struct {
-	client connect.HTTPClient
-	signer *Signer
-}
-
-// Do signs and sends an HTTP request, and returns the HTTP response.
-func (c *SigningClient) Do(req *http.Request) (*http.Response, error) {
-	if err := c.signer.Sign(req); err != nil {
-		return nil, fmt.Errorf("failed to sign request: %w", err)
-	}
-	return c.client.Do(req)
 }
