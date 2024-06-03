@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -84,8 +85,10 @@ func (d *Dispatch) validateSignatures(next http.Handler) (http.Handler, error) {
 		return nil, err
 	}
 	if key == nil {
-		// TODO: don't print this when running under the CLI
-		slog.Warn("request signature validation is disabled")
+		// Don't print this warning when running under the CLI.
+		if endpoint := d.endpoint(); !strings.HasPrefix(endpoint, "bridge://") {
+			slog.Warn("request signature validation is disabled")
+		}
 		return next, nil
 	}
 
