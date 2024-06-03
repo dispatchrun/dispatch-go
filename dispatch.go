@@ -3,6 +3,7 @@ package dispatch
 import (
 	"context"
 	"crypto/ed25519"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -38,13 +39,29 @@ type Dispatch struct {
 	// If nil, environment variables are read from os.Environ().
 	Env []string
 
-	// Registry is the registry of functions to dispatch calls to.
-	Registry
-
 	// Client is the client to use when dispatching function calls.
 	Client
 
-	mu sync.Mutex
+	functions map[string]NamedFunction
+	mu        sync.Mutex
+}
+
+// Register registers a function.
+func (d *Dispatch) Register(fn NamedFunction) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if d.functions == nil {
+		d.functions = map[string]NamedFunction{}
+	}
+	d.functions[fn.Name()] = fn
+}
+
+func (d *Dispatch) lookup(name string) NamedFunction {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	return d.functions[name]
 }
 
 // Handler returns an HTTP handler for Dispatch, along with the path
@@ -73,14 +90,20 @@ func (d *Dispatch) Handler(opts ...connect.HandlerOption) (string, http.Handler,
 	return path, verifier.Middleware(handler), nil
 }
 
-// The gRPC handler is unexported. This is so that the http.Handler
-// wrapped in order to validate request signatures.
+// The gRPC handler is unexported so that the http.Handler can
+// be wrapped in order to validate request signatures.
 type dispatchFunctionServiceHandler struct {
 	dispatch *Dispatch
 }
 
 func (d *dispatchFunctionServiceHandler) Run(ctx context.Context, req *connect.Request[sdkv1.RunRequest]) (*connect.Response[sdkv1.RunResponse], error) {
-	res := d.dispatch.Registry.Run(ctx, req.Msg)
+	var res *sdkv1.RunResponse
+	fn := d.dispatch.lookup(req.Msg.Function)
+	if fn == nil {
+		res = ErrorResponse(sdkv1.Status_STATUS_NOT_FOUND, fmt.Errorf("function %q not found", req.Msg.Function))
+	} else {
+		res = fn.Run(ctx, req.Msg)
+	}
 	return connect.NewResponse(res), nil
 }
 

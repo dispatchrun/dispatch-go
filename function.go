@@ -5,7 +5,6 @@ package dispatch
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
@@ -15,42 +14,6 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
-
-// Registry is a registry of functions.
-type Registry struct {
-	functions map[string]NamedFunction
-	mu        sync.Mutex
-}
-
-// Register registers a function.
-func (r *Dispatch) Register(fn NamedFunction) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if r.functions == nil {
-		r.functions = map[string]NamedFunction{}
-	}
-	r.functions[fn.Name()] = fn
-}
-
-// Lookup looks up a function by name.
-//
-// It returns nil if a function with that name has not been registered.
-func (r *Registry) Lookup(name string) NamedFunction {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	return r.functions[name]
-}
-
-// Run forwards a request to a function in the registry.
-func (r *Registry) Run(ctx context.Context, req *sdkv1.RunRequest) *sdkv1.RunResponse {
-	fn := r.Lookup(req.Function)
-	if fn == nil {
-		return ErrorResponse(sdkv1.Status_STATUS_NOT_FOUND, fmt.Errorf("function %q not found", req.Function))
-	}
-	return fn.Run(ctx, req)
-}
 
 // NamedFunction is a Dispatch function with a name.
 type NamedFunction interface {
