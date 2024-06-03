@@ -67,13 +67,12 @@ func (d *Dispatch) lookup(name string) NamedFunction {
 // Handler returns an HTTP handler for Dispatch, along with the path
 // that the handler should be registered at.
 func (d *Dispatch) Handler(opts ...connect.HandlerOption) (string, http.Handler, error) {
-	interceptor, err := validate.NewInterceptor()
+	validatingInterceptor, err := validate.NewInterceptor()
 	if err != nil {
 		return "", nil, err
 	}
-	opts = append(opts, connect.WithInterceptors(interceptor))
-
-	path, handler := sdkv1connect.NewFunctionServiceHandler(&dispatchFunctionServiceHandler{d}, opts...)
+	path, handler := sdkv1connect.NewFunctionServiceHandler(&dispatchFunctionServiceHandler{d},
+		connect.WithInterceptors(validatingInterceptor))
 
 	// Setup request signature verification.
 	verificationKey, err := d.verificationKey()
@@ -87,7 +86,9 @@ func (d *Dispatch) Handler(opts ...connect.HandlerOption) (string, http.Handler,
 		return path, handler, nil
 	}
 	verifier := auth.NewVerifier(verificationKey)
-	return path, verifier.Middleware(handler), nil
+	handler = verifier.Middleware(handler)
+
+	return path, handler, nil
 }
 
 // The gRPC handler is unexported so that the http.Handler can
