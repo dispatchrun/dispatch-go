@@ -1,22 +1,18 @@
 package dispatch
 
 import (
-	"bytes"
 	"context"
 	"crypto/ed25519"
-	"io"
 	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
-	"time"
 
 	"buf.build/gen/go/stealthrocket/dispatch-proto/connectrpc/go/dispatch/sdk/v1/sdkv1connect"
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
 	"connectrpc.com/connect"
 	"connectrpc.com/validate"
 	"github.com/dispatchrun/dispatch-go/internal/auth"
-	"github.com/offblocks/httpsig"
 )
 
 // Dispatch is a Dispatch endpoint.
@@ -61,14 +57,23 @@ func (d *Dispatch) Handler(opts ...connect.HandlerOption) (string, http.Handler,
 	opts = append(opts, connect.WithInterceptors(interceptor))
 
 	path, handler := sdkv1connect.NewFunctionServiceHandler(&dispatchFunctionServiceHandler{d}, opts...)
-	handler, err = d.validateSignatures(handler)
+
+	// Setup request signature verification.
+	verificationKey, err := d.verificationKey()
 	if err != nil {
 		return "", nil, err
+	} else if verificationKey == nil {
+		if endpoint := d.endpoint(); !strings.HasPrefix(endpoint, "bridge://") {
+			// Don't print this warning when running under the CLI.
+			slog.Warn("request signature validation is disabled")
+		}
+		return path, handler, nil
 	}
-	return path, handler, nil
+	verifier := auth.NewVerifier(verificationKey)
+	return path, verifier.Middleware(handler), nil
 }
 
-// The gRPC handler is unexported. This is so that the http.Handler can be
+// The gRPC handler is unexported. This is so that the http.Handler
 // wrapped in order to validate request signatures.
 type dispatchFunctionServiceHandler struct {
 	dispatch *Dispatch
@@ -77,64 +82,6 @@ type dispatchFunctionServiceHandler struct {
 func (d *dispatchFunctionServiceHandler) Run(ctx context.Context, req *connect.Request[sdkv1.RunRequest]) (*connect.Response[sdkv1.RunResponse], error) {
 	res := d.dispatch.Registry.Run(ctx, req.Msg)
 	return connect.NewResponse(res), nil
-}
-
-func (d *Dispatch) validateSignatures(next http.Handler) (http.Handler, error) {
-	key, err := d.verificationKey()
-	if err != nil {
-		return nil, err
-	}
-	if key == nil {
-		// Don't print this warning when running under the CLI.
-		if endpoint := d.endpoint(); !strings.HasPrefix(endpoint, "bridge://") {
-			slog.Warn("request signature validation is disabled")
-		}
-		return next, nil
-	}
-
-	verifier := httpsig.NewVerifier(
-		httpsig.WithVerifyEd25519("default", key),
-		httpsig.WithVerifyAll(true),
-		httpsig.WithVerifyMaxAge(5*time.Minute),
-		httpsig.WithVerifyTolerance(5*time.Second),
-		// The httpsig library checks the strings below against marshaled
-		// httpsfv items, hence the double quoting.
-		httpsig.WithVerifyRequiredFields(`"@method"`, `"@path"`, `"@authority"`, `"content-type"`, `"content-digest"`),
-	)
-
-	digestor := httpsig.NewDigestor(httpsig.WithDigestAlgorithms(httpsig.DigestAlgorithmSha512))
-
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Read the body into memory so that the Content-Digest header
-		// can be verified.
-		// TODO: put a limit on the read
-		body, err := io.ReadAll(r.Body)
-		_ = r.Body.Close()
-		if err != nil {
-			slog.Warn("failed to read request body", "err", err)
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		r.Body = io.NopCloser(bytes.NewReader(body))
-
-		if _, ok := r.Header[httpsig.ContentDigestHeader]; !ok {
-			slog.Warn("missing content digest header")
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		} else if err := digestor.Verify(body, r.Header); err != nil {
-			slog.Warn("invalid content digest header", "error", err)
-			w.WriteHeader(http.StatusForbidden)
-			return
-		}
-
-		if err := verifier.Verify(httpsig.MessageFromRequest(r)); err != nil {
-			slog.Warn("missing or invalid request signature", "error", err)
-			w.WriteHeader(http.StatusForbidden)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	}), nil
 }
 
 // ListenAndServe serves the Dispatch endpoint on the specified address.
