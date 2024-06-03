@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
-	"encoding/base64"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -17,6 +15,7 @@ import (
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
 	"connectrpc.com/connect"
 	"connectrpc.com/validate"
+	"github.com/dispatchrun/dispatch-go/internal/auth"
 	"github.com/offblocks/httpsig"
 )
 
@@ -186,12 +185,5 @@ func (d *Dispatch) verificationKey() (ed25519.PublicKey, error) {
 	if encodedKey == "" {
 		return nil, nil
 	}
-
-	// TODO: accept key in PEM format
-
-	key, err := base64.StdEncoding.DecodeString(encodedKey)
-	if err != nil || len(key) != ed25519.PublicKeySize {
-		return nil, fmt.Errorf("invalid verification key")
-	}
-	return ed25519.PublicKey(key), nil
+	return auth.ParseKey(encodedKey)
 }
