@@ -92,6 +92,7 @@ func NewVerifier(verificationKey ed25519.PublicKey) *Verifier {
 		httpsig.WithVerifyAll(true),
 		httpsig.WithVerifyMaxAge(5*time.Minute),
 		httpsig.WithVerifyTolerance(5*time.Second),
+		httpsig.WithVerifyRequiredParams("created"),
 		// The httpsig library checks the strings below against marshaled
 		// httpsfv items, hence the double quoting.
 		httpsig.WithVerifyRequiredFields(`"@method"`, `"@path"`, `"@authority"`, `"content-type"`, `"content-digest"`),
@@ -101,12 +102,16 @@ func NewVerifier(verificationKey ed25519.PublicKey) *Verifier {
 
 // Verify verifies that a request was signed by Dispatch.
 func (v *Verifier) Verify(r *http.Request) error {
-	body, err := io.ReadAll(r.Body)
-	_ = r.Body.Close()
-	if err != nil {
-		return fmt.Errorf("failed to read request body: %w", err)
+	var body []byte
+	if r.Body != nil {
+		var err error
+		body, err = io.ReadAll(r.Body)
+		_ = r.Body.Close()
+		if err != nil {
+			return fmt.Errorf("failed to read request body: %w", err)
+		}
+		r.Body = io.NopCloser(bytes.NewReader(body))
 	}
-	r.Body = io.NopCloser(bytes.NewReader(body))
 
 	// Verify the Content-Digest header.
 	if _, ok := r.Header[httpsig.ContentDigestHeader]; !ok {
