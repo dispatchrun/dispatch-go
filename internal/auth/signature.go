@@ -3,6 +3,7 @@ package auth
 import (
 	"bytes"
 	"crypto/ed25519"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"log/slog"
@@ -80,7 +81,8 @@ func (c *SigningClient) Do(req *http.Request) (*http.Response, error) {
 
 // Verifier verifies that requests were signed by Dispatch.
 type Verifier struct {
-	verifier *httpsig.Verifier
+	verifier  *httpsig.Verifier
+	base64Key string
 }
 
 // NewVerifier creates a Verifier that verifies that requests were
@@ -97,7 +99,10 @@ func NewVerifier(verificationKey ed25519.PublicKey) *Verifier {
 		// httpsfv items, hence the double quoting.
 		httpsig.WithVerifyRequiredFields(`"@method"`, `"@path"`, `"@authority"`, `"content-type"`, `"content-digest"`),
 	)
-	return &Verifier{verifier}
+	return &Verifier{
+		verifier:  verifier,
+		base64Key: base64.StdEncoding.EncodeToString(verificationKey[:]),
+	}
 }
 
 // Verify verifies that a request was signed by Dispatch.
@@ -131,7 +136,7 @@ func (v *Verifier) Verify(r *http.Request) error {
 func (v *Verifier) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if err := v.Verify(r); err != nil {
-			slog.Warn("request was not signed correctly", "error", err)
+			slog.Warn("Dispatch request signature was missing or invalid", "error", err, "verification_key", v.base64Key)
 			w.WriteHeader(http.StatusForbidden)
 			return
 		}

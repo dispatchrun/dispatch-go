@@ -85,7 +85,7 @@ func (d *Dispatch) Handler(opts ...connect.HandlerOption) (string, http.Handler,
 	} else if verificationKey == nil {
 		if endpoint := d.endpoint(); !strings.HasPrefix(endpoint, "bridge://") {
 			// Don't print this warning when running under the CLI.
-			slog.Warn("request signature validation is disabled")
+			slog.Warn("Dispatch request signature validation is disabled")
 		}
 		return path, handler, nil
 	}

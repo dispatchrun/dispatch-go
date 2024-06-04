@@ -3,7 +3,6 @@ package dispatch
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -91,8 +90,6 @@ func (c *Client) dispatchClient() (sdkv1connect.DispatchServiceClient, error) {
 		}
 	}
 
-	slog.Info("configuring Dispatch client", "api_url", apiUrl, "api_key", redact(apiKey))
-
 	authenticatingInterceptor := connect.UnaryInterceptorFunc(func(next connect.UnaryFunc) connect.UnaryFunc {
 		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
 			req.Header().Add("Authorization", "Bearer "+apiKey)
@@ -130,13 +127,6 @@ func getenv(env []string, name string) (string, bool) {
 		}
 	}
 	return "", false
-}
-
-func redact(s string) string {
-	if len(s) < 4 {
-		return s
-	}
-	return s[:4] + strings.Repeat("*", len(s)-4)
 }
 
 // Batch is used to submit a batch of function calls to Dispatch.
