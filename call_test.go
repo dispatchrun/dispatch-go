@@ -87,4 +87,27 @@ func TestCall(t *testing.T) {
 			t.Errorf("unexpected call proto message: %#v", got)
 		}
 	})
+
+	t.Run("zero value", func(t *testing.T) {
+		var call Call
+
+		if got := call.Endpoint(); got != "" {
+			t.Errorf("unexpected call endpoint: %v", got)
+		}
+		if got := call.Function(); got != "" {
+			t.Errorf("unexpected call function: %v", got)
+		}
+		if got, err := call.Input(); err == nil {
+			t.Errorf("unexpected call input: %v, %v", got, err)
+		}
+		if got := call.CorrelationID(); got != 0 {
+			t.Errorf("unexpected call correlation ID: %v", got)
+		}
+		if got, ok := call.Expiration(); ok {
+			t.Errorf("unexpected call expiration: %v, %v", got, ok)
+		}
+		if got := call.Version(); got != "" {
+			t.Errorf("unexpected call version: %v", got)
+		}
+	})
 }
