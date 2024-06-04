@@ -5,14 +5,12 @@ package dispatch
 import (
 	"context"
 	"fmt"
-	"time"
 
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
 	"github.com/stealthrocket/coroutine"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
-	"google.golang.org/protobuf/types/known/durationpb"
 )
 
 // NamedFunction is a Dispatch function with a name.
@@ -113,15 +111,7 @@ func (f *Function[Input, Output]) Run(ctx context.Context, req *sdkv1.RunRequest
 	if !coroutine.Durable {
 		var canceled bool
 		coroutine.Run(coro, func(v any) any {
-			switch yield := v.(type) {
-			case sleep:
-				select {
-				case <-time.After(time.Duration(yield)):
-				case <-ctx.Done():
-					coro.Stop()
-					canceled = true
-				}
-			}
+			// TODO
 			return nil
 		})
 		if canceled {
@@ -135,17 +125,12 @@ func (f *Function[Input, Output]) Run(ctx context.Context, req *sdkv1.RunRequest
 			return ErrorResponse(PermanentErrorStatus, fmt.Errorf("cannot serialize coroutine: %w", err))
 		}
 		switch yield := coro.Recv().(type) {
-		case sleep:
-			res.Status = sdkv1.Status_STATUS_OK // TODO: is it the expected status for suspended coroutines?
-			res.Directive = &sdkv1.RunResponse_Poll{
-				Poll: &sdkv1.Poll{
-					CoroutineState: coroutineState,
-					MaxWait:        durationpb.New(time.Duration(yield)),
-				},
-			}
+		// TODO
 		default:
 			res = ErrorResponse(InvalidResponseStatus, fmt.Errorf("unsupported coroutine yield: %T", yield))
 		}
+		// TODO
+		_ = coroutineState
 	} else {
 		switch ret := coro.Result().(type) {
 		case proto.Message:

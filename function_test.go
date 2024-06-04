@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
 	"github.com/dispatchrun/dispatch-go"
@@ -86,44 +85,5 @@ func TestFunctionRunResult(t *testing.T) {
 		}
 	default:
 		t.Fatalf("unexpected coroutine response type: %T", coro)
-	}
-}
-
-func TestFunctionRunSleep(t *testing.T) {
-	const sleep = 20 * time.Millisecond
-
-	fn := dispatch.NewFunction("sleeper", func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
-		dispatch.Sleep(sleep)
-		return req, nil
-	})
-
-	start := time.Now()
-	res := fn.Run(context.Background(), &sdkv1.RunRequest{
-		Directive: &sdkv1.RunRequest_Input{},
-	})
-	result := res.GetExit().GetResult()
-	if err := result.GetError(); err != nil {
-		t.Fatalf("unexpected error: %s %s", err.Type, err.Message)
-	}
-	if delay := time.Since(start); delay < sleep {
-		t.Fatalf("expected coroutine to sleep for at least %s, slept for %s", sleep, delay)
-	}
-}
-
-func TestFunctionRunCancel(t *testing.T) {
-	fn := dispatch.NewFunction("sleeper", func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
-		dispatch.Sleep(10 * time.Second) // won't wait for that long beccause the context is canceled
-		return req, nil
-	})
-
-	ctx, cancel := context.WithCancelCause(context.Background())
-	cause := errors.New("oops")
-	cancel(cause)
-
-	res := fn.Run(ctx, &sdkv1.RunRequest{
-		Directive: &sdkv1.RunRequest_Input{},
-	})
-	if err := res.GetExit().GetResult().GetError(); err == nil || err.Message != "oops" {
-		t.Fatalf("unexpected error: %#v", err)
 	}
 }
