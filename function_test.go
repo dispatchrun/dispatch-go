@@ -17,7 +17,7 @@ func TestFunctionRunInvalidCoroutineType(t *testing.T) {
 	})
 
 	res := fn.Run(context.Background(), &sdkv1.RunRequest{})
-	if err := res.GetExit().GetResult().GetError(); err == nil || err.Message != "unsupported coroutine directive: <nil>" {
+	if err := res.GetExit().GetResult().GetError(); err == nil || err.Message != "InvalidArgument: unsupported coroutine directive: <nil>" {
 		t.Fatalf("unexpected error: %#v", err)
 	}
 }

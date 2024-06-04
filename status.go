@@ -1,6 +1,7 @@
 package dispatch
 
 import (
+	"errors"
 	"fmt"
 
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
@@ -30,22 +31,22 @@ const (
 )
 
 var statusNames = [...]string{
-	UnspecifiedStatus:       "UnspecifiedStatus",
-	OKStatus:                "OKStatus",
-	TimeoutStatus:           "TimeoutStatus",
-	ThrottledStatus:         "ThrottledStatus",
-	InvalidArgumentStatus:   "InvalidArgumentStatus",
-	InvalidResponseStatus:   "InvalidResponseStatus",
-	TemporaryErrorStatus:    "TemporaryErrorStatus",
-	PermanentErrorStatus:    "PermanentErrorStatus",
-	IncompatibleStateStatus: "IncompatibleStateStatus",
-	DNSErrorStatus:          "DNSErrorStatus",
-	TCPErrorStatus:          "TCPErrorStatus",
-	TLSErrorStatus:          "TLSErrorStatus",
-	HTTPErrorStatus:         "HTTPErrorStatus",
-	UnauthenticatedStatus:   "UnauthenticatedStatus",
-	PermissionDeniedStatus:  "PermissionDeniedStatus",
-	NotFoundStatus:          "NotFoundStatus",
+	UnspecifiedStatus:       "Unspecified",
+	OKStatus:                "OK",
+	TimeoutStatus:           "Timeout",
+	ThrottledStatus:         "Throttled",
+	InvalidArgumentStatus:   "InvalidArgument",
+	InvalidResponseStatus:   "InvalidResponse",
+	TemporaryErrorStatus:    "TemporaryError",
+	PermanentErrorStatus:    "PermanentError",
+	IncompatibleStateStatus: "IncompatibleState",
+	DNSErrorStatus:          "DNSError",
+	TCPErrorStatus:          "TCPError",
+	TLSErrorStatus:          "TLSError",
+	HTTPErrorStatus:         "HTTPError",
+	UnauthenticatedStatus:   "Unauthenticated",
+	PermissionDeniedStatus:  "PermissionDenied",
+	NotFoundStatus:          "NotFound",
 }
 
 func (s Status) proto() sdkv1.Status {
@@ -57,4 +58,28 @@ func (s Status) String() string {
 		return fmt.Sprintf("Status(%d)", int(s))
 	}
 	return statusNames[s]
+}
+
+func (s Status) GoString() string {
+	if s < 0 || int(s) >= len(statusNames) {
+		return fmt.Sprintf("Status(%d)", int(s))
+	}
+	return statusNames[s] + "Status"
+}
+
+func statusOf(v any) Status {
+	if s, ok := v.(hasStatus); ok {
+		return s.Status()
+	}
+	if e, ok := v.(error); ok {
+		var s hasStatus
+		if errors.As(e, &s) {
+			return s.Status()
+		}
+	}
+	return UnspecifiedStatus
+}
+
+type hasStatus interface {
+	Status() Status
 }

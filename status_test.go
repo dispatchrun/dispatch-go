@@ -20,82 +20,82 @@ func TestStatus(t *testing.T) {
 		{
 			status: UnspecifiedStatus,
 			proto:  sdkv1.Status_STATUS_UNSPECIFIED,
-			string: "UnspecifiedStatus",
+			string: "Unspecified",
 		},
 		{
 			status: OKStatus,
 			proto:  sdkv1.Status_STATUS_OK,
-			string: "OKStatus",
+			string: "OK",
 		},
 		{
 			status: TimeoutStatus,
 			proto:  sdkv1.Status_STATUS_TIMEOUT,
-			string: "TimeoutStatus",
+			string: "Timeout",
 		},
 		{
 			status: ThrottledStatus,
 			proto:  sdkv1.Status_STATUS_THROTTLED,
-			string: "ThrottledStatus",
+			string: "Throttled",
 		},
 		{
 			status: InvalidArgumentStatus,
 			proto:  sdkv1.Status_STATUS_INVALID_ARGUMENT,
-			string: "InvalidArgumentStatus",
+			string: "InvalidArgument",
 		},
 		{
 			status: InvalidResponseStatus,
 			proto:  sdkv1.Status_STATUS_INVALID_RESPONSE,
-			string: "InvalidResponseStatus",
+			string: "InvalidResponse",
 		},
 		{
 			status: TemporaryErrorStatus,
 			proto:  sdkv1.Status_STATUS_TEMPORARY_ERROR,
-			string: "TemporaryErrorStatus",
+			string: "TemporaryError",
 		},
 		{
 			status: PermanentErrorStatus,
 			proto:  sdkv1.Status_STATUS_PERMANENT_ERROR,
-			string: "PermanentErrorStatus",
+			string: "PermanentError",
 		},
 		{
 			status: IncompatibleStateStatus,
 			proto:  sdkv1.Status_STATUS_INCOMPATIBLE_STATE,
-			string: "IncompatibleStateStatus",
+			string: "IncompatibleState",
 		},
 		{
 			status: DNSErrorStatus,
 			proto:  sdkv1.Status_STATUS_DNS_ERROR,
-			string: "DNSErrorStatus",
+			string: "DNSError",
 		},
 		{
 			status: TCPErrorStatus,
 			proto:  sdkv1.Status_STATUS_TCP_ERROR,
-			string: "TCPErrorStatus",
+			string: "TCPError",
 		},
 		{
 			status: TLSErrorStatus,
 			proto:  sdkv1.Status_STATUS_TLS_ERROR,
-			string: "TLSErrorStatus",
+			string: "TLSError",
 		},
 		{
 			status: HTTPErrorStatus,
 			proto:  sdkv1.Status_STATUS_HTTP_ERROR,
-			string: "HTTPErrorStatus",
+			string: "HTTPError",
 		},
 		{
 			status: UnauthenticatedStatus,
 			proto:  sdkv1.Status_STATUS_UNAUTHENTICATED,
-			string: "UnauthenticatedStatus",
+			string: "Unauthenticated",
 		},
 		{
 			status: PermissionDeniedStatus,
 			proto:  sdkv1.Status_STATUS_PERMISSION_DENIED,
-			string: "PermissionDeniedStatus",
+			string: "PermissionDenied",
 		},
 		{
 			status: NotFoundStatus,
 			proto:  sdkv1.Status_STATUS_NOT_FOUND,
-			string: "NotFoundStatus",
+			string: "NotFound",
 		},
 	} {
 		t.Run(test.string, func(t *testing.T) {
@@ -103,7 +103,10 @@ func TestStatus(t *testing.T) {
 				t.Errorf("unexpected proto status: got %v, want %v", got, test.proto)
 			}
 			if got := test.status.String(); got != test.string {
-				t.Errorf("unexpected string repr: got %v, want %v", got, test.string)
+				t.Errorf("unexpected string: got %v, want %v", got, test.string)
+			}
+			if got, want := test.status.GoString(), test.string+"Status"; got != want {
+				t.Errorf("unexpected go string: got %v, want %v", got, want)
 			}
 		})
 
