@@ -23,17 +23,17 @@ func errorTypeOf(err error) string {
 	return str
 }
 
-func errorStatusOf(err error) sdkv1.Status {
+func errorStatusOf(err error) Status {
 	if err == nil {
-		return sdkv1.Status_STATUS_OK
+		return OKStatus
 	}
 	if isTimeout(err) {
-		return sdkv1.Status_STATUS_TIMEOUT
+		return TimeoutStatus
 	}
 	if isTemporary(err) {
-		return sdkv1.Status_STATUS_TEMPORARY_ERROR
+		return TemporaryErrorStatus
 	}
-	return sdkv1.Status_STATUS_PERMANENT_ERROR
+	return PermanentErrorStatus
 }
 
 func isTemporary(err error) bool {
@@ -74,12 +74,12 @@ type timeout interface {
 }
 
 // ErrorResponse creates a RunResponse for the specified error.
-func ErrorResponse(status sdkv1.Status, err error) *sdkv1.RunResponse {
-	if status == sdkv1.Status_STATUS_UNSPECIFIED {
+func ErrorResponse(status Status, err error) *sdkv1.RunResponse {
+	if status == UnspecifiedStatus {
 		status = errorStatusOf(err)
 	}
 	return &sdkv1.RunResponse{
-		Status: status,
+		Status: status.proto(),
 		Directive: &sdkv1.RunResponse_Exit{
 			Exit: &sdkv1.Exit{
 				Result: &sdkv1.CallResult{

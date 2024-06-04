@@ -33,7 +33,7 @@ func TestDispatch(t *testing.T) {
 		case *sdkv1.RunRequest_Input:
 			input = d.Input
 		default:
-			return dispatch.ErrorResponse(sdkv1.Status_STATUS_INVALID_ARGUMENT, fmt.Errorf("unexpected run directive: %T", d))
+			return dispatch.ErrorResponse(dispatch.InvalidArgumentStatus, fmt.Errorf("unexpected run directive: %T", d))
 		}
 		return &sdkv1.RunResponse{
 			Status: sdkv1.Status_STATUS_OK,

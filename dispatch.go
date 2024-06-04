@@ -101,7 +101,7 @@ func (d *dispatchFunctionServiceHandler) Run(ctx context.Context, req *connect.R
 	var res *sdkv1.RunResponse
 	fn := d.dispatch.lookup(req.Msg.Function)
 	if fn == nil {
-		res = ErrorResponse(sdkv1.Status_STATUS_NOT_FOUND, fmt.Errorf("function %q not found", req.Msg.Function))
+		res = ErrorResponse(NotFoundStatus, fmt.Errorf("function %q not found", req.Msg.Function))
 	} else {
 		res = fn.Run(ctx, req.Msg)
 	}

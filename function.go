@@ -82,7 +82,7 @@ func (f *Function[Input, Output]) Run(ctx context.Context, req *sdkv1.RunRequest
 	case *sdkv1.RunRequest_PollResult:
 		coro = coroutine.NewWithReturn[any, any](f.entrypoint(zero))
 		if err := coro.Context().Unmarshal(c.PollResult.GetCoroutineState()); err != nil {
-			return ErrorResponse(sdkv1.Status_STATUS_INCOMPATIBLE_STATE, fmt.Errorf("invalid coroutine state: %w", err))
+			return ErrorResponse(IncompatibleStateStatus, fmt.Errorf("invalid coroutine state: %w", err))
 		}
 	case *sdkv1.RunRequest_Input:
 		var input Input
@@ -93,14 +93,14 @@ func (f *Function[Input, Output]) Run(ctx context.Context, req *sdkv1.RunRequest
 				RecursionLimit: protowire.DefaultRecursionLimit,
 			}
 			if err := options.Unmarshal(c.Input.Value, message.Interface()); err != nil {
-				return ErrorResponse(sdkv1.Status_STATUS_INVALID_ARGUMENT, fmt.Errorf("invalid function input: %w", err))
+				return ErrorResponse(InvalidArgumentStatus, fmt.Errorf("invalid function input: %w", err))
 			}
 			input = message.Interface().(Input)
 		}
 		coro = coroutine.NewWithReturn[any, any](f.entrypoint(input))
 
 	default:
-		return ErrorResponse(sdkv1.Status_STATUS_INVALID_ARGUMENT, fmt.Errorf("unsupported coroutine directive: %T", c))
+		return ErrorResponse(InvalidArgumentStatus, fmt.Errorf("unsupported coroutine directive: %T", c))
 	}
 
 	res := &sdkv1.RunResponse{
@@ -125,14 +125,14 @@ func (f *Function[Input, Output]) Run(ctx context.Context, req *sdkv1.RunRequest
 			return nil
 		})
 		if canceled {
-			return ErrorResponse(sdkv1.Status_STATUS_UNSPECIFIED, context.Cause(ctx))
+			return ErrorResponse(UnspecifiedStatus, context.Cause(ctx))
 		}
 	}
 
 	if coro.Next() {
 		coroutineState, err := coro.Context().Marshal()
 		if err != nil {
-			return ErrorResponse(sdkv1.Status_STATUS_PERMANENT_ERROR, fmt.Errorf("cannot serialize coroutine: %w", err))
+			return ErrorResponse(PermanentErrorStatus, fmt.Errorf("cannot serialize coroutine: %w", err))
 		}
 		switch yield := coro.Recv().(type) {
 		case sleep:
@@ -144,7 +144,7 @@ func (f *Function[Input, Output]) Run(ctx context.Context, req *sdkv1.RunRequest
 				},
 			}
 		default:
-			res = ErrorResponse(sdkv1.Status_STATUS_INVALID_RESPONSE, fmt.Errorf("unsupported coroutine yield: %T", yield))
+			res = ErrorResponse(InvalidResponseStatus, fmt.Errorf("unsupported coroutine yield: %T", yield))
 		}
 	} else {
 		switch ret := coro.Result().(type) {
@@ -159,9 +159,9 @@ func (f *Function[Input, Output]) Run(ctx context.Context, req *sdkv1.RunRequest
 				},
 			}
 		case error:
-			res = ErrorResponse(sdkv1.Status_STATUS_UNSPECIFIED, ret)
+			res = ErrorResponse(UnspecifiedStatus, ret)
 		default:
-			res = ErrorResponse(sdkv1.Status_STATUS_INVALID_RESPONSE, fmt.Errorf("unsupported coroutine return: %T", ret))
+			res = ErrorResponse(InvalidResponseStatus, fmt.Errorf("unsupported coroutine return: %T", ret))
 		}
 	}
 
