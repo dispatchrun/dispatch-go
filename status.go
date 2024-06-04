@@ -9,7 +9,7 @@ import (
 
 // Status categorizes the success or failure conditions resulting from
 // an execution request.
-type Status sdkv1.Status
+type Status int
 
 const (
 	UnspecifiedStatus       = Status(sdkv1.Status_STATUS_UNSPECIFIED)
