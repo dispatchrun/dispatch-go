@@ -45,7 +45,7 @@ type Client struct {
 }
 
 // Dispatch dispatches a function call.
-func (c *Client) Dispatch(ctx context.Context, call Call) (DispatchID, error) {
+func (c *Client) Dispatch(ctx context.Context, call Call) (ID, error) {
 	batch := c.Batch()
 	batch.Add(call)
 	ids, err := batch.Dispatch(ctx)
@@ -157,7 +157,7 @@ func (b *Batch) Add(call Call) {
 }
 
 // Dispatch dispatches the batch of function calls.
-func (b *Batch) Dispatch(ctx context.Context) ([]DispatchID, error) {
+func (b *Batch) Dispatch(ctx context.Context) ([]ID, error) {
 	client, err := b.client.dispatchClient()
 	if err != nil {
 		return nil, err

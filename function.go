@@ -61,7 +61,7 @@ func (f *PrimitiveFunction) BuildCall(input proto.Message, opts ...CallOption) (
 }
 
 // Dispatch dispatches a call to the function.
-func (f *PrimitiveFunction) Dispatch(ctx context.Context, input proto.Message, opts ...CallOption) (DispatchID, error) {
+func (f *PrimitiveFunction) Dispatch(ctx context.Context, input proto.Message, opts ...CallOption) (ID, error) {
 	if f.client == nil {
 		return "", fmt.Errorf("cannot dispatch function call: client has not been registered")
 	}
@@ -196,7 +196,7 @@ func (f *GenericFunction[Input, Output]) BuildCall(input Input, opts ...CallOpti
 }
 
 // Dispatch dispatches a call to the function.
-func (f *GenericFunction[Input, Output]) Dispatch(ctx context.Context, input Input, opts ...CallOption) (DispatchID, error) {
+func (f *GenericFunction[Input, Output]) Dispatch(ctx context.Context, input Input, opts ...CallOption) (ID, error) {
 	if f.client == nil {
 		return "", fmt.Errorf("cannot dispatch function call: client has not been registered")
 	}
