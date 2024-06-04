@@ -8,6 +8,7 @@ import (
 	"buf.build/gen/go/stealthrocket/dispatch-proto/connectrpc/go/dispatch/sdk/v1/sdkv1connect"
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
 	"connectrpc.com/connect"
+	"connectrpc.com/validate"
 	"github.com/dispatchrun/dispatch-go/internal/auth"
 )
 
@@ -37,7 +38,13 @@ func NewEndpointClient(baseURL string, opts ...endpointClientOption) *EndpointCl
 		signer := auth.NewSigner(c.signingKey)
 		c.httpClient = signer.Client(c.httpClient)
 	}
-	c.client = sdkv1connect.NewFunctionServiceClient(c.httpClient, baseURL)
+
+	validatingInterceptor, err := validate.NewInterceptor()
+	if err != nil {
+		panic(err)
+	}
+	c.client = sdkv1connect.NewFunctionServiceClient(c.httpClient, baseURL,
+		connect.WithInterceptors(validatingInterceptor))
 	return c
 }
 

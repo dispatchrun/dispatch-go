@@ -17,7 +17,7 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-func TestDispatch(t *testing.T) {
+func TestDispatchEndpoint(t *testing.T) {
 	verificationKey, signingKey, err := ed25519.GenerateKey(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -47,7 +47,7 @@ func TestDispatch(t *testing.T) {
 		}
 	}))
 
-	// Setup the server that serves the Dispatch handler.
+	// Setup the server that serves the Dispatch endpoint.
 	path, handler, err := d.Handler()
 	if err != nil {
 		t.Fatal(err)
