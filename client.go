@@ -44,18 +44,20 @@ type Client struct {
 	mu     sync.Mutex
 }
 
-// Dispatch dispatches a batch of function calls.
-func (c *Client) Dispatch(ctx context.Context, calls []*sdkv1.Call) ([]DispatchID, error) {
-	client, err := c.dispatchClient()
+// Dispatch dispatches a function call.
+func (c *Client) Dispatch(ctx context.Context, call Call) (DispatchID, error) {
+	batch := c.Batch()
+	batch.Add(call)
+	ids, err := batch.Dispatch(ctx)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	req := connect.NewRequest(&sdkv1.DispatchRequest{Calls: calls})
-	res, err := client.Dispatch(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-	return res.Msg.DispatchIds, nil
+	return ids[0], nil
+}
+
+// Batch creates a Batch.
+func (c *Client) Batch() Batch {
+	return Batch{client: c}
 }
 
 func (c *Client) dispatchClient() (sdkv1connect.DispatchServiceClient, error) {
@@ -135,4 +137,35 @@ func redact(s string) string {
 		return s
 	}
 	return s[:4] + strings.Repeat("*", len(s)-4)
+}
+
+// Batch is used to submit a batch of function calls to Dispatch.
+type Batch struct {
+	client *Client
+
+	calls []*sdkv1.Call
+}
+
+// Reset resets the batch.
+func (b *Batch) Reset() {
+	b.calls = b.calls[:0]
+}
+
+// Add adds a Call to the batch.
+func (b *Batch) Add(call Call) {
+	b.calls = append(b.calls, call.proto())
+}
+
+// Dispatch dispatches the batch of function calls.
+func (b *Batch) Dispatch(ctx context.Context) ([]DispatchID, error) {
+	client, err := b.client.dispatchClient()
+	if err != nil {
+		return nil, err
+	}
+	req := connect.NewRequest(&sdkv1.DispatchRequest{Calls: b.calls})
+	res, err := client.Dispatch(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return res.Msg.DispatchIds, nil
 }

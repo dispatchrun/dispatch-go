@@ -39,7 +39,7 @@ type Dispatch struct {
 	// If nil, environment variables are read from os.Environ().
 	Env []string
 
-	// Client is the client to use when dispatching function calls.
+	// Client is an embedded Dispatch Client, for convenience.
 	Client
 
 	functions map[string]Function
@@ -48,6 +48,8 @@ type Dispatch struct {
 
 // Register registers a function.
 func (d *Dispatch) Register(fn Function) {
+	endpoint := d.endpoint()
+
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -55,6 +57,8 @@ func (d *Dispatch) Register(fn Function) {
 		d.functions = map[string]Function{}
 	}
 	d.functions[fn.Name()] = fn
+
+	fn.register(endpoint, &d.Client)
 }
 
 func (d *Dispatch) lookup(name string) Function {
@@ -124,19 +128,6 @@ func (d *Dispatch) ListenAndServe(addr string) error {
 		Handler: mux,
 	}
 	return server.ListenAndServe()
-}
-
-// Dispatch dispatches a batch of function calls.
-func (d *Dispatch) Dispatch(ctx context.Context, calls []*sdkv1.Call) ([]DispatchID, error) {
-	d.Client.Env = d.Env
-
-	defaultEndpoint := d.endpoint()
-	for _, c := range calls {
-		if c.Endpoint == "" {
-			c.Endpoint = defaultEndpoint
-		}
-	}
-	return d.Client.Dispatch(ctx, calls)
 }
 
 func (d *Dispatch) endpoint() string {
