@@ -24,7 +24,7 @@ func Handler(fn dispatch.Function) lambda.Handler {
 }
 
 type handler struct {
-	runnable dispatch.Function
+	function dispatch.Function
 }
 
 func (h *handler) Invoke(ctx context.Context, payload []byte) ([]byte, error) {
@@ -50,7 +50,7 @@ func (h *handler) Invoke(ctx context.Context, payload []byte) ([]byte, error) {
 		return nil, badRequest("raw payload did not contain a protobuf encoded execution request")
 	}
 
-	res := h.runnable.Run(ctx, req)
+	res := h.function.Run(ctx, req)
 
 	rawResponse, err := proto.Marshal(res)
 	if err != nil {
