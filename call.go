@@ -72,12 +72,8 @@ func (c Call) Input() (proto.Message, error) {
 }
 
 // Expiration is the maximum time the function is allowed to run.
-func (c Call) Expiration() (time.Duration, bool) {
-	expiration := c.message.GetExpiration()
-	if expiration == nil {
-		return 0, false
-	}
-	return c.message.Expiration.AsDuration(), true
+func (c Call) Expiration() time.Duration {
+	return c.message.GetExpiration().AsDuration()
 }
 
 // Version of the application to select during execution.

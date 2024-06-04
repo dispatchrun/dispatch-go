@@ -30,8 +30,8 @@ func TestCall(t *testing.T) {
 		if got := call.CorrelationID(); got != 0 {
 			t.Errorf("unexpected call correlation ID: %v", got)
 		}
-		if got, ok := call.Expiration(); ok {
-			t.Errorf("unexpected call expiration: %v, %v", got, ok)
+		if got := call.Expiration(); got != 0 {
+			t.Errorf("unexpected call expiration: %v", got)
 		}
 		if got := call.Version(); got != "" {
 			t.Errorf("unexpected call version: %v", got)
@@ -67,8 +67,8 @@ func TestCall(t *testing.T) {
 		if got := call.CorrelationID(); got != 1234 {
 			t.Errorf("unexpected call correlation ID: %v", got)
 		}
-		if got, ok := call.Expiration(); !ok || got != 10*time.Second {
-			t.Errorf("unexpected call expiration: %v, %v", got, ok)
+		if got := call.Expiration(); got != 10*time.Second {
+			t.Errorf("unexpected call expiration: %v", got)
 		}
 		if got := call.Version(); got != "xyzzy" {
 			t.Errorf("unexpected call version: %v", got)
@@ -103,8 +103,8 @@ func TestCall(t *testing.T) {
 		if got := call.CorrelationID(); got != 0 {
 			t.Errorf("unexpected call correlation ID: %v", got)
 		}
-		if got, ok := call.Expiration(); ok {
-			t.Errorf("unexpected call expiration: %v, %v", got, ok)
+		if got := call.Expiration(); got != 0 {
+			t.Errorf("unexpected call expiration: %v", got)
 		}
 		if got := call.Version(); got != "" {
 			t.Errorf("unexpected call version: %v", got)
