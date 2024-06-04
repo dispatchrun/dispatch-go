@@ -6,19 +6,17 @@ import (
 
 	"github.com/dispatchrun/dispatch-go"
 	"github.com/dispatchrun/dispatch-go/dispatchtest"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 func TestClient(t *testing.T) {
-	var recorder dispatchtest.Recorder
+	var recorder dispatchtest.CallRecorder
 
-	server := dispatchtest.NewServer(&recorder)
+	server := dispatchtest.NewDispatchServer(&recorder)
 
 	client := &dispatch.Client{ApiKey: "foobar", ApiUrl: server.URL}
 
-	input := wrapperspb.Int32(11)
-	call, err := dispatch.NewCall("http://example.com", "function1", input)
+	call, err := dispatch.NewCall("http://example.com", "function1", wrapperspb.Int32(11))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -28,44 +26,25 @@ func TestClient(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(recorder.Requests) != 1 {
-		t.Fatalf("expected one request to Dispatch, got %v", len(recorder.Requests))
-	}
-	req := &recorder.Requests[0]
-	if req.ApiKey != "foobar" {
-		t.Errorf("unexpected API key: %v", req.ApiKey)
-	}
-	if len(req.Calls) != 1 {
-		t.Fatalf("expected one call to Dispatch, got %v", len(req.Calls))
-	}
-	got := req.Calls[0]
-	if got.Endpoint() != call.Endpoint() {
-		t.Errorf("unexpected call endpoint: %v", got.Endpoint())
-	}
-	if got.Function() != call.Function() {
-		t.Errorf("unexpected call function: %v", got.Function())
-	}
-	gotInput, err := got.Input()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !proto.Equal(gotInput, input) {
-		t.Errorf("unexpected call input: %#v", gotInput)
-	}
+	dispatchtest.AssertDispatchRequests(t, recorder.Requests, []dispatchtest.DispatchRequest{
+		{
+			ApiKey: "foobar",
+			Calls:  []dispatch.Call{call},
+		},
+	})
 }
 
 func TestClientEnvConfig(t *testing.T) {
-	var recorder dispatchtest.Recorder
+	var recorder dispatchtest.CallRecorder
 
-	server := dispatchtest.NewServer(&recorder)
+	server := dispatchtest.NewDispatchServer(&recorder)
 
 	client := &dispatch.Client{Env: []string{
 		"DISPATCH_API_KEY=foobar",
 		"DISPATCH_API_URL=" + server.URL,
 	}}
 
-	input := wrapperspb.Int32(11)
-	call, err := dispatch.NewCall("http://example.com", "function1", input)
+	call, err := dispatch.NewCall("http://example.com", "function1", wrapperspb.Int32(11))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,11 +54,61 @@ func TestClientEnvConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(recorder.Requests) != 1 {
-		t.Fatalf("expected one request to Dispatch, got %v", len(recorder.Requests))
+	dispatchtest.AssertDispatchRequests(t, recorder.Requests, []dispatchtest.DispatchRequest{
+		{
+			ApiKey: "foobar",
+			Calls:  []dispatch.Call{call},
+		},
+	})
+}
+
+func TestClientBatch(t *testing.T) {
+	var recorder dispatchtest.CallRecorder
+
+	server := dispatchtest.NewDispatchServer(&recorder)
+
+	client := &dispatch.Client{ApiKey: "foobar", ApiUrl: server.URL}
+
+	call1, err := dispatch.NewCall("http://example.com", "function1", wrapperspb.Int32(11))
+	if err != nil {
+		t.Fatal(err)
 	}
-	req := &recorder.Requests[0]
-	if req.ApiKey != "foobar" {
-		t.Errorf("unexpected API key: %v", req.ApiKey)
+	call2, err := dispatch.NewCall("http://example.com", "function2", wrapperspb.Int32(22))
+	if err != nil {
+		t.Fatal(err)
 	}
+	call3, err := dispatch.NewCall("http://example.com", "function3", wrapperspb.Int32(33))
+	if err != nil {
+		t.Fatal(err)
+	}
+	call4, err := dispatch.NewCall("http://example2.com", "function4", wrapperspb.Int32(44))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	batch := client.Batch()
+	batch.Add(call1, call2)
+	_, err = batch.Dispatch(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	batch.Reset()
+	batch.Add(call3)
+	batch.Add(call4)
+	_, err = batch.Dispatch(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dispatchtest.AssertDispatchRequests(t, recorder.Requests, []dispatchtest.DispatchRequest{
+		{
+			ApiKey: "foobar",
+			Calls:  []dispatch.Call{call1, call2},
+		},
+		{
+			ApiKey: "foobar",
+			Calls:  []dispatch.Call{call3, call4},
+		},
+	})
 }

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
 	"connectrpc.com/connect"
@@ -111,4 +112,38 @@ func TestDispatchEndpoint(t *testing.T) {
 	if err == nil || connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Fatalf("expected a permission denied error, got %v", err)
 	}
+}
+
+func TestDispatchCalls(t *testing.T) {
+	var recorder dispatchtest.CallRecorder
+
+	server := dispatchtest.NewDispatchServer(&recorder)
+
+	d := &dispatch.Dispatch{
+		EndpointUrl: "http://example.com",
+		Client:      dispatch.Client{ApiKey: "foobar", ApiUrl: server.URL},
+	}
+
+	fn := dispatch.NewPrimitiveFunction("function1", func(ctx context.Context, req *sdkv1.RunRequest) *sdkv1.RunResponse {
+		panic("not implemented")
+	})
+
+	d.Register(fn)
+
+	_, err := fn.Dispatch(context.Background(), wrapperspb.Int32(11), dispatch.WithExpiration(10*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wantCall, err := dispatch.NewCall("http://example.com", "function1", wrapperspb.Int32(11), dispatch.WithExpiration(10*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dispatchtest.AssertDispatchRequests(t, recorder.Requests, []dispatchtest.DispatchRequest{
+		{
+			ApiKey: "foobar",
+			Calls:  []dispatch.Call{wantCall},
+		},
+	})
 }

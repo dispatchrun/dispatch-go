@@ -141,9 +141,11 @@ func (b *Batch) Reset() {
 	b.calls = b.calls[:0]
 }
 
-// Add adds a Call to the batch.
-func (b *Batch) Add(call Call) {
-	b.calls = append(b.calls, call.proto())
+// Add adds calls to the batch.
+func (b *Batch) Add(calls ...Call) {
+	for i := range calls {
+		b.calls = append(b.calls, calls[i].proto())
+	}
 }
 
 // Dispatch dispatches the batch of function calls.

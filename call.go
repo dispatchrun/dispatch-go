@@ -91,3 +91,28 @@ func (c Call) CorrelationID() uint64 {
 func (c Call) proto() *sdkv1.Call {
 	return c.message
 }
+
+// Equal is true if the call is equal to another.
+func (c Call) Equal(other Call) bool {
+	if c.message == nil || other.message == nil {
+		return false
+	}
+	if c.Endpoint() != other.Endpoint() {
+		return false
+	}
+	if c.Function() != other.Function() {
+		return false
+	}
+	if c.CorrelationID() != other.CorrelationID() {
+		return false
+	}
+	if c.Expiration() != other.Expiration() {
+		return false
+	}
+	if c.Version() != other.Version() {
+		return false
+	}
+	input, _ := c.Input()
+	otherInput, _ := other.Input()
+	return input != nil && otherInput != nil && proto.Equal(input, otherInput)
+}

@@ -14,13 +14,13 @@ import (
 	"github.com/dispatchrun/dispatch-go"
 )
 
-// Handler is a handler for dispatched function calls.
-type Handler interface {
+// DispatchServerHandler is a handler for dispatched function calls.
+type DispatchServerHandler interface {
 	Handle(ctx context.Context, apiKey string, calls []dispatch.Call) ([]dispatch.ID, error)
 }
 
-// HandlerFunc creates a Handler from a function.
-func HandlerFunc(fn func(ctx context.Context, apiKey string, calls []dispatch.Call) ([]dispatch.ID, error)) Handler {
+// DispatchServerHandlerFunc creates a Handler from a function.
+func DispatchServerHandlerFunc(fn func(ctx context.Context, apiKey string, calls []dispatch.Call) ([]dispatch.ID, error)) DispatchServerHandler {
 	return handlerFunc(fn)
 }
 
@@ -30,15 +30,15 @@ func (h handlerFunc) Handle(ctx context.Context, apiKey string, calls []dispatch
 	return h(ctx, apiKey, calls)
 }
 
-// NewServer creates a new test Dispatch server.
-func NewServer(handler Handler) *httptest.Server {
+// NewDispatchServer creates a new test Dispatch server.
+func NewDispatchServer(handler DispatchServerHandler) *httptest.Server {
 	mux := http.NewServeMux()
 	mux.Handle(sdkv1connect.NewDispatchServiceHandler(&dispatchServiceHandler{handler}))
 	return httptest.NewServer(mux)
 }
 
 type dispatchServiceHandler struct {
-	Handler
+	DispatchServerHandler
 }
 
 func (d *dispatchServiceHandler) Dispatch(ctx context.Context, req *connect.Request[sdkv1.DispatchRequest]) (*connect.Response[sdkv1.DispatchResponse], error) {
@@ -80,22 +80,22 @@ func wrapCall(c *sdkv1.Call) (dispatch.Call, error) {
 		dispatch.WithVersion(c.Version))
 }
 
-// Recorder is a Handler that captures requests to Dispatch.
-type Recorder struct {
-	Requests []RecorderRequest
+// CallRecorder is a DispatchServerHandler that captures requests to Dispatch.
+type CallRecorder struct {
+	Requests []DispatchRequest
 	calls    int
 }
 
-type RecorderRequest struct {
+type DispatchRequest struct {
 	ApiKey string
 	Calls  []dispatch.Call
 }
 
-func (r *Recorder) Handle(ctx context.Context, apiKey string, calls []dispatch.Call) ([]dispatch.ID, error) {
+func (r *CallRecorder) Handle(ctx context.Context, apiKey string, calls []dispatch.Call) ([]dispatch.ID, error) {
 	base := r.calls
 	r.calls += len(calls)
 
-	r.Requests = append(r.Requests, RecorderRequest{
+	r.Requests = append(r.Requests, DispatchRequest{
 		ApiKey: apiKey,
 		Calls:  calls,
 	})
