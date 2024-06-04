@@ -13,8 +13,8 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 )
 
-// NamedFunction is a Dispatch function with a name.
-type NamedFunction interface {
+// Function is a Dispatch function.
+type Function interface {
 	// Name is the name of the function.
 	Name() string
 
@@ -22,57 +22,47 @@ type NamedFunction interface {
 	Run(context.Context, *sdkv1.RunRequest) *sdkv1.RunResponse
 }
 
-// NewPrimitiveFunction creates a primitive function that
-// accepts a RunRequest and returns a RunResponse.
-func NewPrimitiveFunction(name string, fn func(context.Context, *sdkv1.RunRequest) *sdkv1.RunResponse) NamedFunction {
-	return &primitiveFunction{name, fn}
+// NewPrimitiveFunction creates a PrimitiveFunction.
+func NewPrimitiveFunction(name string, fn func(context.Context, *sdkv1.RunRequest) *sdkv1.RunResponse) *PrimitiveFunction {
+	return &PrimitiveFunction{name, fn}
 }
 
-type primitiveFunction struct {
+// PrimitiveFunction is a function that's close to the underlying
+// Dispatch protocol, accepting a RunRequest and returning a RunResponse.
+type PrimitiveFunction struct {
 	name string
 	fn   func(context.Context, *sdkv1.RunRequest) *sdkv1.RunResponse
 }
 
-func (p *primitiveFunction) Name() string {
+// Name is the name of the function.
+func (p *PrimitiveFunction) Name() string {
 	return p.name
 }
 
-func (p *primitiveFunction) Run(ctx context.Context, req *sdkv1.RunRequest) *sdkv1.RunResponse {
+// Run runs the function.
+func (p *PrimitiveFunction) Run(ctx context.Context, req *sdkv1.RunRequest) *sdkv1.RunResponse {
 	return p.fn(ctx, req)
 }
 
-// NewFunction creates a Dispatch function.
-func NewFunction[Input, Output proto.Message](name string, fn func(context.Context, Input) (Output, error)) *Function[Input, Output] {
-	return &Function[Input, Output]{name, fn}
+// NewGenericFunction creates a GenericFunction.
+func NewGenericFunction[Input, Output proto.Message](name string, fn func(context.Context, Input) (Output, error)) *GenericFunction[Input, Output] {
+	return &GenericFunction[Input, Output]{name, fn}
 }
 
-// Function is a generic function type that can be used as entrypoint to a
-// durable coroutine.
-type Function[Input, Output proto.Message] struct {
+// GenericFunction is a higher level Dispatch function that accepts
+// arbitrary input and returns arbitrary output.
+type GenericFunction[Input, Output proto.Message] struct {
 	name string
 	fn   func(ctx context.Context, input Input) (Output, error)
 }
 
 // Name is the name of the function.
-func (f *Function[Input, Output]) Name() string {
+func (f *GenericFunction[Input, Output]) Name() string {
 	return f.name
 }
 
-// Run runs the Dispatch function.
-//
-// The request passed as argument is interpreted to either start a new coroutine
-// or resume from a previous state. If the coroutine yields, the returned
-// response embeds a sdkv1.Poll message capturing its state; otherwise, the
-// response contains either the result of the execution or an error.
-//
-// Note that the ability to execute durable coroutines relies on the program
-// being compiled with -tags=durable. Without this build tag, coroutines are
-// volatiles and the method acts as a simple invocation that runs the whole
-// function to completion.
-func (f *Function[Input, Output]) Run(ctx context.Context, req *sdkv1.RunRequest) *sdkv1.RunResponse {
-	// TODO: since the coroutine yield and return values are the same the only
-	// common denominator is any. We could improve type safety if we were able
-	// to separate the two.
+// Run runs the function.
+func (f *GenericFunction[Input, Output]) Run(ctx context.Context, req *sdkv1.RunRequest) *sdkv1.RunResponse {
 	var coro coroutine.Coroutine[any, any]
 	var zero Input
 
@@ -154,7 +144,7 @@ func (f *Function[Input, Output]) Run(ctx context.Context, req *sdkv1.RunRequest
 }
 
 //go:noinline
-func (f *Function[Input, Output]) entrypoint(input Input) func() any {
+func (f *GenericFunction[Input, Output]) entrypoint(input Input) func() any {
 	return func() any {
 		// The context that gets passed as argument here should be recreated
 		// each time the coroutine is resumed, ideally inheriting from the

@@ -12,7 +12,7 @@ import (
 )
 
 func TestFunctionRunInvalidCoroutineType(t *testing.T) {
-	fn := dispatch.NewFunction("foo", func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
+	fn := dispatch.NewGenericFunction("foo", func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
 		return nil, nil
 	})
 
@@ -25,7 +25,7 @@ func TestFunctionRunInvalidCoroutineType(t *testing.T) {
 func TestFunctionRunError(t *testing.T) {
 	oops := errors.New("oops")
 
-	fn := dispatch.NewFunction("foo", func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
+	fn := dispatch.NewGenericFunction("foo", func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
 		return nil, oops
 	})
 
@@ -55,7 +55,7 @@ func TestFunctionRunError(t *testing.T) {
 }
 
 func TestFunctionRunResult(t *testing.T) {
-	fn := dispatch.NewFunction("foo", func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
+	fn := dispatch.NewGenericFunction("foo", func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
 		return wrapperspb.String("world"), nil
 	})
 

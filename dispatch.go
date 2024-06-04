@@ -42,22 +42,22 @@ type Dispatch struct {
 	// Client is the client to use when dispatching function calls.
 	Client
 
-	functions map[string]NamedFunction
+	functions map[string]Function
 	mu        sync.Mutex
 }
 
 // Register registers a function.
-func (d *Dispatch) Register(fn NamedFunction) {
+func (d *Dispatch) Register(fn Function) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
 	if d.functions == nil {
-		d.functions = map[string]NamedFunction{}
+		d.functions = map[string]Function{}
 	}
 	d.functions[fn.Name()] = fn
 }
 
-func (d *Dispatch) lookup(name string) NamedFunction {
+func (d *Dispatch) lookup(name string) Function {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
