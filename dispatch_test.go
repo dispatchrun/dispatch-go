@@ -147,3 +147,46 @@ func TestDispatchCalls(t *testing.T) {
 		},
 	})
 }
+
+func TestDispatchCallsBatch(t *testing.T) {
+	var recorder dispatchtest.CallRecorder
+
+	server := dispatchtest.NewDispatchServer(&recorder)
+
+	d := &dispatch.Dispatch{
+		EndpointUrl: "http://example.com",
+		Client:      dispatch.Client{ApiKey: "foobar", ApiUrl: server.URL},
+	}
+
+	fn1 := dispatch.NewPrimitiveFunction("function1", func(ctx context.Context, req *sdkv1.RunRequest) *sdkv1.RunResponse {
+		panic("not implemented")
+	})
+	fn2 := dispatch.NewFunction("function2", func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
+		panic("not implemented")
+	})
+
+	d.Register(fn1)
+	d.Register(fn2)
+
+	call1, err := fn1.BuildCall(wrapperspb.Int32(11), dispatch.WithExpiration(10*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	call2, err := fn2.BuildCall(wrapperspb.String("foo"), dispatch.WithVersion("xyzzy"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	batch := d.Batch()
+	batch.Add(call1, call2)
+	if _, err := batch.Dispatch(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	dispatchtest.AssertDispatchRequests(t, recorder.Requests, []dispatchtest.DispatchRequest{
+		{
+			ApiKey: "foobar",
+			Calls:  []dispatch.Call{call1, call2},
+		},
+	})
+}

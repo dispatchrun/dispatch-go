@@ -27,64 +27,13 @@ type Function interface {
 	register(endpoint string, client *Client)
 }
 
-// NewPrimitiveFunction creates a PrimitiveFunction.
-func NewPrimitiveFunction(name string, fn func(context.Context, *sdkv1.RunRequest) *sdkv1.RunResponse) *PrimitiveFunction {
-	return &PrimitiveFunction{name: name, fn: fn}
-}
-
-// PrimitiveFunction is a function that's close to the underlying
-// Dispatch protocol, accepting a RunRequest and returning a RunResponse.
-type PrimitiveFunction struct {
-	name string
-	fn   func(context.Context, *sdkv1.RunRequest) *sdkv1.RunResponse
-
-	endpoint string
-	client   *Client
-}
-
-// Name is the name of the function.
-func (f *PrimitiveFunction) Name() string {
-	return f.name
-}
-
-// Run runs the function.
-func (f *PrimitiveFunction) Run(ctx context.Context, req *sdkv1.RunRequest) *sdkv1.RunResponse {
-	return f.fn(ctx, req)
-}
-
-// BuildCall constructs a call for the function.
-func (f *PrimitiveFunction) BuildCall(input proto.Message, opts ...CallOption) (Call, error) {
-	if f.endpoint == "" {
-		return Call{}, fmt.Errorf("cannot build function call: endpoint has not been registered")
-	}
-	return NewCall(f.endpoint, f.name, input, opts...)
-}
-
-// Dispatch dispatches a call to the function.
-func (f *PrimitiveFunction) Dispatch(ctx context.Context, input proto.Message, opts ...CallOption) (ID, error) {
-	if f.client == nil {
-		return "", fmt.Errorf("cannot dispatch function call: client has not been registered")
-	}
-	call, err := f.BuildCall(input, opts...)
-	if err != nil {
-		return "", err
-	}
-	return f.client.Dispatch(ctx, call)
-}
-
-// register registers an endpoint and client.
-func (f *PrimitiveFunction) register(endpoint string, client *Client) {
-	f.endpoint = endpoint
-	f.client = client
-}
-
-// NewGenericFunction creates a GenericFunction.
-func NewGenericFunction[Input, Output proto.Message](name string, fn func(context.Context, Input) (Output, error)) *GenericFunction[Input, Output] {
+// NewFunction creates a Dispatch function.
+func NewFunction[Input, Output proto.Message](name string, fn func(context.Context, Input) (Output, error)) *GenericFunction[Input, Output] {
 	return &GenericFunction[Input, Output]{name: name, fn: fn}
 }
 
-// GenericFunction is a higher level Dispatch function that accepts
-// arbitrary input and returns arbitrary output.
+// GenericFunction is a Dispatch function that accepts arbitrary input
+// and returns arbitrary output.
 type GenericFunction[Input, Output proto.Message] struct {
 	name string
 	fn   func(ctx context.Context, input Input) (Output, error)
@@ -221,4 +170,55 @@ func (f *GenericFunction[Input, Output]) entrypoint(input Input) func() any {
 			return res
 		}
 	}
+}
+
+// NewPrimitiveFunction creates a PrimitiveFunction.
+func NewPrimitiveFunction(name string, fn func(context.Context, *sdkv1.RunRequest) *sdkv1.RunResponse) *PrimitiveFunction {
+	return &PrimitiveFunction{name: name, fn: fn}
+}
+
+// PrimitiveFunction is a function that's close to the underlying
+// Dispatch protocol, accepting a RunRequest and returning a RunResponse.
+type PrimitiveFunction struct {
+	name string
+	fn   func(context.Context, *sdkv1.RunRequest) *sdkv1.RunResponse
+
+	endpoint string
+	client   *Client
+}
+
+// Name is the name of the function.
+func (f *PrimitiveFunction) Name() string {
+	return f.name
+}
+
+// Run runs the function.
+func (f *PrimitiveFunction) Run(ctx context.Context, req *sdkv1.RunRequest) *sdkv1.RunResponse {
+	return f.fn(ctx, req)
+}
+
+// BuildCall constructs a call for the function.
+func (f *PrimitiveFunction) BuildCall(input proto.Message, opts ...CallOption) (Call, error) {
+	if f.endpoint == "" {
+		return Call{}, fmt.Errorf("cannot build function call: endpoint has not been registered")
+	}
+	return NewCall(f.endpoint, f.name, input, opts...)
+}
+
+// Dispatch dispatches a call to the function.
+func (f *PrimitiveFunction) Dispatch(ctx context.Context, input proto.Message, opts ...CallOption) (ID, error) {
+	if f.client == nil {
+		return "", fmt.Errorf("cannot dispatch function call: client has not been registered")
+	}
+	call, err := f.BuildCall(input, opts...)
+	if err != nil {
+		return "", err
+	}
+	return f.client.Dispatch(ctx, call)
+}
+
+// register registers an endpoint and client.
+func (f *PrimitiveFunction) register(endpoint string, client *Client) {
+	f.endpoint = endpoint
+	f.client = client
 }
