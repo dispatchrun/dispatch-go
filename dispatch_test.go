@@ -60,7 +60,10 @@ func TestDispatchEndpoint(t *testing.T) {
 
 	d.EndpointUrl = server.URL
 
-	client := dispatchtest.NewEndpointClient(server.URL, dispatchtest.WithSigningKey(signingKey))
+	client := dispatchtest.EndpointClient{
+		EndpointUrl: server.URL,
+		SigningKey:  signingKey,
+	}
 
 	// Send a request for the identity function, and check that the
 	// input was echoed back.
@@ -100,7 +103,7 @@ func TestDispatchEndpoint(t *testing.T) {
 
 	// Try with a client that does not sign requests. The Dispatch
 	// instance should reject the request.
-	nonSigningClient := dispatchtest.NewEndpointClient(server.URL)
+	nonSigningClient := dispatchtest.EndpointClient{EndpointUrl: server.URL}
 	_, err = nonSigningClient.Run(context.Background(), &sdkv1.RunRequest{
 		Function:  "identity",
 		Directive: &sdkv1.RunRequest_Input{Input: input},

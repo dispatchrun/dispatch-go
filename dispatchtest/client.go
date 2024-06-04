@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"net/http"
+	"sync"
 
 	"buf.build/gen/go/stealthrocket/dispatch-proto/connectrpc/go/dispatch/sdk/v1/sdkv1connect"
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
@@ -18,60 +19,62 @@ import (
 // is a client for the Dispatch API. The client here is
 // useful when testing an endpoint.
 type EndpointClient struct {
-	httpClient connect.HTTPClient
-	signingKey ed25519.PrivateKey
+	// EndpointUrl is the URL of the endpoint to connect to.
+	EndpointUrl string
+
+	// Client is the client to use when making HTTP requets.
+	// By default, http.DefaultClient is used.
+	Client connect.HTTPClient
+
+	// SigningKey is an optional signing key to use when signing
+	// outbound HTTP requests. If the key is omitted, requests are
+	// not signed.
+	SigningKey ed25519.PrivateKey
 
 	client sdkv1connect.FunctionServiceClient
-}
-
-// NewEndpointClient creates an EndpointClient.
-func NewEndpointClient(baseURL string, opts ...endpointClientOption) *EndpointClient {
-	c := &EndpointClient{}
-	for _, opt := range opts {
-		opt(c)
-	}
-
-	if c.httpClient == nil {
-		c.httpClient = http.DefaultClient
-	}
-	if c.signingKey != nil {
-		signer := auth.NewSigner(c.signingKey)
-		c.httpClient = signer.Client(c.httpClient)
-	}
-
-	validatingInterceptor, err := validate.NewInterceptor()
-	if err != nil {
-		panic(err)
-	}
-	c.client = sdkv1connect.NewFunctionServiceClient(c.httpClient, baseURL,
-		connect.WithInterceptors(validatingInterceptor))
-	return c
-}
-
-type endpointClientOption func(*EndpointClient)
-
-// WithClient configures an EndpointClient to make HTTP
-// requests using the specified HTTP client.
-//
-// By default, http.DefaultClient is used.
-func WithClient(client *http.Client) endpointClientOption {
-	return endpointClientOption(func(c *EndpointClient) { c.httpClient = client })
-}
-
-// WithSigningKey configures an EndpointClient to sign
-// requests in the same way that Dispatch would, using
-// the specified ed25519 private key.
-//
-// By default, requests are not signed.
-func WithSigningKey(signingKey ed25519.PrivateKey) endpointClientOption {
-	return endpointClientOption(func(c *EndpointClient) { c.signingKey = signingKey })
+	err    error
+	mu     sync.Mutex
 }
 
 // Run sends a RunRequest and returns a RunResponse.
 func (c *EndpointClient) Run(ctx context.Context, req *sdkv1.RunRequest) (*sdkv1.RunResponse, error) {
-	res, err := c.client.Run(ctx, connect.NewRequest(req))
+	client, err := c.endpointClient()
+	if err != nil {
+		return nil, err
+	}
+	res, err := client.Run(ctx, connect.NewRequest(req))
 	if err != nil {
 		return nil, err
 	}
 	return res.Msg, nil
+}
+
+func (c *EndpointClient) endpointClient() (sdkv1connect.FunctionServiceClient, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.err != nil {
+		return nil, c.err
+	}
+	if c.client != nil {
+		return c.client, nil
+	}
+
+	httpClient := c.Client
+	if httpClient == nil {
+		httpClient = http.DefaultClient
+	}
+	if c.SigningKey != nil {
+		signer := auth.NewSigner(c.SigningKey)
+		httpClient = signer.Client(httpClient)
+	}
+
+	validatingInterceptor, err := validate.NewInterceptor()
+	if err != nil {
+		c.err = err
+		return nil, err
+	}
+	c.client = sdkv1connect.NewFunctionServiceClient(httpClient, c.EndpointUrl,
+		connect.WithInterceptors(validatingInterceptor))
+	return c.client, nil
 }
