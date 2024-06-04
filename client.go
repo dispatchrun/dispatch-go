@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"sync"
 
 	"buf.build/gen/go/stealthrocket/dispatch-proto/connectrpc/go/dispatch/sdk/v1/sdkv1connect"
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
@@ -14,33 +13,90 @@ import (
 	"connectrpc.com/validate"
 )
 
+// Client is a client for the Dispatch API.
+//
+// The Client can be used to dispatch function calls.
+type Client struct {
+	apiKey     string
+	apiUrl     string
+	env        []string
+	httpClient *http.Client
+
+	client sdkv1connect.DispatchServiceClient
+}
+
+// NewClient creates a Client.
+func NewClient(opts ...ClientOption) (*Client, error) {
+	c := &Client{env: os.Environ()}
+	for _, opt := range opts {
+		opt(c)
+	}
+
+	if c.apiKey == "" {
+		c.apiKey, _ = getenv(c.env, "DISPATCH_API_KEY")
+	}
+	if c.apiKey == "" {
+		return nil, fmt.Errorf("API key has not been set. Use WithAPIKey(..), or set the DISPATCH_API_KEY environment variable")
+	}
+
+	if c.apiUrl == "" {
+		c.apiUrl, _ = getenv(c.env, "DISPATCH_API_URL")
+	}
+	if c.apiUrl == "" {
+		c.apiUrl = DefaultApiUrl
+	}
+
+	if c.httpClient == nil {
+		c.httpClient = http.DefaultClient
+	}
+
+	authenticatingInterceptor := connect.UnaryInterceptorFunc(func(next connect.UnaryFunc) connect.UnaryFunc {
+		authorization := "Bearer " + c.apiKey
+		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
+			req.Header().Add("Authorization", authorization)
+			return next(ctx, req)
+		}
+	})
+
+	validatingInterceptor, err := validate.NewInterceptor()
+	if err != nil {
+		return nil, err
+	}
+
+	c.client = sdkv1connect.NewDispatchServiceClient(c.httpClient, c.apiUrl,
+		connect.WithInterceptors(validatingInterceptor, authenticatingInterceptor))
+
+	return c, nil
+}
+
+// ClientOption configures a Client.
+type ClientOption func(*Client)
+
+// WithAPIKey sets the Dispatch API key to use for authentication when
+// dispatching function calls through a Client.
+//
+// It defaults to the value of the DISPATCH_API_KEY environment variable.
+func WithAPIKey(apiKey string) ClientOption {
+	return func(c *Client) { c.apiKey = apiKey }
+}
+
+// WithAPIUrl sets the URL of the Dispatch API.
+//
+// It defaults to the value of the DISPATCH_API_URL environment variable,
+// or DefaultApiUrl if DISPATCH_API_URL is unset.
+func WithAPIUrl(apiUrl string) ClientOption {
+	return func(c *Client) { c.apiUrl = apiUrl }
+}
+
 // DefaultApiUrl is the default Dispatch API URL.
 const DefaultApiUrl = "https://api.dispatch.run"
 
-// Client is a client for Dispatch.
-type Client struct {
-	// ApiKey is the Dispatch API key to use for authentication when
-	// dispatching calls to functions. If omitted, the the value of the
-	// DISPATCH_API_KEY environment variable is used.
-	ApiKey string
-
-	// ApiUrl is the URL of the Dispatch API to use when dispatching calls
-	// to functions. If omitted, the value of the DISPATCH_API_URL
-	// environment variable is used. If both are unset/empty, the default URL
-	// (DefaultApiUrl) is used.
-	ApiUrl string
-
-	// Env are environment variables to parse configuration from.
-	// If nil, environment variables are read from os.Environ().
-	Env []string
-
-	// Client is the HTTP client to use when making requests to Dispatch.
-	// If nil, http.DefaultClient is used.
-	Client *http.Client
-
-	client sdkv1connect.DispatchServiceClient
-	err    error
-	mu     sync.Mutex
+// WithClientEnv sets the environment variables that a Client parses
+// default configuration from.
+//
+// It defaults to os.Environ().
+func WithClientEnv(env []string) ClientOption {
+	return func(c *Client) { c.env = env }
 }
 
 // Dispatch dispatches a function call.
@@ -56,82 +112,12 @@ func (c *Client) Dispatch(ctx context.Context, call Call) (ID, error) {
 
 // Batch creates a Batch.
 func (c *Client) Batch() Batch {
-	return Batch{client: c}
-}
-
-func (c *Client) dispatchClient() (sdkv1connect.DispatchServiceClient, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.err != nil {
-		return nil, c.err
-	}
-	if c.client != nil {
-		return c.client, nil
-	}
-
-	apiKey := c.ApiKey
-	if apiKey == "" {
-		envApiKey, ok := getenv(c.Env, "DISPATCH_API_KEY")
-		if !ok || envApiKey == "" {
-			c.err = fmt.Errorf("Dispatch API key not found. Check DISPATCH_API_KEY")
-			return nil, c.err
-		}
-		apiKey = envApiKey
-	}
-
-	apiUrl := c.ApiUrl
-	if apiUrl == "" {
-		envApiUrl, ok := getenv(c.Env, "DISPATCH_API_URL")
-		if ok && envApiUrl != "" {
-			apiUrl = envApiUrl
-		} else {
-			apiUrl = DefaultApiUrl
-		}
-	}
-
-	authenticatingInterceptor := connect.UnaryInterceptorFunc(func(next connect.UnaryFunc) connect.UnaryFunc {
-		return func(ctx context.Context, req connect.AnyRequest) (connect.AnyResponse, error) {
-			req.Header().Add("Authorization", "Bearer "+apiKey)
-			return next(ctx, req)
-		}
-	})
-
-	validatingInterceptor, err := validate.NewInterceptor()
-	if err != nil {
-		c.err = err
-		return nil, err
-	}
-
-	c.client = sdkv1connect.NewDispatchServiceClient(c.httpClient(), apiUrl,
-		connect.WithInterceptors(validatingInterceptor, authenticatingInterceptor))
-
-	return c.client, nil
-}
-
-func (c *Client) httpClient() *http.Client {
-	if c.Client != nil {
-		return c.Client
-	}
-	return http.DefaultClient
-}
-
-func getenv(env []string, name string) (string, bool) {
-	if env == nil {
-		env = os.Environ()
-	}
-	for _, s := range env {
-		n, v, ok := strings.Cut(s, "=")
-		if ok && n == name {
-			return v, true
-		}
-	}
-	return "", false
+	return Batch{client: c.client}
 }
 
 // Batch is used to submit a batch of function calls to Dispatch.
 type Batch struct {
-	client *Client
+	client sdkv1connect.DispatchServiceClient
 
 	calls []*sdkv1.Call
 }
@@ -150,14 +136,23 @@ func (b *Batch) Add(calls ...Call) {
 
 // Dispatch dispatches the batch of function calls.
 func (b *Batch) Dispatch(ctx context.Context) ([]ID, error) {
-	client, err := b.client.dispatchClient()
-	if err != nil {
-		return nil, err
-	}
 	req := connect.NewRequest(&sdkv1.DispatchRequest{Calls: b.calls})
-	res, err := client.Dispatch(ctx, req)
+	res, err := b.client.Dispatch(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 	return res.Msg.DispatchIds, nil
+}
+
+func getenv(env []string, name string) (string, bool) {
+	if env == nil {
+		env = os.Environ()
+	}
+	for _, s := range env {
+		n, v, ok := strings.Cut(s, "=")
+		if ok && n == name {
+			return v, true
+		}
+	}
+	return "", false
 }

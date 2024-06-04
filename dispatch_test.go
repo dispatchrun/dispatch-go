@@ -119,9 +119,14 @@ func TestDispatchCalls(t *testing.T) {
 
 	server := dispatchtest.NewDispatchServer(&recorder)
 
+	client, err := dispatch.NewClient(dispatch.WithAPIKey("foobar"), dispatch.WithAPIUrl(server.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	d := &dispatch.Dispatch{
 		EndpointUrl: "http://example.com",
-		Client:      dispatch.Client{ApiKey: "foobar", ApiUrl: server.URL},
+		Client:      *client, // FIXME
 	}
 
 	fn := dispatch.NewPrimitiveFunction("function1", func(ctx context.Context, req *sdkv1.RunRequest) *sdkv1.RunResponse {
@@ -130,7 +135,7 @@ func TestDispatchCalls(t *testing.T) {
 
 	d.Register(fn)
 
-	_, err := fn.Dispatch(context.Background(), wrapperspb.Int32(11), dispatch.WithExpiration(10*time.Second))
+	_, err = fn.Dispatch(context.Background(), wrapperspb.Int32(11), dispatch.WithExpiration(10*time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,9 +158,14 @@ func TestDispatchCallsBatch(t *testing.T) {
 
 	server := dispatchtest.NewDispatchServer(&recorder)
 
+	client, err := dispatch.NewClient(dispatch.WithAPIKey("foobar"), dispatch.WithAPIUrl(server.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	d := &dispatch.Dispatch{
 		EndpointUrl: "http://example.com",
-		Client:      dispatch.Client{ApiKey: "foobar", ApiUrl: server.URL},
+		Client:      *client, // FIXME
 	}
 
 	fn1 := dispatch.NewPrimitiveFunction("function1", func(ctx context.Context, req *sdkv1.RunRequest) *sdkv1.RunResponse {

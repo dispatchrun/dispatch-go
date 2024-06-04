@@ -14,7 +14,10 @@ func TestClient(t *testing.T) {
 
 	server := dispatchtest.NewDispatchServer(&recorder)
 
-	client := &dispatch.Client{ApiKey: "foobar", ApiUrl: server.URL}
+	client, err := dispatch.NewClient(dispatch.WithAPIKey("foobar"), dispatch.WithAPIUrl(server.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	call, err := dispatch.NewCall("http://example.com", "function1", wrapperspb.Int32(11))
 	if err != nil {
@@ -35,14 +38,16 @@ func TestClient(t *testing.T) {
 }
 
 func TestClientEnvConfig(t *testing.T) {
-	var recorder dispatchtest.CallRecorder
+	recorder := &dispatchtest.CallRecorder{}
+	server := dispatchtest.NewDispatchServer(recorder)
 
-	server := dispatchtest.NewDispatchServer(&recorder)
-
-	client := &dispatch.Client{Env: []string{
+	client, err := dispatch.NewClient(dispatch.WithClientEnv([]string{
 		"DISPATCH_API_KEY=foobar",
 		"DISPATCH_API_URL=" + server.URL,
-	}}
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	call, err := dispatch.NewCall("http://example.com", "function1", wrapperspb.Int32(11))
 	if err != nil {
@@ -63,11 +68,13 @@ func TestClientEnvConfig(t *testing.T) {
 }
 
 func TestClientBatch(t *testing.T) {
-	var recorder dispatchtest.CallRecorder
+	recorder := &dispatchtest.CallRecorder{}
+	server := dispatchtest.NewDispatchServer(recorder)
 
-	server := dispatchtest.NewDispatchServer(&recorder)
-
-	client := &dispatch.Client{ApiKey: "foobar", ApiUrl: server.URL}
+	client, err := dispatch.NewClient(dispatch.WithAPIKey("foobar"), dispatch.WithAPIUrl(server.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	call1, err := dispatch.NewCall("http://example.com", "function1", wrapperspb.Int32(11))
 	if err != nil {
@@ -111,4 +118,13 @@ func TestClientBatch(t *testing.T) {
 			Calls:  []dispatch.Call{call3, call4},
 		},
 	})
+}
+
+func TestClientNoAPIKey(t *testing.T) {
+	_, err := dispatch.NewClient(dispatch.WithClientEnv(nil))
+	if err == nil {
+		t.Fatalf("expected an error")
+	} else if err.Error() != "API key has not been set. Use WithAPIKey(..), or set the DISPATCH_API_KEY environment variable" {
+		t.Errorf("unexpected error: %v", err)
+	}
 }
