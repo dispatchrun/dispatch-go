@@ -559,7 +559,7 @@ func NewRequest(function string, directive RequestDirective, opts ...RequestOpti
 	}
 	switch d := directive.(type) {
 	case Input:
-		request.proto.Directive = &sdkv1.RunRequest_Input{Input: d.Value().proto}
+		request.proto.Directive = &sdkv1.RunRequest_Input{Input: Any(d).proto}
 	case PollResult:
 		request.proto.Directive = &sdkv1.RunRequest_PollResult{PollResult: d.proto}
 	default:
@@ -579,11 +579,6 @@ func (PollResult) requestDirective() {}
 // Input is a directive to start execution of a function
 // with an input value.
 type Input Any
-
-// Value is the input value.
-func (i Input) Value() Any {
-	return Any(i)
-}
 
 // RequestOption configures a Request.
 type RequestOption func(*Request)
@@ -627,9 +622,9 @@ func (r Request) Directive() RequestDirective {
 // Input is input to the function, along with a boolean
 // flag that indicates whether the request carries a directive
 // to start the function with the input.
-func (r Request) Input() (Input, bool) {
+func (r Request) Input() (Any, bool) {
 	proto := r.proto.GetInput()
-	return Input(Any{proto}), proto != nil
+	return Any{proto}, proto != nil
 }
 
 // PollResult is the poll result, along with a boolean
@@ -701,7 +696,7 @@ func (r Request) Equal(other Request) bool {
 	expiration, _ := r.ExpirationTime()
 	otherExpiration, _ := other.ExpirationTime()
 	return r.Function() == other.Function() &&
-		input.Value().Equal(otherInput.Value()) &&
+		input.Equal(otherInput) &&
 		pollResult.Equal(otherPollResult) &&
 		creation.Equal(otherCreation) &&
 		expiration.Equal(otherExpiration) &&

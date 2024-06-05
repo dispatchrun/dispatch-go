@@ -30,7 +30,7 @@ func TestDispatchEndpoint(t *testing.T) {
 		if !ok {
 			return dispatch.NewErrorfResponse("%w: unexpected request: %v", dispatch.ErrInvalidArgument, req)
 		}
-		return dispatch.NewOutputResponse(input.Value())
+		return dispatch.NewOutputResponse(input)
 	}))
 
 	// Send a request for the identity function, and check that the

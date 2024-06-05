@@ -49,7 +49,7 @@ func (f *GenericFunction[Input, Output]) Run(ctx context.Context, req Request) R
 	var zero Input
 
 	if boxedInput, ok := req.Input(); ok {
-		message, err := boxedInput.Value().Proto()
+		message, err := boxedInput.Proto()
 		if err != nil {
 			return NewErrorfResponse("%w: invalid input: %v", ErrInvalidArgument, err)
 		}

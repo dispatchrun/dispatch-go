@@ -229,16 +229,23 @@ func (d *dispatchFunctionServiceHandler) Run(ctx context.Context, req *connect.R
 // If the address is omitted, the endpoint is served on the address found
 // in the DISPATCH_ENDPOINT_ADDR environment variable. If this is unset,
 // the endpoint is served at 127.0.0.1:8000.
-func (d *Dispatch) ListenAndServe(addr string) error {
+func (d *Dispatch) ListenAndServe(optionalAddr ...string) error {
+	var addr string
+	switch len(optionalAddr) {
+	case 0:
+		addr = getenv(d.env, "DISPATCH_ENDPOINT_ADDR")
+		if addr == "" {
+			addr = "127.0.0.1:8000"
+		}
+	case 1:
+		addr = optionalAddr[0]
+	default:
+		return fmt.Errorf("more than one address provided")
+	}
+
 	mux := http.NewServeMux()
 	mux.Handle(d.Handler())
 
-	if addr == "" {
-		addr = getenv(d.env, "DISPATCH_ENDPOINT_ADDR")
-	}
-	if addr == "" {
-		addr = "127.0.0.1:8000"
-	}
 	slog.Info("serving Dispatching endpoint", "addr", addr)
 
 	server := &http.Server{Addr: addr, Handler: mux}
