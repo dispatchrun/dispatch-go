@@ -27,13 +27,12 @@ func TestDispatchEndpoint(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	endpoint.Register(dispatch.NewPrimitiveFunction("identity", func(ctx context.Context, req *sdkv1.RunRequest) dispatch.Response {
-		switch d := req.Directive.(type) {
-		case *sdkv1.RunRequest_Input:
-			return dispatch.NewOutputResponse(dispatch.NewRawAny(d.Input.TypeUrl, d.Input.Value))
-		default:
-			return dispatch.NewErrorfResponse("%w: unexpected run directive: %T", dispatch.ErrInvalidArgument, d)
+	endpoint.Register(dispatch.NewPrimitiveFunction("identity", func(ctx context.Context, req dispatch.Request) dispatch.Response {
+		input, ok := req.Input()
+		if !ok {
+			return dispatch.NewErrorfResponse("%w: unexpected request: %v", dispatch.ErrInvalidArgument, req)
 		}
+		return dispatch.NewOutputResponse(input.Value())
 	}))
 
 	// Send a request for the identity function, and check that the
@@ -99,7 +98,7 @@ func TestDispatchCall(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fn := dispatch.NewPrimitiveFunction("function1", func(ctx context.Context, req *sdkv1.RunRequest) dispatch.Response {
+	fn := dispatch.NewPrimitiveFunction("function1", func(ctx context.Context, req dispatch.Request) dispatch.Response {
 		panic("not implemented")
 	})
 	endpoint.Register(fn)
@@ -161,7 +160,7 @@ func TestDispatchCallsBatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fn1 := dispatch.NewPrimitiveFunction("function1", func(ctx context.Context, req *sdkv1.RunRequest) dispatch.Response {
+	fn1 := dispatch.NewPrimitiveFunction("function1", func(ctx context.Context, req dispatch.Request) dispatch.Response {
 		panic("not implemented")
 	})
 	fn2 := dispatch.NewFunction("function2", func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {

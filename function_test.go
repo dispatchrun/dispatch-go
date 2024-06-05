@@ -5,45 +5,17 @@ import (
 	"errors"
 	"testing"
 
-	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
 	"github.com/dispatchrun/dispatch-go"
-	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-func TestFunctionRunInvalidCoroutineType(t *testing.T) {
-	fn := dispatch.NewFunction("foo", func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
-		return nil, nil
-	})
-
-	res := fn.Run(context.Background(), &sdkv1.RunRequest{})
-	error, ok := res.Error()
-	if !ok {
-		t.Fatalf("invalid response: %v", res)
-	}
-	if error.Message() != "InvalidArgument: unsupported coroutine directive: <nil>" {
-		t.Errorf("unexpected error: %v", error)
-	}
-}
-
 func TestFunctionRunError(t *testing.T) {
-	oops := errors.New("oops")
-
 	fn := dispatch.NewFunction("foo", func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
-		return nil, oops
+		return nil, errors.New("oops")
 	})
 
-	input, err := anypb.New(wrapperspb.String("hello"))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	res := fn.Run(context.Background(), &sdkv1.RunRequest{
-		Directive: &sdkv1.RunRequest_Input{
-			Input: input,
-		},
-	})
-
+	req := dispatch.NewRequest("foo", dispatch.Input(dispatch.String("hello")))
+	res := fn.Run(context.Background(), req)
 	error, ok := res.Error()
 	if !ok {
 		t.Fatalf("invalid response: %v", res)
@@ -61,20 +33,14 @@ func TestFunctionRunResult(t *testing.T) {
 		return wrapperspb.String("world"), nil
 	})
 
-	input, err := anypb.New(wrapperspb.String("hello"))
-	if err != nil {
-		t.Fatal(err)
+	req := dispatch.NewRequest("foo", dispatch.Input(dispatch.String("hello")))
+	res := fn.Run(context.Background(), req)
+	if error, ok := res.Error(); ok {
+		t.Fatalf("unexpected response error: %v", error)
 	}
-
-	res := fn.Run(context.Background(), &sdkv1.RunRequest{
-		Directive: &sdkv1.RunRequest_Input{
-			Input: input,
-		},
-	})
-
 	output, ok := res.Output()
 	if !ok {
-		t.Fatalf("invalid response: %v (%v)", res, err)
+		t.Fatalf("invalid response: %v", res)
 	} else if str, err := output.String(); err != nil {
 		t.Fatalf("unexpected output: %v", err)
 	} else if str != "world" {
@@ -83,7 +49,7 @@ func TestFunctionRunResult(t *testing.T) {
 }
 
 func TestPrimitiveFunctionNewCallAndDispatchWithoutEndpoint(t *testing.T) {
-	fn := dispatch.NewPrimitiveFunction("foo", func(ctx context.Context, req *sdkv1.RunRequest) dispatch.Response {
+	fn := dispatch.NewPrimitiveFunction("foo", func(ctx context.Context, req dispatch.Request) dispatch.Response {
 		panic("not implemented")
 	})
 
@@ -125,7 +91,7 @@ func TestPrimitiveFunctionDispatchWithoutClient(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fn := dispatch.NewPrimitiveFunction("foo", func(ctx context.Context, req *sdkv1.RunRequest) dispatch.Response {
+	fn := dispatch.NewPrimitiveFunction("foo", func(ctx context.Context, req dispatch.Request) dispatch.Response {
 		panic("not implemented")
 	})
 	endpoint.Register(fn)

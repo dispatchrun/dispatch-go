@@ -219,7 +219,7 @@ func (d *dispatchFunctionServiceHandler) Run(ctx context.Context, req *connect.R
 	if fn == nil {
 		res = NewErrorfResponse("%w: function %q not found", ErrNotFound, req.Msg.Function)
 	} else {
-		res = fn.Run(ctx, req.Msg)
+		res = fn.Run(ctx, Request{req.Msg})
 	}
 	return connect.NewResponse(res.proto), nil
 }

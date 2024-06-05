@@ -3,6 +3,7 @@ package dispatchlambda
 import (
 	"context"
 	"encoding/base64"
+	_ "unsafe"
 
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -50,9 +51,9 @@ func (h *handler) Invoke(ctx context.Context, payload []byte) ([]byte, error) {
 		return nil, badRequest("raw payload did not contain a protobuf encoded execution request")
 	}
 
-	res := h.function.Run(ctx, req)
+	res := h.function.Run(ctx, newProtoRequest(req))
 
-	rawResponse, err := res.Marshal()
+	rawResponse, err := proto.Marshal(responseProto(res))
 	if err != nil {
 		return nil, err
 	}
@@ -71,3 +72,9 @@ func badRequest(msg string) messages.InvokeResponse_Error {
 		Message: msg,
 	}
 }
+
+//go:linkname newProtoRequest github.com/dispatchrun/dispatch-go.newProtoRequest
+func newProtoRequest(r *sdkv1.RunRequest) dispatch.Request
+
+//go:linkname responseProto github.com/dispatchrun/dispatch-go.responseProto
+func responseProto(r dispatch.Response) *sdkv1.RunResponse

@@ -839,8 +839,10 @@ func (r Response) Marshal() ([]byte, error) {
 	return proto.Marshal(r.proto)
 }
 
-// These are hooks used by the dispatchtest package that
-// allow us to avoid exposing the proto messages.
+// These are hooks used by the dispatchlambda and dispatchtest
+// package that let us avoid exposing proto messages. Exposing
+// the underlying proto messages complicates the API and opens
+// up new failure modes.
 
 //go:linkname newProtoCall
 func newProtoCall(proto *sdkv1.Call) Call { //nolint
@@ -850,4 +852,14 @@ func newProtoCall(proto *sdkv1.Call) Call { //nolint
 //go:linkname newProtoResponse
 func newProtoResponse(proto *sdkv1.RunResponse) Response { //nolint
 	return Response{proto}
+}
+
+//go:linkname newProtoRequest
+func newProtoRequest(proto *sdkv1.RunRequest) Request { //nolint
+	return Request{proto}
+}
+
+//go:linkname responseProto
+func responseProto(r Response) *sdkv1.RunResponse { //nolint
+	return r.proto
 }
