@@ -1,6 +1,7 @@
 package dispatch
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"time"
@@ -88,6 +89,11 @@ func (c Call) CorrelationID() uint64 {
 	return c.proto.GetCorrelationId()
 }
 
+// String is the string representation of the call.
+func (c Call) String() string {
+	return fmt.Sprintf("Call(%s)", c.proto.String())
+}
+
 // Equal is true if the call is equal to another.
 func (c Call) Equal(other Call) bool {
 	if c.proto == nil || other.proto == nil {
@@ -113,7 +119,79 @@ func (c Call) Equal(other Call) bool {
 	return input != nil && otherInput != nil && proto.Equal(input, otherInput)
 }
 
+// Error is an error that occurred during execution of a function.
+type Error struct {
+	proto *sdkv1.Error
+}
+
+// NewError creates an error.
+func NewError(typ, message string, opts ...ErrorOption) Error {
+	err := Error{&sdkv1.Error{
+		Type:    typ,
+		Message: message,
+	}}
+	for _, opt := range opts {
+		opt(&err)
+	}
+	return err
+}
+
+// ErrorOption configures an Error.
+type ErrorOption func(*Error)
+
+// WithErrorValue sets the language-specific representation of the error.
+//
+// This is used to enable propagation of the error value between
+// instances of a program, by encoding information allowing the error
+// value to be reconstructed.
+func WithErrorValue(value []byte) ErrorOption {
+	return func(e *Error) { e.proto.Value = value }
+}
+
+// WithErrorTraceback sets the encoded stack trace for the error.
+//
+// The format is language-specific, encoded in the standard format used by
+// each programming language to represent stack traces. Not all languages have
+// stack traces for errors, so in some cases the value might be omitted.
+func WithErrorTraceback(traceback []byte) ErrorOption {
+	return func(e *Error) { e.proto.Traceback = traceback }
+}
+
+// Type is the type of error that occurred.
+//
+// This value is language and application specific. It is is used to provide
+// debugging information to the user.
+func (e Error) Type() string {
+	return e.proto.GetType()
+}
+
+// Message is a human-readable message providing more details about the error.
+func (e Error) Message() string {
+	return e.proto.GetMessage()
+}
+
+// Value is the language-specific representation of the error.
+func (e Error) Value() []byte {
+	return e.proto.GetValue()
+}
+
+// Traceback is the encoded stack trace for the error.
+func (e Error) Traceback() []byte {
+	return e.proto.GetTraceback()
+}
+
 // String is the string representation of the call.
-func (c Call) String() string {
-	return fmt.Sprintf("Call(%s)", c.proto.String())
+func (e Error) String() string {
+	return fmt.Sprintf("Error(%s)", e.proto.String())
+}
+
+// Equal is true if the error is equal to another.
+func (e Error) Equal(other Error) bool {
+	if e.proto == nil || other.proto == nil {
+		return false
+	}
+	return e.Type() == other.Type() &&
+		e.Message() == other.Message() &&
+		bytes.Equal(e.Value(), other.Value()) &&
+		bytes.Equal(e.Traceback(), other.Traceback())
 }
