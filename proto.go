@@ -128,7 +128,6 @@ func (c Call) Equal(other Call) bool {
 type CallResult struct {
 	proto  *sdkv1.CallResult
 	output proto.Message
-	error  Error
 }
 
 // NewCallResult creates a CallResult.
@@ -145,8 +144,6 @@ func NewCallResult(opts ...CallResultOption) (CallResult, error) {
 		}
 		result.proto.Output = outputAny
 	}
-
-	result.proto.Error = result.error.proto
 
 	return result, nil
 }
@@ -166,7 +163,7 @@ func WithCallResultOutput(output proto.Message) CallResultOption {
 
 // WithCallResultError sets the error from the function call.
 func WithCallResultError(err Error) CallResultOption {
-	return func(result *CallResult) { result.error = err }
+	return func(result *CallResult) { result.proto.Error = err.proto }
 }
 
 // WithCallResultID sets the opaque identifier for the function call.
@@ -321,4 +318,69 @@ func (e Error) Equal(other Error) bool {
 		e.Message() == other.Message() &&
 		bytes.Equal(e.Value(), other.Value()) &&
 		bytes.Equal(e.Traceback(), other.Traceback())
+}
+
+// Exit is a directive that terminates a function call.
+type Exit struct {
+	proto *sdkv1.Exit
+}
+
+// NewExit creates an Exit directive.
+func NewExit(opts ...ExitOption) Exit {
+	exit := Exit{&sdkv1.Exit{
+		Result: &sdkv1.CallResult{},
+	}}
+	for _, opt := range opts {
+		opt(&exit)
+	}
+	return exit
+}
+
+// ExitOption configures an Exit directive.
+type ExitOption func(*Exit)
+
+// WithExitResult sets the result of the function call.
+func WithExitResult(result CallResult) ExitOption {
+	return func(e *Exit) { e.proto.Result = result.proto }
+}
+
+// WithTailCall sets the tail call.
+func WithTailCall(tailCall Call) ExitOption {
+	return func(e *Exit) { e.proto.TailCall = tailCall.proto }
+}
+
+// Result is the function call result the exit directive carries.
+func (e Exit) Result() (CallResult, bool) {
+	r := e.proto.GetResult()
+	return CallResult{proto: r}, r != nil
+}
+
+// TailCall is the tail call the exit directive carries.
+func (e Exit) TailCall() (Call, bool) {
+	c := e.proto.GetTailCall()
+	return Call{proto: c}, c != nil
+}
+
+// String is the string representation of the Exit directive.
+func (e Exit) String() string {
+	return fmt.Sprintf("Exit(%s)", e.proto)
+}
+
+// Equal is true if an Exit directive is equal to another.
+func (e Exit) Equal(other Exit) bool {
+	result, ok := e.Result()
+	otherResult, otherOk := other.Result()
+	if ok != otherOk {
+		return false
+	} else if ok && !result.Equal(otherResult) {
+		return false
+	}
+	tailCall, ok := e.TailCall()
+	otherTailCall, otherOk := other.TailCall()
+	if ok != otherOk {
+		return false
+	} else if ok && !tailCall.Equal(otherTailCall) {
+		return false
+	}
+	return true
 }
