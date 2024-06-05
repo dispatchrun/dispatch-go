@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 
@@ -37,6 +38,7 @@ type Dispatch struct {
 // New creates a Dispatch endpoint.
 func New(opts ...DispatchOption) (*Dispatch, error) {
 	d := &Dispatch{
+		env:       os.Environ(),
 		functions: map[string]Function{},
 	}
 	for _, opt := range opts {
@@ -44,18 +46,24 @@ func New(opts ...DispatchOption) (*Dispatch, error) {
 	}
 
 	// Prepare the endpoint URL.
-	var endpointUrlFromEnv bool
+	var endpointUrlFromEnv string
 	if d.endpointUrl == "" {
 		d.endpointUrl = getenv(d.env, "DISPATCH_ENDPOINT_URL")
-		endpointUrlFromEnv = true
+		endpointUrlFromEnv = "DISPATCH_ENDPOINT_URL"
+	}
+	if d.endpointUrl == "" {
+		if endpointAddr := getenv(d.env, "DISPATCH_ENDPOINT_ADDR"); endpointAddr != "" {
+			d.endpointUrl = fmt.Sprintf("http://%s", endpointAddr)
+			endpointUrlFromEnv = "DISPATCH_ENDPOINT_ADDR"
+		}
 	}
 	if d.endpointUrl == "" {
 		return nil, fmt.Errorf("Dispatch endpoint URL has not been set. Use WithEndpointUrl(..), or set the DISPATCH_ENDPOINT_URL environment variable")
 	}
 	_, err := url.Parse(d.endpointUrl)
 	if err != nil {
-		if endpointUrlFromEnv {
-			return nil, fmt.Errorf("invalid DISPATCH_ENDPOINT_URL: %v", d.endpointUrl)
+		if endpointUrlFromEnv != "" {
+			return nil, fmt.Errorf("invalid %s: %v", endpointUrlFromEnv, d.endpointUrl)
 		}
 		return nil, fmt.Errorf("invalid endpoint URL provided via WithEndpointUrl: %v", d.endpointUrl)
 	}
@@ -212,9 +220,22 @@ func (d *dispatchFunctionServiceHandler) Run(ctx context.Context, req *connect.R
 }
 
 // ListenAndServe serves the Dispatch endpoint on the specified address.
+//
+// If the address is omitted, the endpoint is served on the address found
+// in the DISPATCH_ENDPOINT_ADDR environment variable. If this is unset,
+// the endpoint is served at 127.0.0.1:8000.
 func (d *Dispatch) ListenAndServe(addr string) error {
 	mux := http.NewServeMux()
 	mux.Handle(d.Handler())
+
+	if addr == "" {
+		addr = getenv(d.env, "DISPATCH_ENDPOINT_ADDR")
+	}
+	if addr == "" {
+		addr = "127.0.0.1:8000"
+	}
+	slog.Info("serving Dispatching endpoint", "addr", addr)
+
 	server := &http.Server{Addr: addr, Handler: mux}
 	return server.ListenAndServe()
 }

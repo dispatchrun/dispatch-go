@@ -27,7 +27,9 @@ type Client struct {
 
 // NewClient creates a Client.
 func NewClient(opts ...ClientOption) (*Client, error) {
-	c := &Client{env: os.Environ()}
+	c := &Client{
+		env: os.Environ(),
+	}
 	for _, opt := range opts {
 		opt(c)
 	}
