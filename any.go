@@ -23,15 +23,6 @@ func NewAny(message proto.Message) (Any, error) {
 	return Any{proto}, nil
 }
 
-// NewRawAny constructs an Any from a type URL and a raw
-// serialized representation of the value.
-func NewRawAny(typeURL string, value []byte) Any {
-	return Any{&anypb.Any{
-		TypeUrl: typeURL,
-		Value:   value,
-	}}
-}
-
 // Int creates an Any that contains an integer value.
 func Int(v int64) Any {
 	any, err := NewAny(wrapperspb.Int64(v))
