@@ -2,11 +2,7 @@ package dispatch_test
 
 import (
 	"context"
-	"crypto/ed25519"
-	"encoding/base64"
 	"fmt"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -19,16 +15,20 @@ import (
 )
 
 func TestDispatchEndpoint(t *testing.T) {
-	verificationKey, signingKey, err := ed25519.GenerateKey(nil)
+	signingKey, verificationKey := dispatchtest.KeyPair()
+
+	endpoint, server, err := dispatchtest.NewEndpoint(dispatch.WithVerificationKey(verificationKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Close()
+
+	client, err := server.Client(dispatchtest.WithSigningKey(signingKey))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	d := &dispatch.Dispatch{
-		VerificationKey: base64.StdEncoding.EncodeToString(verificationKey[:]),
-	}
-
-	d.Register(dispatch.NewPrimitiveFunction("identity", func(ctx context.Context, req *sdkv1.RunRequest) *sdkv1.RunResponse {
+	endpoint.Register(dispatch.NewPrimitiveFunction("identity", func(ctx context.Context, req *sdkv1.RunRequest) *sdkv1.RunResponse {
 		var input *anypb.Any
 		switch d := req.Directive.(type) {
 		case *sdkv1.RunRequest_Input:
@@ -47,24 +47,6 @@ func TestDispatchEndpoint(t *testing.T) {
 			},
 		}
 	}))
-
-	// Setup the server that serves the Dispatch endpoint.
-	path, handler, err := d.Handler()
-	if err != nil {
-		t.Fatal(err)
-	}
-	mux := http.NewServeMux()
-	mux.Handle(path, handler)
-	server := httptest.NewUnstartedServer(mux)
-	defer server.Close()
-	server.Start()
-
-	d.EndpointUrl = server.URL
-
-	client := dispatchtest.EndpointClient{
-		EndpointUrl: server.URL,
-		SigningKey:  signingKey,
-	}
 
 	// Send a request for the identity function, and check that the
 	// input was echoed back.
@@ -104,7 +86,10 @@ func TestDispatchEndpoint(t *testing.T) {
 
 	// Try with a client that does not sign requests. The Dispatch
 	// instance should reject the request.
-	nonSigningClient := dispatchtest.EndpointClient{EndpointUrl: server.URL}
+	nonSigningClient, err := server.Client()
+	if err != nil {
+		t.Fatal(err)
+	}
 	_, err = nonSigningClient.Run(context.Background(), &sdkv1.RunRequest{
 		Function:  "identity",
 		Directive: &sdkv1.RunRequest_Input{Input: input},
@@ -114,26 +99,57 @@ func TestDispatchEndpoint(t *testing.T) {
 	}
 }
 
-func TestDispatchCalls(t *testing.T) {
-	var recorder dispatchtest.CallRecorder
+func TestDispatchCall(t *testing.T) {
+	recorder := &dispatchtest.CallRecorder{}
+	server := dispatchtest.NewDispatchServer(recorder)
 
-	server := dispatchtest.NewDispatchServer(&recorder)
-
-	client, err := dispatch.NewClient(dispatch.WithAPIKey("foobar"), dispatch.WithAPIUrl(server.URL))
+	endpoint, err := dispatch.New(
+		dispatch.WithEndpointUrl("http://example.com"),
+		dispatch.WithClientOptions(dispatch.WithAPIKey("foobar"), dispatch.WithAPIUrl(server.URL)))
 	if err != nil {
 		t.Fatal(err)
-	}
-
-	d := &dispatch.Dispatch{
-		EndpointUrl: "http://example.com",
-		Client:      *client, // FIXME
 	}
 
 	fn := dispatch.NewPrimitiveFunction("function1", func(ctx context.Context, req *sdkv1.RunRequest) *sdkv1.RunResponse {
 		panic("not implemented")
 	})
+	endpoint.Register(fn)
 
-	d.Register(fn)
+	_, err = fn.Dispatch(context.Background(), wrapperspb.Int32(11), dispatch.WithExpiration(10*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	wantCall, err := dispatch.NewCall("http://example.com", "function1", wrapperspb.Int32(11), dispatch.WithExpiration(10*time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dispatchtest.AssertDispatchRequests(t, recorder.Requests, []dispatchtest.DispatchRequest{
+		{
+			ApiKey: "foobar",
+			Calls:  []dispatch.Call{wantCall},
+		},
+	})
+}
+
+func TestDispatchCallEnvConfig(t *testing.T) {
+	recorder := &dispatchtest.CallRecorder{}
+	server := dispatchtest.NewDispatchServer(recorder)
+
+	endpoint, err := dispatch.New(dispatch.WithEnv(
+		"DISPATCH_ENDPOINT_URL=http://example.com",
+		"DISPATCH_API_KEY=foobar",
+		"DISPATCH_API_URL="+server.URL,
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fn := dispatch.NewPrimitiveFunction("function1", func(ctx context.Context, req *sdkv1.RunRequest) *sdkv1.RunResponse {
+		panic("not implemented")
+	})
+	endpoint.Register(fn)
 
 	_, err = fn.Dispatch(context.Background(), wrapperspb.Int32(11), dispatch.WithExpiration(10*time.Second))
 	if err != nil {
@@ -158,14 +174,11 @@ func TestDispatchCallsBatch(t *testing.T) {
 
 	server := dispatchtest.NewDispatchServer(&recorder)
 
-	client, err := dispatch.NewClient(dispatch.WithAPIKey("foobar"), dispatch.WithAPIUrl(server.URL))
+	endpoint, err := dispatch.New(
+		dispatch.WithEndpointUrl("http://example.com"),
+		dispatch.WithClientOptions(dispatch.WithAPIKey("foobar"), dispatch.WithAPIUrl(server.URL)))
 	if err != nil {
 		t.Fatal(err)
-	}
-
-	d := &dispatch.Dispatch{
-		EndpointUrl: "http://example.com",
-		Client:      *client, // FIXME
 	}
 
 	fn1 := dispatch.NewPrimitiveFunction("function1", func(ctx context.Context, req *sdkv1.RunRequest) *sdkv1.RunResponse {
@@ -175,8 +188,8 @@ func TestDispatchCallsBatch(t *testing.T) {
 		panic("not implemented")
 	})
 
-	d.Register(fn1)
-	d.Register(fn2)
+	endpoint.Register(fn1)
+	endpoint.Register(fn2)
 
 	call1, err := fn1.BuildCall(wrapperspb.Int32(11), dispatch.WithExpiration(10*time.Second))
 	if err != nil {
@@ -187,7 +200,12 @@ func TestDispatchCallsBatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	batch := d.Batch()
+	client, err := endpoint.Client()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	batch := client.Batch()
 	batch.Add(call1, call2)
 	if _, err := batch.Dispatch(context.Background()); err != nil {
 		t.Fatal(err)

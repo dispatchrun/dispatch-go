@@ -10,9 +10,8 @@ import (
 )
 
 func TestClient(t *testing.T) {
-	var recorder dispatchtest.CallRecorder
-
-	server := dispatchtest.NewDispatchServer(&recorder)
+	recorder := &dispatchtest.CallRecorder{}
+	server := dispatchtest.NewDispatchServer(recorder)
 
 	client, err := dispatch.NewClient(dispatch.WithAPIKey("foobar"), dispatch.WithAPIUrl(server.URL))
 	if err != nil {
@@ -41,10 +40,10 @@ func TestClientEnvConfig(t *testing.T) {
 	recorder := &dispatchtest.CallRecorder{}
 	server := dispatchtest.NewDispatchServer(recorder)
 
-	client, err := dispatch.NewClient(dispatch.WithClientEnv([]string{
+	client, err := dispatch.NewClient(dispatch.WithClientEnv(
 		"DISPATCH_API_KEY=foobar",
-		"DISPATCH_API_URL=" + server.URL,
-	}))
+		"DISPATCH_API_URL="+server.URL,
+	))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,10 +120,10 @@ func TestClientBatch(t *testing.T) {
 }
 
 func TestClientNoAPIKey(t *testing.T) {
-	_, err := dispatch.NewClient(dispatch.WithClientEnv(nil))
+	_, err := dispatch.NewClient(dispatch.WithClientEnv( /* i.e. no env vars */ ))
 	if err == nil {
 		t.Fatalf("expected an error")
-	} else if err.Error() != "API key has not been set. Use WithAPIKey(..), or set the DISPATCH_API_KEY environment variable" {
+	} else if err.Error() != "Dispatch API key has not been set. Use WithAPIKey(..), or set the DISPATCH_API_KEY environment variable" {
 		t.Errorf("unexpected error: %v", err)
 	}
 }

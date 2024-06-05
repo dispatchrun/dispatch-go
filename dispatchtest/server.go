@@ -14,23 +14,23 @@ import (
 	"github.com/dispatchrun/dispatch-go"
 )
 
-// DispatchServerHandler is a handler for dispatched function calls.
+// DispatchServerHandler is a handler for a test Dispatch API server.
 type DispatchServerHandler interface {
 	Handle(ctx context.Context, apiKey string, calls []dispatch.Call) ([]dispatch.ID, error)
 }
 
-// DispatchServerHandlerFunc creates a Handler from a function.
+// DispatchServerHandlerFunc creates a DispatchServerHandler from a function.
 func DispatchServerHandlerFunc(fn func(ctx context.Context, apiKey string, calls []dispatch.Call) ([]dispatch.ID, error)) DispatchServerHandler {
-	return handlerFunc(fn)
+	return dispatchServerHandlerFunc(fn)
 }
 
-type handlerFunc func(context.Context, string, []dispatch.Call) ([]dispatch.ID, error)
+type dispatchServerHandlerFunc func(context.Context, string, []dispatch.Call) ([]dispatch.ID, error)
 
-func (h handlerFunc) Handle(ctx context.Context, apiKey string, calls []dispatch.Call) ([]dispatch.ID, error) {
+func (h dispatchServerHandlerFunc) Handle(ctx context.Context, apiKey string, calls []dispatch.Call) ([]dispatch.ID, error) {
 	return h(ctx, apiKey, calls)
 }
 
-// NewDispatchServer creates a new test Dispatch server.
+// NewDispatchServer creates a new test Dispatch API server.
 func NewDispatchServer(handler DispatchServerHandler) *httptest.Server {
 	mux := http.NewServeMux()
 	mux.Handle(sdkv1connect.NewDispatchServiceHandler(&dispatchServiceHandler{handler}))
@@ -80,12 +80,13 @@ func wrapCall(c *sdkv1.Call) (dispatch.Call, error) {
 		dispatch.WithVersion(c.Version))
 }
 
-// CallRecorder is a DispatchServerHandler that captures requests to Dispatch.
+// CallRecorder is a DispatchServerHandler that captures requests to the Dispatch API.
 type CallRecorder struct {
 	Requests []DispatchRequest
 	calls    int
 }
 
+// DispatchRequest is a request to the Dispatch API captured by a CallRecorder.
 type DispatchRequest struct {
 	ApiKey string
 	Calls  []dispatch.Call

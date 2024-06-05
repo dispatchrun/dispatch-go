@@ -9,12 +9,12 @@ import (
 	"strings"
 )
 
-// ParseKey parses a ed25519 public key.
-func ParseKey(encodedKey string) (ed25519.PublicKey, error) {
+// ParsePublicKey parses a ed25519 public key.
+func ParsePublicKey(encodedKey string) (ed25519.PublicKey, error) {
 	if strings.Contains(encodedKey, "BEGIN PUBLIC KEY") {
-		return parsePemKey(encodedKey)
+		return parsePemPublicKey(encodedKey)
 	}
-	return parseBase64Key(encodedKey)
+	return parseBase64PublicKey(encodedKey)
 }
 
 var (
@@ -22,7 +22,7 @@ var (
 	errInvalidBase64Key = errors.New("invalid base64 ed25519 public key")
 )
 
-func parsePemKey(encodedKey string) (ed25519.PublicKey, error) {
+func parsePemPublicKey(encodedKey string) (ed25519.PublicKey, error) {
 	// Be forgiving when parsing PEM formatted keys, which may
 	// have passed through environment variables.
 	encodedKey = strings.ReplaceAll(encodedKey, "\\n", "\n")
@@ -42,7 +42,7 @@ func parsePemKey(encodedKey string) (ed25519.PublicKey, error) {
 	return key, nil
 }
 
-func parseBase64Key(encodedKey string) (ed25519.PublicKey, error) {
+func parseBase64PublicKey(encodedKey string) (ed25519.PublicKey, error) {
 	key, err := base64.StdEncoding.DecodeString(encodedKey)
 	if err != nil || len(key) != ed25519.PublicKeySize {
 		return nil, errInvalidBase64Key
