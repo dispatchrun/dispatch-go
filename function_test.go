@@ -88,33 +88,44 @@ func TestFunctionRunResult(t *testing.T) {
 	}
 }
 
-func TestPrimitiveFunctionBuildCallWithoutEndpoint(t *testing.T) {
+func TestPrimitiveFunctionNewCallAndDispatchWithoutEndpoint(t *testing.T) {
 	fn := dispatch.NewPrimitiveFunction("foo", func(ctx context.Context, req *sdkv1.RunRequest) *sdkv1.RunResponse {
 		panic("not implemented")
 	})
 
-	_, err := fn.BuildCall(wrapperspb.String("bar"))
-	if err == nil {
-		t.Fatal("expected an error")
-	} else if err.Error() != "cannot build function call: function has not been registered with a Dispatch endpoint" {
-		t.Errorf("unexpected error: %v", err)
+	wantErr := "cannot build function call: function has not been registered with a Dispatch endpoint"
+
+	_, err := fn.NewCall(wrapperspb.String("bar"))
+	if err == nil || err.Error() != wantErr {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	_, err = fn.Dispatch(context.Background(), wrapperspb.String("bar"))
+	if err == nil || err.Error() != wantErr {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestFunctionBuildCallWithoutEndpoint(t *testing.T) {
+func TestFunctionNewCallAndDispatchWithoutEndpoint(t *testing.T) {
 	fn := dispatch.NewFunction("foo", func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
 		panic("not implemented")
 	})
 
-	_, err := fn.BuildCall(wrapperspb.String("bar"))
-	if err == nil {
-		t.Fatal("expected an error")
-	} else if err.Error() != "cannot build function call: function has not been registered with a Dispatch endpoint" {
-		t.Errorf("unexpected error: %v", err)
+	wantErr := "cannot build function call: function has not been registered with a Dispatch endpoint"
+
+	_, err := fn.NewCall(wrapperspb.String("bar"))
+	if err == nil || err.Error() != wantErr {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	_, err = fn.Dispatch(context.Background(), wrapperspb.String("bar"))
+	if err == nil || err.Error() != wantErr {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
 func TestPrimitiveFunctionDispatchWithoutClient(t *testing.T) {
+	// It's not necessary to have valid Client configuration when
+	// creating a Dispatch endpoint. In this case, there's no
+	// Dispatch API key available.
 	endpoint, err := dispatch.New(dispatch.WithEndpointUrl("http://example.com"), dispatch.WithEnv( /* i.e. no env vars */ ))
 	if err != nil {
 		t.Fatal(err)
@@ -125,6 +136,12 @@ func TestPrimitiveFunctionDispatchWithoutClient(t *testing.T) {
 	})
 	endpoint.Register(fn)
 
+	// It's possible to create a call since an endpoint URL is available.
+	if _, err := fn.NewCall(wrapperspb.String("bar")); err != nil {
+		t.Fatal(err)
+	}
+
+	// However, a client is not available.
 	_, err = fn.Dispatch(context.Background(), wrapperspb.String("bar"))
 	if err == nil {
 		t.Fatal("expected an error")
@@ -134,6 +151,9 @@ func TestPrimitiveFunctionDispatchWithoutClient(t *testing.T) {
 }
 
 func TestFunctionDispatchWithoutClient(t *testing.T) {
+	// It's not necessary to have valid Client configuration when
+	// creating a Dispatch endpoint. In this case, there's no
+	// Dispatch API key available.
 	endpoint, err := dispatch.New(dispatch.WithEndpointUrl("http://example.com"), dispatch.WithEnv( /* i.e. no env vars */ ))
 	if err != nil {
 		t.Fatal(err)
@@ -144,6 +164,12 @@ func TestFunctionDispatchWithoutClient(t *testing.T) {
 	})
 	endpoint.Register(fn)
 
+	// It's possible to create a call since an endpoint URL is available.
+	if _, err := fn.NewCall(wrapperspb.String("bar")); err != nil {
+		t.Fatal(err)
+	}
+
+	// However, a client is not available.
 	_, err = fn.Dispatch(context.Background(), wrapperspb.String("bar"))
 	if err == nil {
 		t.Fatal("expected an error")

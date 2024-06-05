@@ -191,11 +191,11 @@ func TestDispatchCallsBatch(t *testing.T) {
 	endpoint.Register(fn1)
 	endpoint.Register(fn2)
 
-	call1, err := fn1.BuildCall(wrapperspb.Int32(11), dispatch.WithExpiration(10*time.Second))
+	call1, err := fn1.NewCall(wrapperspb.Int32(11), dispatch.WithExpiration(10*time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
-	call2, err := fn2.BuildCall(wrapperspb.String("foo"), dispatch.WithVersion("xyzzy"))
+	call2, err := fn2.NewCall(wrapperspb.String("foo"), dispatch.WithVersion("xyzzy"))
 	if err != nil {
 		t.Fatal(err)
 	}

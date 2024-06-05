@@ -179,7 +179,7 @@ func (d *Dispatch) Register(fn Function) {
 	d.functions[fn.Name()] = fn
 
 	// Bind the function to this endpoint, so that the function's
-	// BuildCall and Dispatch methods can be used to build and
+	// NewCall and Dispatch methods can be used to build and
 	// dispatch calls.
 	fn.bind(d)
 }

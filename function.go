@@ -22,7 +22,7 @@ type Function interface {
 	Run(context.Context, *sdkv1.RunRequest) *sdkv1.RunResponse
 
 	// bind is an internal hook for binding a function to
-	// a Dispatch endpoint, allowing the BuildCall and Dispatch
+	// a Dispatch endpoint, allowing the NewCall and Dispatch
 	// methods to be called on the function.
 	bind(endpoint *Dispatch)
 }
@@ -134,8 +134,8 @@ func (f *GenericFunction[Input, Output]) bind(endpoint *Dispatch) {
 	f.endpoint = endpoint
 }
 
-// BuildCall constructs a call for the function.
-func (f *GenericFunction[Input, Output]) BuildCall(input Input, opts ...CallOption) (Call, error) {
+// NewCall creates a Call for the function.
+func (f *GenericFunction[Input, Output]) NewCall(input Input, opts ...CallOption) (Call, error) {
 	if f.endpoint == nil {
 		return Call{}, fmt.Errorf("cannot build function call: function has not been registered with a Dispatch endpoint")
 	}
@@ -144,7 +144,7 @@ func (f *GenericFunction[Input, Output]) BuildCall(input Input, opts ...CallOpti
 
 // Dispatch dispatches a call to the function.
 func (f *GenericFunction[Input, Output]) Dispatch(ctx context.Context, input Input, opts ...CallOption) (ID, error) {
-	call, err := f.BuildCall(input, opts...)
+	call, err := f.NewCall(input, opts...)
 	if err != nil {
 		return "", err
 	}
@@ -199,8 +199,8 @@ func (f *PrimitiveFunction) bind(endpoint *Dispatch) {
 	f.endpoint = endpoint
 }
 
-// BuildCall constructs a call for the function.
-func (f *PrimitiveFunction) BuildCall(input proto.Message, opts ...CallOption) (Call, error) {
+// NewCall creates a Call for the function.
+func (f *PrimitiveFunction) NewCall(input proto.Message, opts ...CallOption) (Call, error) {
 	if f.endpoint == nil {
 		return Call{}, fmt.Errorf("cannot build function call: function has not been registered with a Dispatch endpoint")
 	}
@@ -209,7 +209,7 @@ func (f *PrimitiveFunction) BuildCall(input proto.Message, opts ...CallOption) (
 
 // Dispatch dispatches a call to the function.
 func (f *PrimitiveFunction) Dispatch(ctx context.Context, input proto.Message, opts ...CallOption) (ID, error) {
-	call, err := f.BuildCall(input, opts...)
+	call, err := f.NewCall(input, opts...)
 	if err != nil {
 		return "", err
 	}
