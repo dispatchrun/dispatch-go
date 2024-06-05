@@ -112,8 +112,8 @@ func WithSigningKey(signingKey string) EndpointClientOption {
 }
 
 // Run sends a RunRequest and returns a RunResponse.
-func (c *EndpointClient) Run(ctx context.Context, req *sdkv1.RunRequest) (dispatch.Response, error) {
-	res, err := c.client.Run(ctx, connect.NewRequest(req))
+func (c *EndpointClient) Run(ctx context.Context, req dispatch.Request) (dispatch.Response, error) {
+	res, err := c.client.Run(ctx, connect.NewRequest(requestProto(req)))
 	if err != nil {
 		return dispatch.Response{}, err
 	}
@@ -122,3 +122,6 @@ func (c *EndpointClient) Run(ctx context.Context, req *sdkv1.RunRequest) (dispat
 
 //go:linkname newProtoResponse github.com/dispatchrun/dispatch-go.newProtoResponse
 func newProtoResponse(r *sdkv1.RunResponse) dispatch.Response
+
+//go:linkname requestProto github.com/dispatchrun/dispatch-go.requestProto
+func requestProto(r dispatch.Request) *sdkv1.RunRequest

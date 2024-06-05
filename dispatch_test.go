@@ -5,11 +5,9 @@ import (
 	"testing"
 	"time"
 
-	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
 	"connectrpc.com/connect"
 	"github.com/dispatchrun/dispatch-go"
 	"github.com/dispatchrun/dispatch-go/dispatchtest"
-	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -37,15 +35,8 @@ func TestDispatchEndpoint(t *testing.T) {
 
 	// Send a request for the identity function, and check that the
 	// input was echoed back.
-	const inputValue = 11
-	input, err := anypb.New(wrapperspb.Int32(inputValue))
-	if err != nil {
-		t.Fatal(err)
-	}
-	res, err := client.Run(context.Background(), &sdkv1.RunRequest{
-		Function:  "identity",
-		Directive: &sdkv1.RunRequest_Input{Input: input},
-	})
+	req := dispatch.NewRequest("identity", dispatch.Input(dispatch.Int(11)))
+	res, err := client.Run(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,15 +47,14 @@ func TestDispatchEndpoint(t *testing.T) {
 	if !ok {
 		t.Fatalf("invalid response: %v (%v)", res, err)
 	}
-	m, err := output.Proto()
-	if err != nil {
-		t.Fatal(err)
-	} else if v, ok := m.(*wrapperspb.Int32Value); !ok || v.Value != inputValue {
-		t.Errorf("exit directive result or output was invalid: %v", output)
+	if v, err := output.Int(); err != nil {
+		t.Fatalf("invalid output: %v", err)
+	} else if v != 11 {
+		t.Fatalf("invalid output: %v", v)
 	}
 
 	// Try running a function that has not been registered.
-	res, err = client.Run(context.Background(), &sdkv1.RunRequest{Function: "not_found"})
+	res, err = client.Run(context.Background(), dispatch.NewRequest("not_found", dispatch.Input(dispatch.Int(22))))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,10 +68,7 @@ func TestDispatchEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = nonSigningClient.Run(context.Background(), &sdkv1.RunRequest{
-		Function:  "identity",
-		Directive: &sdkv1.RunRequest_Input{Input: input},
-	})
+	_, err = nonSigningClient.Run(context.Background(), req)
 	if err == nil || connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Fatalf("expected a permission denied error, got %v", err)
 	}

@@ -859,6 +859,11 @@ func newProtoRequest(proto *sdkv1.RunRequest) Request { //nolint
 	return Request{proto}
 }
 
+//go:linkname requestProto
+func requestProto(r Request) *sdkv1.RunRequest { //nolint
+	return r.proto
+}
+
 //go:linkname responseProto
 func responseProto(r Response) *sdkv1.RunResponse { //nolint
 	return r.proto
