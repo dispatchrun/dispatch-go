@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	_ "unsafe"
 
 	"buf.build/gen/go/stealthrocket/dispatch-proto/connectrpc/go/dispatch/sdk/v1/sdkv1connect"
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
@@ -14,7 +15,6 @@ import (
 	"connectrpc.com/validate"
 	"github.com/dispatchrun/dispatch-go"
 	"github.com/dispatchrun/dispatch-go/internal/auth"
-	"google.golang.org/protobuf/proto"
 )
 
 // NewEndpoint creates a Dispatch endpoint, like dispatch.New.
@@ -117,17 +117,8 @@ func (c *EndpointClient) Run(ctx context.Context, req *sdkv1.RunRequest) (dispat
 	if err != nil {
 		return dispatch.Response{}, err
 	}
-	return wrapResponse(res.Msg), nil
+	return newProtoResponse(res.Msg), nil
 }
 
-func wrapResponse(r *sdkv1.RunResponse) dispatch.Response {
-	b, err := proto.Marshal(r)
-	if err != nil {
-		panic(err)
-	}
-	response, err := dispatch.UnmarshalResponse(b)
-	if err != nil {
-		panic(err)
-	}
-	return response
-}
+//go:linkname newProtoResponse github.com/dispatchrun/dispatch-go.newProtoResponse
+func newProtoResponse(r *sdkv1.RunResponse) dispatch.Response

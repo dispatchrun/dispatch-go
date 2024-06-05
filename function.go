@@ -106,7 +106,12 @@ func (f *GenericFunction[Input, Output]) Run(ctx context.Context, req *sdkv1.Run
 	} else {
 		switch ret := coro.Result().(type) {
 		case proto.Message:
-			res = NewOutputResponse(ret)
+			output, err := NewAny(ret)
+			if err != nil {
+				res = NewErrorfResponse("%w: cannot serialize return value: %v", ErrInvalidResponse, err)
+			} else {
+				res = NewOutputResponse(output)
+			}
 		case error:
 			res = NewErrorResponse(ret)
 		default:
@@ -126,7 +131,11 @@ func (f *GenericFunction[Input, Output]) NewCall(input Input, opts ...CallOption
 	if f.endpoint == nil {
 		return Call{}, fmt.Errorf("cannot build function call: function has not been registered with a Dispatch endpoint")
 	}
-	return NewCall(f.endpoint.URL(), f.name, input, opts...)
+	anyInput, err := NewAny(input)
+	if err != nil {
+		return Call{}, fmt.Errorf("cannot serialize input: %v", err)
+	}
+	return NewCall(f.endpoint.URL(), f.name, anyInput, opts...), nil
 }
 
 // Dispatch dispatches a call to the function.
@@ -187,15 +196,15 @@ func (f *PrimitiveFunction) bind(endpoint *Dispatch) {
 }
 
 // NewCall creates a Call for the function.
-func (f *PrimitiveFunction) NewCall(input proto.Message, opts ...CallOption) (Call, error) {
+func (f *PrimitiveFunction) NewCall(input Any, opts ...CallOption) (Call, error) {
 	if f.endpoint == nil {
 		return Call{}, fmt.Errorf("cannot build function call: function has not been registered with a Dispatch endpoint")
 	}
-	return NewCall(f.endpoint.URL(), f.name, input, opts...)
+	return NewCall(f.endpoint.URL(), f.name, input, opts...), nil
 }
 
 // Dispatch dispatches a call to the function.
-func (f *PrimitiveFunction) Dispatch(ctx context.Context, input proto.Message, opts ...CallOption) (ID, error) {
+func (f *PrimitiveFunction) Dispatch(ctx context.Context, input Any, opts ...CallOption) (ID, error) {
 	call, err := f.NewCall(input, opts...)
 	if err != nil {
 		return "", err

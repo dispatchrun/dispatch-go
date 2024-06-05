@@ -6,7 +6,6 @@ import (
 
 	"github.com/dispatchrun/dispatch-go"
 	"github.com/dispatchrun/dispatch-go/dispatchtest"
-	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 func TestClient(t *testing.T) {
@@ -18,10 +17,7 @@ func TestClient(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	call, err := dispatch.NewCall("http://example.com", "function1", wrapperspb.Int32(11))
-	if err != nil {
-		t.Fatal(err)
-	}
+	call := dispatch.NewCall("http://example.com", "function1", dispatch.Int(11))
 
 	_, err = client.Dispatch(context.Background(), call)
 	if err != nil {
@@ -46,10 +42,7 @@ func TestClientEnvConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	call, err := dispatch.NewCall("http://example.com", "function1", wrapperspb.Int32(11))
-	if err != nil {
-		t.Fatal(err)
-	}
+	call := dispatch.NewCall("http://example.com", "function1", dispatch.Int(11))
 
 	_, err = client.Dispatch(context.Background(), call)
 	if err != nil {
@@ -71,22 +64,10 @@ func TestClientBatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	call1, err := dispatch.NewCall("http://example.com", "function1", wrapperspb.Int32(11))
-	if err != nil {
-		t.Fatal(err)
-	}
-	call2, err := dispatch.NewCall("http://example.com", "function2", wrapperspb.Int32(22))
-	if err != nil {
-		t.Fatal(err)
-	}
-	call3, err := dispatch.NewCall("http://example.com", "function3", wrapperspb.Int32(33))
-	if err != nil {
-		t.Fatal(err)
-	}
-	call4, err := dispatch.NewCall("http://example2.com", "function4", wrapperspb.Int32(44))
-	if err != nil {
-		t.Fatal(err)
-	}
+	call1 := dispatch.NewCall("http://example.com", "function1", dispatch.Int(11))
+	call2 := dispatch.NewCall("http://example.com", "function2", dispatch.Int(22))
+	call3 := dispatch.NewCall("http://example.com", "function3", dispatch.Int(33))
+	call4 := dispatch.NewCall("http://example2.com", "function4", dispatch.Int(44))
 
 	batch := client.Batch()
 	batch.Add(call1, call2)

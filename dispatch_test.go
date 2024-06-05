@@ -30,11 +30,7 @@ func TestDispatchEndpoint(t *testing.T) {
 	endpoint.Register(dispatch.NewPrimitiveFunction("identity", func(ctx context.Context, req *sdkv1.RunRequest) dispatch.Response {
 		switch d := req.Directive.(type) {
 		case *sdkv1.RunRequest_Input:
-			input, err := d.Input.UnmarshalNew()
-			if err != nil {
-				return dispatch.NewErrorResponse(err)
-			}
-			return dispatch.NewOutputResponse(input)
+			return dispatch.NewOutputResponse(dispatch.NewRawAny(d.Input.TypeUrl, d.Input.Value))
 		default:
 			return dispatch.NewErrorfResponse("%w: unexpected run directive: %T", dispatch.ErrInvalidArgument, d)
 		}
@@ -57,11 +53,14 @@ func TestDispatchEndpoint(t *testing.T) {
 	if res.Status() != dispatch.OKStatus {
 		t.Fatalf("unexpected response status: %v", res.Status())
 	}
-	output, err := res.Output()
-	if err != nil {
+	output, ok := res.Output()
+	if !ok {
 		t.Fatalf("invalid response: %v (%v)", res, err)
 	}
-	if v, ok := output.(*wrapperspb.Int32Value); !ok || v.Value != inputValue {
+	m, err := output.Proto()
+	if err != nil {
+		t.Fatal(err)
+	} else if v, ok := m.(*wrapperspb.Int32Value); !ok || v.Value != inputValue {
 		t.Errorf("exit directive result or output was invalid: %v", output)
 	}
 
@@ -105,19 +104,17 @@ func TestDispatchCall(t *testing.T) {
 	})
 	endpoint.Register(fn)
 
-	_, err = fn.Dispatch(context.Background(), wrapperspb.Int32(11), dispatch.WithCallExpiration(10*time.Second))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	wantCall, err := dispatch.NewCall("http://example.com", "function1", wrapperspb.Int32(11), dispatch.WithCallExpiration(10*time.Second))
+	_, err = fn.Dispatch(context.Background(), dispatch.Int(11), dispatch.WithCallExpiration(10*time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	recorder.Assert(t, dispatchtest.DispatchRequest{
 		ApiKey: "foobar",
-		Calls:  []dispatch.Call{wantCall},
+		Calls: []dispatch.Call{
+			dispatch.NewCall("http://example.com", "function1", dispatch.Int(11),
+				dispatch.WithCallExpiration(10*time.Second)),
+		},
 	})
 }
 
@@ -144,14 +141,11 @@ func TestDispatchCallEnvConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	wantCall, err := dispatch.NewCall("http://example.com", "function2", wrapperspb.String("foo"), dispatch.WithCallVersion("xyzzy"))
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	recorder.Assert(t, dispatchtest.DispatchRequest{
 		ApiKey: "foobar",
-		Calls:  []dispatch.Call{wantCall},
+		Calls: []dispatch.Call{
+			dispatch.NewCall("http://example.com", "function2", dispatch.String("foo"), dispatch.WithCallVersion("xyzzy")),
+		},
 	})
 }
 
@@ -177,7 +171,7 @@ func TestDispatchCallsBatch(t *testing.T) {
 	endpoint.Register(fn1)
 	endpoint.Register(fn2)
 
-	call1, err := fn1.NewCall(wrapperspb.Int32(11), dispatch.WithCallExpiration(10*time.Second))
+	call1, err := fn1.NewCall(dispatch.Int(11), dispatch.WithCallExpiration(10*time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}

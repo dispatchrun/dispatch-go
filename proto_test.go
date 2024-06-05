@@ -13,10 +13,7 @@ import (
 
 func TestCall(t *testing.T) {
 	t.Run("with no options", func(t *testing.T) {
-		call, err := NewCall("endpoint1", "function2", wrapperspb.Int32(11))
-		if err != nil {
-			t.Fatal(err)
-		}
+		call := NewCall("endpoint1", "function2", Int(11))
 
 		if got := call.Endpoint(); got != "endpoint1" {
 			t.Errorf("unexpected call endpoint: %v", got)
@@ -24,8 +21,8 @@ func TestCall(t *testing.T) {
 		if got := call.Function(); got != "function2" {
 			t.Errorf("unexpected call function: %v", got)
 		}
-		if got, err := call.Input(); err != nil || !proto.Equal(got, wrapperspb.Int32(11)) {
-			t.Errorf("unexpected call input: %v, %v", got, err)
+		if got := call.Input(); !got.Equal(Int(11)) {
+			t.Errorf("unexpected call input: %v", got)
 		}
 		if got := call.CorrelationID(); got != 0 {
 			t.Errorf("unexpected call correlation ID: %v", got)
@@ -37,7 +34,7 @@ func TestCall(t *testing.T) {
 			t.Errorf("unexpected call version: %v", got)
 		}
 
-		inputAny, _ := anypb.New(wrapperspb.Int32(11))
+		inputAny, _ := anypb.New(wrapperspb.Int64(11))
 		want := &sdkv1.Call{
 			Endpoint: "endpoint1",
 			Function: "function2",
@@ -49,11 +46,8 @@ func TestCall(t *testing.T) {
 	})
 
 	t.Run("with options", func(t *testing.T) {
-		call, err := NewCall("endpoint1", "function2", wrapperspb.Int32(11),
+		call := NewCall("endpoint1", "function2", Int(11),
 			WithCallCorrelationID(1234), WithCallExpiration(10*time.Second), WithCallVersion("xyzzy"))
-		if err != nil {
-			t.Fatal(err)
-		}
 
 		if got := call.Endpoint(); got != "endpoint1" {
 			t.Errorf("unexpected call endpoint: %v", got)
@@ -61,8 +55,8 @@ func TestCall(t *testing.T) {
 		if got := call.Function(); got != "function2" {
 			t.Errorf("unexpected call function: %v", got)
 		}
-		if got, err := call.Input(); err != nil || !proto.Equal(got, wrapperspb.Int32(11)) {
-			t.Errorf("unexpected call input: %v, %v", got, err)
+		if got := call.Input(); !got.Equal(Int(11)) {
+			t.Errorf("unexpected call input: %v", got)
 		}
 		if got := call.CorrelationID(); got != 1234 {
 			t.Errorf("unexpected call correlation ID: %v", got)
@@ -74,7 +68,7 @@ func TestCall(t *testing.T) {
 			t.Errorf("unexpected call version: %v", got)
 		}
 
-		inputAny, _ := anypb.New(wrapperspb.Int32(11))
+		inputAny, _ := anypb.New(wrapperspb.Int64(11))
 		want := &sdkv1.Call{
 			Endpoint:      "endpoint1",
 			Function:      "function2",
@@ -97,8 +91,8 @@ func TestCall(t *testing.T) {
 		if got := call.Function(); got != "" {
 			t.Errorf("unexpected call function: %v", got)
 		}
-		if got, err := call.Input(); err == nil {
-			t.Errorf("unexpected call input: %v, %v", got, err)
+		if got := call.Input(); got.TypeURL() != "" {
+			t.Errorf("unexpected call input: %v", got)
 		}
 		if got := call.CorrelationID(); got != 0 {
 			t.Errorf("unexpected call correlation ID: %v", got)

@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"fmt"
 	"time"
+	_ "unsafe"
 
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
 )
 
@@ -17,21 +17,16 @@ type Call struct {
 }
 
 // NewCall creates a Call.
-func NewCall(endpoint, function string, input proto.Message, opts ...CallOption) (Call, error) {
-	inputAny, err := anypb.New(input)
-	if err != nil {
-		return Call{}, fmt.Errorf("cannot serialize call input: %w", err)
-	}
-
+func NewCall(endpoint, function string, input Any, opts ...CallOption) Call {
 	call := Call{&sdkv1.Call{
 		Endpoint: endpoint,
 		Function: function,
-		Input:    inputAny,
+		Input:    input.proto,
 	}}
 	for _, opt := range opts {
 		opt(&call)
 	}
-	return call, nil
+	return call
 }
 
 // CallOption configures a call.
@@ -63,12 +58,9 @@ func (c Call) Function() string {
 }
 
 // Input is input to the function.
-func (c Call) Input() (proto.Message, error) {
+func (c Call) Input() Any {
 	input := c.proto.GetInput()
-	if input == nil {
-		return nil, fmt.Errorf("no input")
-	}
-	return input.UnmarshalNew()
+	return Any{input}
 }
 
 // Expiration is the maximum time the function is allowed to run.
@@ -95,64 +87,30 @@ func (c Call) String() string {
 
 // Equal is true if the call is equal to another.
 func (c Call) Equal(other Call) bool {
-	if c.proto == nil || other.proto == nil {
+	if (c.proto == nil) != (other.proto == nil) {
 		return false
 	}
-	if c.Endpoint() != other.Endpoint() {
-		return false
+	if c.proto == nil {
+		return true
 	}
-	if c.Function() != other.Function() {
-		return false
-	}
-	if c.CorrelationID() != other.CorrelationID() {
-		return false
-	}
-	if c.Expiration() != other.Expiration() {
-		return false
-	}
-	if c.Version() != other.Version() {
-		return false
-	}
-	input, err := c.Input()
-	if err != nil {
-		return false
-	}
-	otherInput, err := other.Input()
-	if err != nil {
-		return false
-	}
-	return input != nil && otherInput != nil && proto.Equal(input, otherInput)
+	return c.Endpoint() == other.Endpoint() &&
+		c.Function() == other.Function() &&
+		c.CorrelationID() == other.CorrelationID() &&
+		c.Expiration() == other.Expiration() &&
+		c.Version() == other.Version() &&
+		c.Input().Equal(other.Input())
 }
 
 // CallResult is a function call result.
 type CallResult struct {
-	proto  *sdkv1.CallResult
-	output proto.Message
+	proto *sdkv1.CallResult
 }
 
 // NewCallResult creates a CallResult.
-func NewCallResult(opts ...CallResultOption) (CallResult, error) {
-	result := CallResult{proto: &sdkv1.CallResult{}}
+func NewCallResult(opts ...CallResultOption) CallResult {
+	result := CallResult{&sdkv1.CallResult{}}
 	for _, opt := range opts {
 		opt(&result)
-	}
-
-	if result.output != nil {
-		outputAny, err := anypb.New(result.output)
-		if err != nil {
-			return CallResult{}, fmt.Errorf("cannot serialize call output: %w", err)
-		}
-		result.proto.Output = outputAny
-	}
-
-	return result, nil
-}
-
-// NewErrorCallResult constructs a CallResult from a Go error.
-func NewErrorCallResult(err error) CallResult {
-	result, err := NewCallResult(WithCallResultError(NewGoError(err)))
-	if err != nil {
-		panic(err) // unreachable; no output was specified
 	}
 	return result
 }
@@ -165,13 +123,13 @@ func WithCallResultCorrelationID(correlationID uint64) CallResultOption {
 	return func(result *CallResult) { result.proto.CorrelationId = correlationID }
 }
 
-// WithCallResultOutput sets the output from the function call.
-func WithCallResultOutput(output proto.Message) CallResultOption {
-	return func(result *CallResult) { result.output = output }
+// WithOutput sets the output from the function call.
+func WithOutput(output Any) CallResultOption {
+	return func(result *CallResult) { result.proto.Output = output.proto }
 }
 
-// WithCallResultError sets the error from the function call.
-func WithCallResultError(err Error) CallResultOption {
+// WithError sets the error from the function call.
+func WithError(err Error) CallResultOption {
 	return func(result *CallResult) { result.proto.Error = err.proto }
 }
 
@@ -189,12 +147,9 @@ func (r CallResult) CorrelationID() uint64 {
 }
 
 // Output is output from the function.
-func (r CallResult) Output() (proto.Message, error) {
+func (r CallResult) Output() (Any, bool) {
 	output := r.proto.GetOutput()
-	if output == nil {
-		return nil, nil
-	}
-	return output.UnmarshalNew()
+	return Any{output}, output != nil
 }
 
 // Error is the error that occurred during execution of the function.
@@ -202,8 +157,8 @@ func (r CallResult) Output() (proto.Message, error) {
 // It is valid to have both an output and an error, in which case the output
 // might contain a partial result.
 func (r CallResult) Error() (Error, bool) {
-	e := r.proto.GetError()
-	return Error{e}, e != nil
+	proto := r.proto.GetError()
+	return Error{proto}, proto != nil
 }
 
 // ID is the opaque identifier for the function call.
@@ -218,38 +173,20 @@ func (r CallResult) String() string {
 
 // Equal is true if the call result is equal to another.
 func (r CallResult) Equal(other CallResult) bool {
-	if r.proto == nil || other.proto == nil {
+	if (r.proto == nil) != (other.proto == nil) {
 		return false
 	}
-	if r.CorrelationID() != other.CorrelationID() {
-		return false
+	if r.proto == nil {
+		return true
 	}
-	if r.ID() != other.ID() {
-		return false
-	}
-	output, err := r.Output()
-	if err != nil {
-		return false
-	}
-	otherOutput, err := other.Output()
-	if err != nil {
-		return false
-	}
-	if (output == nil) != (otherOutput == nil) {
-		return false
-	}
-	if output != nil && !proto.Equal(output, otherOutput) {
-		return false
-	}
-	if (r.proto.GetError() == nil) != (other.proto.GetError() == nil) {
-		return false
-	}
-	if error, ok := r.Error(); ok {
-		if otherError, _ := other.Error(); !error.Equal(otherError) {
-			return false
-		}
-	}
-	return true
+	output, _ := r.Output()
+	otherOutput, _ := other.Output()
+	error, _ := r.Error()
+	otherError, _ := other.Error()
+	return r.CorrelationID() == other.CorrelationID() &&
+		r.ID() == other.ID() &&
+		output.Equal(otherOutput) &&
+		error.Equal(otherError)
 }
 
 // Error is an error that occurred during execution of a function.
@@ -271,6 +208,7 @@ func NewError(typ, message string, opts ...ErrorOption) Error {
 
 // NewGoError creates an Error from a Go error.
 func NewGoError(err error) Error {
+	// TODO: use WithErrorValue/WithErrorTraceback
 	return NewError(errorTypeOf(err), err.Error())
 }
 
@@ -325,8 +263,11 @@ func (e Error) String() string {
 
 // Equal is true if the error is equal to another.
 func (e Error) Equal(other Error) bool {
-	if e.proto == nil || other.proto == nil {
+	if (e.proto == nil) != (other.proto == nil) {
 		return false
+	}
+	if e.proto == nil {
+		return true
 	}
 	return e.Type() == other.Type() &&
 		e.Message() == other.Message() &&
@@ -353,8 +294,8 @@ func NewExit(opts ...ExitOption) Exit {
 // ExitOption configures an Exit directive.
 type ExitOption func(*Exit)
 
-// WithExitResult sets the result of the function call.
-func WithExitResult(result CallResult) ExitOption {
+// WithResult sets the result of the function call.
+func WithResult(result CallResult) ExitOption {
 	return func(e *Exit) { e.proto.Result = result.proto }
 }
 
@@ -366,30 +307,33 @@ func WithTailCall(tailCall Call) ExitOption {
 // Result is the function call result the exit directive carries.
 func (e Exit) Result() (CallResult, bool) {
 	proto := e.proto.GetResult()
-	return CallResult{proto: proto}, proto != nil
+	return CallResult{proto}, proto != nil
 }
 
 // Error is the error from the function call result the
 // exit directive carries.
 func (e Exit) Error() (Error, bool) {
-	proto := e.proto.GetResult().GetError()
-	return Error{proto: proto}, proto != nil
+	result, ok := e.Result()
+	if !ok {
+		return Error{}, false
+	}
+	return result.Error()
 }
 
 // Output is the output from the function call result the
 // exit directive carries.
-func (e Exit) Output() (proto.Message, error) {
-	output := e.proto.GetResult().GetOutput()
-	if output == nil {
-		return nil, nil
+func (e Exit) Output() (Any, bool) {
+	result, ok := e.Result()
+	if !ok {
+		return Any{}, false
 	}
-	return output.UnmarshalNew()
+	return result.Output()
 }
 
 // TailCall is the tail call the exit directive carries.
 func (e Exit) TailCall() (Call, bool) {
 	proto := e.proto.GetTailCall()
-	return Call{proto: proto}, proto != nil
+	return Call{proto}, proto != nil
 }
 
 // String is the string representation of the Exit directive.
@@ -399,21 +343,12 @@ func (e Exit) String() string {
 
 // Equal is true if an Exit directive is equal to another.
 func (e Exit) Equal(other Exit) bool {
-	result, ok := e.Result()
-	otherResult, otherOk := other.Result()
-	if ok != otherOk {
-		return false
-	} else if ok && !result.Equal(otherResult) {
-		return false
-	}
-	tailCall, ok := e.TailCall()
-	otherTailCall, otherOk := other.TailCall()
-	if ok != otherOk {
-		return false
-	} else if ok && !tailCall.Equal(otherTailCall) {
-		return false
-	}
-	return true
+	result, _ := e.Result()
+	otherResult, _ := other.Result()
+	tailCall, _ := e.TailCall()
+	otherTailCall, _ := other.TailCall()
+	return result.Equal(otherResult) &&
+		tailCall.Equal(otherTailCall)
 }
 
 // Poll is a general purpose directive used to spawn
@@ -539,26 +474,23 @@ func NewResponse(status Status, directive ResponseDirective) Response {
 }
 
 // NewOutputResponse creates a Response from the specified output value.
-func NewOutputResponse(output proto.Message) Response {
-	result, err := NewCallResult(WithCallResultOutput(output))
-	if err != nil {
-		return NewErrorfResponse("cannot serialize output: %w", err)
-	}
-	exit := NewExit(WithExitResult(result))
-
+func NewOutputResponse(output Any) Response {
+	result := NewCallResult(WithOutput(output))
+	exit := NewExit(WithResult(result))
 	status := statusOf(output)
 	if status == UnspecifiedStatus {
 		status = OKStatus
 	}
-
 	return NewResponse(status, exit)
 }
 
-// NewErrorResponse creates a Response for the specified error.
+// NewErrorResponse creates a Response from the specified error.
 func NewErrorResponse(err error) Response {
-	result := NewErrorCallResult(err)
-	exit := NewExit(WithExitResult(result))
-	return NewResponse(errorStatusOf(err), exit)
+	error := NewGoError(err)
+	result := NewCallResult(WithError(error))
+	exit := NewExit(WithResult(result))
+	status := errorStatusOf(err)
+	return NewResponse(status, exit)
 }
 
 // NewErrorfResponse creates a Response from the specified error message
@@ -598,7 +530,7 @@ func (r Response) Exit() (Exit, bool) {
 	return Exit{proto}, proto != nil
 }
 
-// Error is the error from an exit directive.
+// Error is the error from the exit directive attached to the response.
 func (r Response) Error() (Error, bool) {
 	exit, ok := r.Exit()
 	if !ok {
@@ -607,11 +539,11 @@ func (r Response) Error() (Error, bool) {
 	return exit.Error()
 }
 
-// Output is the output from an exit directive.
-func (r Response) Output() (proto.Message, error) {
+// Output is the output from an exit directive attached to the response.
+func (r Response) Output() (Any, bool) {
 	exit, ok := r.Exit()
 	if !ok {
-		return nil, fmt.Errorf("not an exit directive")
+		return Any{}, false
 	}
 	return exit.Output()
 }
@@ -632,21 +564,12 @@ func (r Response) Equal(other Response) bool {
 	if r.Status() != other.Status() {
 		return false
 	}
-	exit, ok := r.Exit()
-	otherExit, otherOk := r.Exit()
-	if ok != otherOk {
-		return false
-	} else if ok && !exit.Equal(otherExit) {
-		return false
-	}
-	poll, ok := r.Poll()
-	otherPoll, otherOk := r.Poll()
-	if ok != otherOk {
-		return false
-	} else if ok && !poll.Equal(otherPoll) {
-		return false
-	}
-	return true
+	exit, _ := r.Exit()
+	otherExit, _ := r.Exit()
+	poll, _ := r.Poll()
+	otherPoll, _ := r.Poll()
+	return exit.Equal(otherExit) &&
+		poll.Equal(otherPoll)
 }
 
 // Marshal marshals the response.
@@ -654,11 +577,15 @@ func (r Response) Marshal() ([]byte, error) {
 	return proto.Marshal(r.proto)
 }
 
-// UnmarshalResponse unmarshals a response.
-func UnmarshalResponse(b []byte) (Response, error) {
-	var r sdkv1.RunResponse
-	if err := proto.Unmarshal(b, &r); err != nil {
-		return Response{}, err
-	}
-	return Response{&r}, nil
+// These are hooks used by the dispatchtest package that
+// allow us to avoid exposing the proto messages.
+
+//go:linkname newProtoCall
+func newProtoCall(proto *sdkv1.Call) Call { //nolint
+	return Call{proto}
+}
+
+//go:linkname newProtoResponse
+func newProtoResponse(proto *sdkv1.RunResponse) Response { //nolint
+	return Response{proto}
 }

@@ -72,14 +72,13 @@ func TestFunctionRunResult(t *testing.T) {
 		},
 	})
 
-	output, err := res.Output()
-	if err != nil {
+	output, ok := res.Output()
+	if !ok {
 		t.Fatalf("invalid response: %v (%v)", res, err)
-	}
-	if str, ok := output.(*wrapperspb.StringValue); !ok {
-		t.Fatalf("unexpected output: %T (%v)", output, output)
-	} else if str.Value != "world" {
-		t.Errorf("unexpected output: %s", str.Value)
+	} else if str, err := output.String(); err != nil {
+		t.Fatalf("unexpected output: %v", err)
+	} else if str != "world" {
+		t.Errorf("unexpected output: %s", str)
 	}
 }
 
@@ -90,11 +89,11 @@ func TestPrimitiveFunctionNewCallAndDispatchWithoutEndpoint(t *testing.T) {
 
 	wantErr := "cannot build function call: function has not been registered with a Dispatch endpoint"
 
-	_, err := fn.NewCall(wrapperspb.String("bar"))
+	_, err := fn.NewCall(dispatch.String("bar"))
 	if err == nil || err.Error() != wantErr {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	_, err = fn.Dispatch(context.Background(), wrapperspb.String("bar"))
+	_, err = fn.Dispatch(context.Background(), dispatch.String("bar"))
 	if err == nil || err.Error() != wantErr {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -132,12 +131,12 @@ func TestPrimitiveFunctionDispatchWithoutClient(t *testing.T) {
 	endpoint.Register(fn)
 
 	// It's possible to create a call since an endpoint URL is available.
-	if _, err := fn.NewCall(wrapperspb.String("bar")); err != nil {
+	if _, err := fn.NewCall(dispatch.String("bar")); err != nil {
 		t.Fatal(err)
 	}
 
 	// However, a client is not available.
-	_, err = fn.Dispatch(context.Background(), wrapperspb.String("bar"))
+	_, err = fn.Dispatch(context.Background(), dispatch.String("bar"))
 	if err == nil {
 		t.Fatal("expected an error")
 	} else if err.Error() != "cannot dispatch function call: Dispatch API key has not been set. Use WithAPIKey(..), or set the DISPATCH_API_KEY environment variable" {

@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	_ "unsafe"
 
 	"buf.build/gen/go/stealthrocket/dispatch-proto/connectrpc/go/dispatch/sdk/v1/sdkv1connect"
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
@@ -51,11 +52,7 @@ func (d *dispatchServiceHandler) Dispatch(ctx context.Context, req *connect.Requ
 
 	calls := make([]dispatch.Call, len(req.Msg.Calls))
 	for i, c := range req.Msg.Calls {
-		var err error
-		calls[i], err = wrapCall(c)
-		if err != nil {
-			return nil, connect.NewError(connect.CodeInvalidArgument, fmt.Errorf("invalid call %d: %v", i+1, err))
-		}
+		calls[i] = newProtoCall(c)
 	}
 
 	ids, err := d.Handle(ctx, apiKey, calls)
@@ -70,16 +67,8 @@ func (d *dispatchServiceHandler) Dispatch(ctx context.Context, req *connect.Requ
 	}), nil
 }
 
-func wrapCall(c *sdkv1.Call) (dispatch.Call, error) {
-	input, err := c.Input.UnmarshalNew()
-	if err != nil {
-		return dispatch.Call{}, err
-	}
-	return dispatch.NewCall(c.Endpoint, c.Function, input,
-		dispatch.WithCallCorrelationID(c.CorrelationId),
-		dispatch.WithCallExpiration(c.Expiration.AsDuration()),
-		dispatch.WithCallVersion(c.Version))
-}
+//go:linkname newProtoCall github.com/dispatchrun/dispatch-go.newProtoCall
+func newProtoCall(c *sdkv1.Call) dispatch.Call
 
 // CallRecorder is a DispatchServerHandler that captures requests to the Dispatch API.
 type CallRecorder struct {
