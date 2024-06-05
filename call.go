@@ -116,3 +116,7 @@ func (c Call) Equal(other Call) bool {
 	otherInput, _ := other.Input()
 	return input != nil && otherInput != nil && proto.Equal(input, otherInput)
 }
+
+func (c Call) String() string {
+	return c.message.String()
+}

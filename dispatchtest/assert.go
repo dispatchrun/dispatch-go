@@ -14,7 +14,7 @@ func AssertCalls(t *testing.T, got, want []dispatch.Call) {
 	}
 	for i, call := range got {
 		if !call.Equal(want[i]) {
-			t.Errorf("unexpected call %d: got %#v, want %#v", i, call, want[i])
+			t.Errorf("unexpected call %d: got %v, want %v", i, call, want[i])
 		}
 	}
 }
@@ -23,7 +23,7 @@ func AssertCall(t *testing.T, got, want dispatch.Call) {
 	t.Helper()
 
 	if !got.Equal(want) {
-		t.Errorf("unexpected call: got %#v, want %#v", got, want)
+		t.Errorf("unexpected call: got %v, want %v", got, want)
 	}
 }
 
