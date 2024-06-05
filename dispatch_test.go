@@ -218,3 +218,55 @@ func TestDispatchCallsBatch(t *testing.T) {
 		},
 	})
 }
+
+func TestDispatchEndpointURL(t *testing.T) {
+	t.Run("missing", func(t *testing.T) {
+		_, err := dispatch.New(dispatch.WithEnv( /* i.e. no env vars */ ))
+		if err == nil || err.Error() != "Dispatch endpoint URL has not been set. Use WithEndpointUrl(..), or set the DISPATCH_ENDPOINT_URL environment variable" {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("invalid", func(t *testing.T) {
+		_, err := dispatch.New(dispatch.WithEndpointUrl(":://::"))
+		if err == nil || err.Error() != "invalid endpoint URL provided via WithEndpointUrl: :://::" {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("invalid env", func(t *testing.T) {
+		_, err := dispatch.New(dispatch.WithEnv(
+			"DISPATCH_ENDPOINT_URL=:://::",
+		))
+		if err == nil || err.Error() != "invalid DISPATCH_ENDPOINT_URL: :://::" {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+}
+
+func TestDispatchVerificationKey(t *testing.T) {
+	t.Run("missing", func(t *testing.T) {
+		// It's not an error to omit the verification key.
+		_, err := dispatch.New(dispatch.WithEndpointUrl("http://example.com"))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("invalid", func(t *testing.T) {
+		_, err := dispatch.New(dispatch.WithEndpointUrl("http://example.com"), dispatch.WithVerificationKey("foo"))
+		if err == nil || err.Error() != "invalid verification key provided via WithVerificationKey: foo" {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("invalid env", func(t *testing.T) {
+		_, err := dispatch.New(dispatch.WithEnv(
+			"DISPATCH_ENDPOINT_URL=http://example.com",
+			"DISPATCH_VERIFICATION_KEY=foo",
+		))
+		if err == nil || err.Error() != "invalid DISPATCH_VERIFICATION_KEY: foo" {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+}
