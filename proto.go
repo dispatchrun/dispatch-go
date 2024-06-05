@@ -66,7 +66,7 @@ func (c Call) Function() string {
 func (c Call) Input() (proto.Message, error) {
 	input := c.proto.GetInput()
 	if input == nil {
-		return nil, nil
+		return nil, fmt.Errorf("no input")
 	}
 	return c.proto.Input.UnmarshalNew()
 }
