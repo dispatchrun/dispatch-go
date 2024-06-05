@@ -485,3 +485,88 @@ func (p Poll) Equal(other Poll) bool {
 		p.MaxWait() == other.MaxWait() &&
 		bytes.Equal(p.CoroutineState(), other.CoroutineState())
 }
+
+// Response is a response to Dispatch after a function has run.
+type Response struct {
+	proto *sdkv1.RunResponse
+}
+
+// NewResponse creates a Response.
+func NewResponse(status Status, directive ResponseDirective) Response {
+	response := Response{&sdkv1.RunResponse{
+		Status: status.proto(),
+	}}
+	switch d := directive.(type) {
+	case Exit:
+		response.proto.Directive = &sdkv1.RunResponse_Exit{Exit: d.proto}
+	case Poll:
+		response.proto.Directive = &sdkv1.RunResponse_Poll{Poll: d.proto}
+	default:
+		panic("nil directive")
+	}
+	return response
+}
+
+// ResponseDirective is either Exit or Poll.
+type ResponseDirective interface {
+	responseDirective()
+}
+
+func (Poll) responseDirective() {}
+func (Exit) responseDirective() {}
+
+// Status is the response status.
+func (r Response) Status() Status {
+	return Status(r.proto.GetStatus())
+}
+
+// Directive is the response directive, either Exit or Poll.
+func (r Response) Directive() ResponseDirective {
+	switch d := r.proto.GetDirective().(type) {
+	case *sdkv1.RunResponse_Exit:
+		return Exit{d.Exit}
+	case *sdkv1.RunResponse_Poll:
+		return Poll{d.Poll}
+	default:
+		return nil
+	}
+}
+
+// Exit is the exit directive on the response.
+func (r Response) Exit() (Exit, bool) {
+	proto := r.proto.GetExit()
+	return Exit{proto}, proto != nil
+}
+
+// Poll is the poll directive on the response.
+func (r Response) Poll() (Poll, bool) {
+	proto := r.proto.GetPoll()
+	return Poll{proto}, proto != nil
+}
+
+// String is the string representation of the response.
+func (r Response) String() string {
+	return fmt.Sprintf("Response(%s)", r.proto)
+}
+
+// Equal is true if the response is equal to another.
+func (r Response) Equal(other Response) bool {
+	if r.Status() != other.Status() {
+		return false
+	}
+	exit, ok := r.Exit()
+	otherExit, otherOk := r.Exit()
+	if ok != otherOk {
+		return false
+	} else if ok && !exit.Equal(otherExit) {
+		return false
+	}
+	poll, ok := r.Poll()
+	otherPoll, otherOk := r.Poll()
+	if ok != otherOk {
+		return false
+	} else if ok && !poll.Equal(otherPoll) {
+		return false
+	}
+	return true
+}
