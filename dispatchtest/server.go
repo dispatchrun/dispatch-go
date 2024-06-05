@@ -75,9 +75,9 @@ func wrapCall(c *sdkv1.Call) (dispatch.Call, error) {
 		return dispatch.Call{}, err
 	}
 	return dispatch.NewCall(c.Endpoint, c.Function, input,
-		dispatch.WithCorrelationID(c.CorrelationId),
-		dispatch.WithExpiration(c.Expiration.AsDuration()),
-		dispatch.WithVersion(c.Version))
+		dispatch.WithCallCorrelationID(c.CorrelationId),
+		dispatch.WithCallExpiration(c.Expiration.AsDuration()),
+		dispatch.WithCallVersion(c.Version))
 }
 
 // CallRecorder is a DispatchServerHandler that captures requests to the Dispatch API.

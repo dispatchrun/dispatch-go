@@ -50,7 +50,7 @@ func TestCall(t *testing.T) {
 
 	t.Run("with options", func(t *testing.T) {
 		call, err := NewCall("endpoint1", "function2", wrapperspb.Int32(11),
-			WithCorrelationID(1234), WithExpiration(10*time.Second), WithVersion("xyzzy"))
+			WithCallCorrelationID(1234), WithCallExpiration(10*time.Second), WithCallVersion("xyzzy"))
 		if err != nil {
 			t.Fatal(err)
 		}

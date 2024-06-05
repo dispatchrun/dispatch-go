@@ -2,7 +2,6 @@ package dispatch
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"time"
 
@@ -38,19 +37,19 @@ func NewCall(endpoint, function string, input proto.Message, opts ...CallOption)
 // CallOption configures a call.
 type CallOption func(*Call)
 
-// WithExpiration sets a function call expiration.
-func WithExpiration(expiration time.Duration) CallOption {
-	return CallOption(func(call *Call) { call.proto.Expiration = durationpb.New(expiration) })
+// WithCallExpiration sets a function call expiration.
+func WithCallExpiration(expiration time.Duration) CallOption {
+	return func(call *Call) { call.proto.Expiration = durationpb.New(expiration) }
 }
 
-// WithCorrelationID sets a function call correlation ID.
-func WithCorrelationID(correlationID uint64) CallOption {
-	return CallOption(func(call *Call) { call.proto.CorrelationId = correlationID })
+// WithCallCorrelationID sets a function call correlation ID.
+func WithCallCorrelationID(correlationID uint64) CallOption {
+	return func(call *Call) { call.proto.CorrelationId = correlationID }
 }
 
-// WithVersion sets a function call version.
-func WithVersion(version string) CallOption {
-	return CallOption(func(call *Call) { call.proto.Version = version })
+// WithCallVersion sets a function call version.
+func WithCallVersion(version string) CallOption {
+	return func(call *Call) { call.proto.Version = version }
 }
 
 // Endpoint is the URL of the service where the function resides.
@@ -67,7 +66,7 @@ func (c Call) Function() string {
 func (c Call) Input() (proto.Message, error) {
 	input := c.proto.GetInput()
 	if input == nil {
-		return nil, errors.New("no input")
+		return nil, nil
 	}
 	return c.proto.Input.UnmarshalNew()
 }
@@ -114,9 +113,137 @@ func (c Call) Equal(other Call) bool {
 	if c.Version() != other.Version() {
 		return false
 	}
-	input, _ := c.Input()
-	otherInput, _ := other.Input()
+	input, err := c.Input()
+	if err != nil {
+		return false
+	}
+	otherInput, err := other.Input()
+	if err != nil {
+		return false
+	}
 	return input != nil && otherInput != nil && proto.Equal(input, otherInput)
+}
+
+// CallResult is a function call result.
+type CallResult struct {
+	proto  *sdkv1.CallResult
+	output proto.Message
+	error  Error
+}
+
+// NewCallResult creates a CallResult.
+func NewCallResult(opts ...CallResultOption) (CallResult, error) {
+	result := CallResult{proto: &sdkv1.CallResult{}}
+	for _, opt := range opts {
+		opt(&result)
+	}
+
+	if result.output != nil {
+		outputAny, err := anypb.New(result.output)
+		if err != nil {
+			return CallResult{}, fmt.Errorf("cannot serialize call output: %w", err)
+		}
+		result.proto.Output = outputAny
+	}
+
+	result.proto.Error = result.error.proto
+
+	return result, nil
+}
+
+// CallResultOption configures a CallResult.
+type CallResultOption func(*CallResult)
+
+// WithCallResultCorrelationID sets a function call result correlation ID.
+func WithCallResultCorrelationID(correlationID uint64) CallResultOption {
+	return func(result *CallResult) { result.proto.CorrelationId = correlationID }
+}
+
+// WithCallResultOutput sets the output from the function call.
+func WithCallResultOutput(output proto.Message) CallResultOption {
+	return func(result *CallResult) { result.output = output }
+}
+
+// WithCallResultError sets the error from the function call.
+func WithCallResultError(err Error) CallResultOption {
+	return func(result *CallResult) { result.error = err }
+}
+
+// WithCallResultID sets the opaque identifier for the function call.
+func WithCallResultID(id ID) CallResultOption {
+	return func(result *CallResult) { result.proto.DispatchId = id }
+}
+
+// CorrelationID is the value that was originally passed in the Call message.
+//
+// This field is intended to be used by the function to correlate the result
+// with the original call.
+func (r CallResult) CorrelationID() uint64 {
+	return r.proto.GetCorrelationId()
+}
+
+// Output is output from the function.
+func (r CallResult) Output() (proto.Message, error) {
+	output := r.proto.GetOutput()
+	if output == nil {
+		return nil, nil
+	}
+	return r.proto.Output.UnmarshalNew()
+}
+
+// Error is the error that occurred during execution of the function.
+//
+// It is valid to have both an output and an error, in which case the output
+// might contain a partial result.
+func (r CallResult) Error() (Error, bool) {
+	e := r.proto.GetError()
+	return Error{e}, e != nil
+}
+
+// ID is the opaque identifier for the function call.
+func (r CallResult) ID() ID {
+	return r.proto.GetDispatchId()
+}
+
+// String is the string representation of the function call result.
+func (r CallResult) String() string {
+	return fmt.Sprintf("CallResult(%s)", r.proto)
+}
+
+// Equal is true if the call result is equal to another.
+func (r CallResult) Equal(other CallResult) bool {
+	if r.proto == nil || other.proto == nil {
+		return false
+	}
+	if r.CorrelationID() != other.CorrelationID() {
+		return false
+	}
+	if r.ID() != other.ID() {
+		return false
+	}
+	output, err := r.Output()
+	if err != nil {
+		return false
+	}
+	otherOutput, err := other.Output()
+	if err != nil {
+		return false
+	}
+	if (output == nil) != (otherOutput == nil) {
+		return false
+	}
+	if output != nil && !proto.Equal(output, otherOutput) {
+		return false
+	}
+	if (r.proto.GetError() == nil) != (other.proto.GetError() == nil) {
+		return false
+	}
+	if error, ok := r.Error(); ok {
+		if otherError, _ := other.Error(); !error.Equal(otherError) {
+			return false
+		}
+	}
+	return true
 }
 
 // Error is an error that occurred during execution of a function.
@@ -140,19 +267,11 @@ func NewError(typ, message string, opts ...ErrorOption) Error {
 type ErrorOption func(*Error)
 
 // WithErrorValue sets the language-specific representation of the error.
-//
-// This is used to enable propagation of the error value between
-// instances of a program, by encoding information allowing the error
-// value to be reconstructed.
 func WithErrorValue(value []byte) ErrorOption {
 	return func(e *Error) { e.proto.Value = value }
 }
 
 // WithErrorTraceback sets the encoded stack trace for the error.
-//
-// The format is language-specific, encoded in the standard format used by
-// each programming language to represent stack traces. Not all languages have
-// stack traces for errors, so in some cases the value might be omitted.
 func WithErrorTraceback(traceback []byte) ErrorOption {
 	return func(e *Error) { e.proto.Traceback = traceback }
 }
@@ -171,11 +290,19 @@ func (e Error) Message() string {
 }
 
 // Value is the language-specific representation of the error.
+//
+// This is used to enable propagation of the error value between
+// instances of a program, by encoding information allowing the error
+// value to be reconstructed.
 func (e Error) Value() []byte {
 	return e.proto.GetValue()
 }
 
 // Traceback is the encoded stack trace for the error.
+//
+// The format is language-specific, encoded in the standard format used by
+// each programming language to represent stack traces. Not all languages have
+// stack traces for errors, so in some cases the value might be omitted.
 func (e Error) Traceback() []byte {
 	return e.proto.GetTraceback()
 }

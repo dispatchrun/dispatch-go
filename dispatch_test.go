@@ -115,12 +115,12 @@ func TestDispatchCall(t *testing.T) {
 	})
 	endpoint.Register(fn)
 
-	_, err = fn.Dispatch(context.Background(), wrapperspb.Int32(11), dispatch.WithExpiration(10*time.Second))
+	_, err = fn.Dispatch(context.Background(), wrapperspb.Int32(11), dispatch.WithCallExpiration(10*time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	wantCall, err := dispatch.NewCall("http://example.com", "function1", wrapperspb.Int32(11), dispatch.WithExpiration(10*time.Second))
+	wantCall, err := dispatch.NewCall("http://example.com", "function1", wrapperspb.Int32(11), dispatch.WithCallExpiration(10*time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,12 +151,12 @@ func TestDispatchCallEnvConfig(t *testing.T) {
 	})
 	endpoint.Register(fn)
 
-	_, err = fn.Dispatch(context.Background(), wrapperspb.String("foo"), dispatch.WithVersion("xyzzy"))
+	_, err = fn.Dispatch(context.Background(), wrapperspb.String("foo"), dispatch.WithCallVersion("xyzzy"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	wantCall, err := dispatch.NewCall("http://example.com", "function2", wrapperspb.String("foo"), dispatch.WithVersion("xyzzy"))
+	wantCall, err := dispatch.NewCall("http://example.com", "function2", wrapperspb.String("foo"), dispatch.WithCallVersion("xyzzy"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,11 +191,11 @@ func TestDispatchCallsBatch(t *testing.T) {
 	endpoint.Register(fn1)
 	endpoint.Register(fn2)
 
-	call1, err := fn1.NewCall(wrapperspb.Int32(11), dispatch.WithExpiration(10*time.Second))
+	call1, err := fn1.NewCall(wrapperspb.Int32(11), dispatch.WithCallExpiration(10*time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
-	call2, err := fn2.NewCall(wrapperspb.String("foo"), dispatch.WithVersion("xyzzy"))
+	call2, err := fn2.NewCall(wrapperspb.String("foo"), dispatch.WithCallVersion("xyzzy"))
 	if err != nil {
 		t.Fatal(err)
 	}
