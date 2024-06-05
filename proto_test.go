@@ -47,7 +47,7 @@ func TestCall(t *testing.T) {
 
 	t.Run("with options", func(t *testing.T) {
 		call := NewCall("endpoint1", "function2", Int(11),
-			WithCallCorrelationID(1234), WithCallExpiration(10*time.Second), WithCallVersion("xyzzy"))
+			WithCallCorrelationID(1234), WithExpiration(10*time.Second), WithVersion("xyzzy"))
 
 		if got := call.Endpoint(); got != "endpoint1" {
 			t.Errorf("unexpected call endpoint: %v", got)

@@ -32,8 +32,8 @@ func NewCall(endpoint, function string, input Any, opts ...CallOption) Call {
 // CallOption configures a call.
 type CallOption func(*Call)
 
-// WithCallExpiration sets a function call expiration.
-func WithCallExpiration(expiration time.Duration) CallOption {
+// WithExpiration sets a function call expiration.
+func WithExpiration(expiration time.Duration) CallOption {
 	return func(call *Call) { call.proto.Expiration = durationpb.New(expiration) }
 }
 
@@ -42,8 +42,8 @@ func WithCallCorrelationID(correlationID uint64) CallOption {
 	return func(call *Call) { call.proto.CorrelationId = correlationID }
 }
 
-// WithCallVersion sets a function call version.
-func WithCallVersion(version string) CallOption {
+// WithVersion sets a function call version.
+func WithVersion(version string) CallOption {
 	return func(call *Call) { call.proto.Version = version }
 }
 
@@ -450,6 +450,93 @@ func (p Poll) Equal(other Poll) bool {
 		p.MaxResults() == other.MaxResults() &&
 		p.MaxWait() == other.MaxWait() &&
 		bytes.Equal(p.CoroutineState(), other.CoroutineState())
+}
+
+// PollResult is the result of a poll operation.
+type PollResult struct {
+	proto *sdkv1.PollResult
+}
+
+// NewPollResult creates a PollResult
+func NewPollResult(opts ...PollResultOption) PollResult {
+	result := PollResult{&sdkv1.PollResult{}}
+	for _, opt := range opts {
+		opt(&result)
+	}
+	return result
+}
+
+// PollResultOption configures a PollResult.
+type PollResultOption func(*PollResult)
+
+// WithPollResultCoroutineState sets the coroutine state.
+func WithPollResultCoroutineState(state []byte) PollResultOption {
+	return func(r *PollResult) { r.proto.CoroutineState = state }
+}
+
+// WithPollResults sets the call results for the poll operation.
+func WithPollResults(results ...CallResult) PollResultOption {
+	return func(r *PollResult) {
+		for i := range results {
+			r.proto.Results = append(r.proto.Results, results[i].proto)
+		}
+	}
+}
+
+// WithPollError sets the error from the poll operation.
+func WithPollError(error Error) PollResultOption {
+	return func(r *PollResult) { r.proto.Error = error.proto }
+}
+
+// CoroutineState is the state recorded when the function was
+// suspended while polling.
+func (r PollResult) CoroutineState() []byte {
+	return r.proto.GetCoroutineState()
+}
+
+// Results are the function call results attached to the poll result.
+func (r PollResult) Results() []CallResult {
+	raw := r.proto.GetResults()
+	if len(raw) == 0 {
+		return nil
+	}
+	results := make([]CallResult, len(raw))
+	for i, proto := range raw {
+		results[i] = CallResult{proto}
+	}
+	return results
+}
+
+// Error is an error that occured while processing a Poll directive.
+//
+// An error indicates that none of the calls were dispatched, and must be
+// resubmitted after the error cause has been resolved.
+func (r PollResult) Error() (Error, bool) {
+	proto := r.proto.GetError()
+	return Error{proto}, proto != nil
+}
+
+// String is the string representation of the poll result.
+func (r PollResult) String() string {
+	return fmt.Sprintf("PollResult(%s)", r.proto)
+}
+
+// Equal is true if the poll result is equal to another.
+func (r PollResult) Equal(other PollResult) bool {
+	results := r.Results()
+	otherResults := other.Results()
+	if len(results) != len(otherResults) {
+		return false
+	}
+	for i := range results {
+		if !results[i].Equal(otherResults[i]) {
+			return false
+		}
+	}
+	error, _ := r.Error()
+	otherError, _ := other.Error()
+	return error.Equal(otherError) &&
+		bytes.Equal(r.CoroutineState(), other.CoroutineState())
 }
 
 // Response is a response to Dispatch after a function has run.
