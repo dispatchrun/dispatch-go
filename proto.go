@@ -68,7 +68,7 @@ func (c Call) Input() (proto.Message, error) {
 	if input == nil {
 		return nil, fmt.Errorf("no input")
 	}
-	return c.proto.Input.UnmarshalNew()
+	return input.UnmarshalNew()
 }
 
 // Expiration is the maximum time the function is allowed to run.
@@ -185,7 +185,7 @@ func (r CallResult) Output() (proto.Message, error) {
 	if output == nil {
 		return nil, nil
 	}
-	return r.proto.Output.UnmarshalNew()
+	return output.UnmarshalNew()
 }
 
 // Error is the error that occurred during execution of the function.
@@ -383,4 +383,105 @@ func (e Exit) Equal(other Exit) bool {
 		return false
 	}
 	return true
+}
+
+// Poll is a general purpose directive used to spawn
+// function calls and wait for their results, and/or
+// to implement sleep/timer functionality.
+type Poll struct {
+	proto *sdkv1.Poll
+}
+
+// NewPoll creates a Poll directive.
+func NewPoll(minResults, maxResults int32, maxWait time.Duration, opts ...PollOption) Poll {
+	poll := Poll{&sdkv1.Poll{
+		MinResults: int32(minResults),
+		MaxResults: int32(maxResults),
+		MaxWait:    durationpb.New(maxWait),
+	}}
+	for _, opt := range opts {
+		opt(&poll)
+	}
+	return poll
+}
+
+// PollOption configures a Poll directive.
+type PollOption func(*Poll)
+
+// WithPollCoroutineState sets the coroutine state.
+func WithPollCoroutineState(state []byte) PollOption {
+	return func(p *Poll) { p.proto.CoroutineState = state }
+}
+
+// WithPollCalls adds calls to a Poll directive.
+func WithPollCalls(calls ...Call) PollOption {
+	return func(p *Poll) {
+		for i := range calls {
+			p.proto.Calls = append(p.proto.Calls, calls[i].proto)
+		}
+	}
+}
+
+// MinResults is the minimum number of call results to wait for before the
+// function is resumed.
+//
+// The function will be suspended until either MinResults are available,
+// or the MaxWait timeout is reached, whichever comes first.
+func (p Poll) MinResults() int32 {
+	return p.proto.GetMinResults()
+}
+
+// MaxResults is the maximum number of call results to deliver in the
+// PollResult.
+func (p Poll) MaxResults() int32 {
+	return p.proto.GetMaxResults()
+}
+
+// MaxWait is the maximum amount of time the function should be suspended for
+// while waiting for call results.
+func (p Poll) MaxWait() time.Duration {
+	return p.proto.GetMaxWait().AsDuration()
+}
+
+// CoroutineState is a snapshot of the function's state.
+//
+// It's passed back in the PollResult when the function is resumed.
+func (p Poll) CoroutineState() []byte {
+	return p.proto.GetCoroutineState()
+}
+
+// Calls are the function calls attached to the poll directive.
+func (p Poll) Calls() []Call {
+	raw := p.proto.GetCalls()
+	if len(raw) == 0 {
+		return nil
+	}
+	calls := make([]Call, len(raw))
+	for i, proto := range raw {
+		calls[i] = Call{proto}
+	}
+	return calls
+}
+
+// String is the string representation of the poll directive.
+func (p Poll) String() string {
+	return fmt.Sprintf("Poll(%s)", p.proto)
+}
+
+// Equal is true if the poll directive is equal to another.
+func (p Poll) Equal(other Poll) bool {
+	calls := p.Calls()
+	otherCalls := other.Calls()
+	if len(calls) != len(otherCalls) {
+		return false
+	}
+	for i := range calls {
+		if !calls[i].Equal(otherCalls[i]) {
+			return false
+		}
+	}
+	return p.MinResults() == other.MinResults() &&
+		p.MaxResults() == other.MaxResults() &&
+		p.MaxWait() == other.MaxWait() &&
+		bytes.Equal(p.CoroutineState(), other.CoroutineState())
 }
