@@ -134,7 +134,7 @@ func (b *Batch) Reset() {
 // Add adds calls to the batch.
 func (b *Batch) Add(calls ...Call) {
 	for i := range calls {
-		b.calls = append(b.calls, calls[i].proto())
+		b.calls = append(b.calls, calls[i].proto)
 	}
 }
 

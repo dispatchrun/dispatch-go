@@ -43,8 +43,8 @@ func TestCall(t *testing.T) {
 			Function: "function2",
 			Input:    inputAny,
 		}
-		if got := call.proto(); !proto.Equal(got, want) {
-			t.Errorf("unexpected call proto message: %#v", got)
+		if !proto.Equal(call.proto, want) {
+			t.Errorf("unexpected call proto message: %s", call.proto)
 		}
 	})
 
@@ -83,8 +83,8 @@ func TestCall(t *testing.T) {
 			Expiration:    durationpb.New(10 * time.Second),
 			Version:       "xyzzy",
 		}
-		if got := call.proto(); !proto.Equal(got, want) {
-			t.Errorf("unexpected call proto message: %#v", got)
+		if !proto.Equal(call.proto, want) {
+			t.Errorf("unexpected call proto message: %s", call.proto)
 		}
 	})
 
