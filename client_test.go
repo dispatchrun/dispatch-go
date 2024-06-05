@@ -28,11 +28,9 @@ func TestClient(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dispatchtest.AssertDispatchRequests(t, recorder.Requests, []dispatchtest.DispatchRequest{
-		{
-			ApiKey: "foobar",
-			Calls:  []dispatch.Call{call},
-		},
+	recorder.Assert(t, dispatchtest.DispatchRequest{
+		ApiKey: "foobar",
+		Calls:  []dispatch.Call{call},
 	})
 }
 
@@ -58,11 +56,9 @@ func TestClientEnvConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dispatchtest.AssertDispatchRequests(t, recorder.Requests, []dispatchtest.DispatchRequest{
-		{
-			ApiKey: "foobar",
-			Calls:  []dispatch.Call{call},
-		},
+	recorder.Assert(t, dispatchtest.DispatchRequest{
+		ApiKey: "foobar",
+		Calls:  []dispatch.Call{call},
 	})
 }
 
@@ -107,16 +103,15 @@ func TestClientBatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dispatchtest.AssertDispatchRequests(t, recorder.Requests, []dispatchtest.DispatchRequest{
-		{
+	recorder.Assert(t,
+		dispatchtest.DispatchRequest{
 			ApiKey: "foobar",
 			Calls:  []dispatch.Call{call1, call2},
 		},
-		{
+		dispatchtest.DispatchRequest{
 			ApiKey: "foobar",
 			Calls:  []dispatch.Call{call3, call4},
-		},
-	})
+		})
 }
 
 func TestClientNoAPIKey(t *testing.T) {

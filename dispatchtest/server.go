@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"testing"
 
 	"buf.build/gen/go/stealthrocket/dispatch-proto/connectrpc/go/dispatch/sdk/v1/sdkv1connect"
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
@@ -82,7 +83,7 @@ func wrapCall(c *sdkv1.Call) (dispatch.Call, error) {
 
 // CallRecorder is a DispatchServerHandler that captures requests to the Dispatch API.
 type CallRecorder struct {
-	Requests []DispatchRequest
+	requests []DispatchRequest
 	calls    int
 }
 
@@ -96,7 +97,7 @@ func (r *CallRecorder) Handle(ctx context.Context, apiKey string, calls []dispat
 	base := r.calls
 	r.calls += len(calls)
 
-	r.Requests = append(r.Requests, DispatchRequest{
+	r.requests = append(r.requests, DispatchRequest{
 		ApiKey: apiKey,
 		Calls:  calls,
 	})
@@ -106,4 +107,27 @@ func (r *CallRecorder) Handle(ctx context.Context, apiKey string, calls []dispat
 		ids[i] = strconv.Itoa(base + i)
 	}
 	return ids, nil
+}
+
+func (r *CallRecorder) Assert(t *testing.T, want ...DispatchRequest) {
+	t.Helper()
+
+	got := r.requests
+	if len(got) != len(want) {
+		t.Fatalf("unexpected number of requests: got %v, want %v", len(got), len(want))
+	}
+	for i, req := range got {
+		if req.ApiKey != want[i].ApiKey {
+			t.Errorf("unexpected API key on request %d: got %v, want %v", i, req.ApiKey, want[i].ApiKey)
+		}
+		if len(req.Calls) != len(want[i].Calls) {
+			t.Errorf("unexpected number of calls in request %d: got %v, want %v", i, len(req.Calls), len(want[i].Calls))
+		} else {
+			for j, call := range req.Calls {
+				if !call.Equal(want[i].Calls[j]) {
+					t.Errorf("unexpected request %d call %d: got %v, want %v", i, j, call, want[i].Calls[j])
+				}
+			}
+		}
+	}
 }

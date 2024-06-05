@@ -115,11 +115,9 @@ func TestDispatchCall(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dispatchtest.AssertDispatchRequests(t, recorder.Requests, []dispatchtest.DispatchRequest{
-		{
-			ApiKey: "foobar",
-			Calls:  []dispatch.Call{wantCall},
-		},
+	recorder.Assert(t, dispatchtest.DispatchRequest{
+		ApiKey: "foobar",
+		Calls:  []dispatch.Call{wantCall},
 	})
 }
 
@@ -151,11 +149,9 @@ func TestDispatchCallEnvConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dispatchtest.AssertDispatchRequests(t, recorder.Requests, []dispatchtest.DispatchRequest{
-		{
-			ApiKey: "foobar",
-			Calls:  []dispatch.Call{wantCall},
-		},
+	recorder.Assert(t, dispatchtest.DispatchRequest{
+		ApiKey: "foobar",
+		Calls:  []dispatch.Call{wantCall},
 	})
 }
 
@@ -201,11 +197,9 @@ func TestDispatchCallsBatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dispatchtest.AssertDispatchRequests(t, recorder.Requests, []dispatchtest.DispatchRequest{
-		{
-			ApiKey: "foobar",
-			Calls:  []dispatch.Call{call1, call2},
-		},
+	recorder.Assert(t, dispatchtest.DispatchRequest{
+		ApiKey: "foobar",
+		Calls:  []dispatch.Call{call1, call2},
 	})
 }
 
