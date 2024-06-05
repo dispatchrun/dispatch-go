@@ -21,10 +21,10 @@ type Function interface {
 	// Run runs the function.
 	Run(context.Context, *sdkv1.RunRequest) *sdkv1.RunResponse
 
-	// register is an internal hook that binds an endpoint URL and
-	// client to the function, allowing the BuildCall and Dispatch
-	// methods to be called.
-	register(endpoint string, client *Client)
+	// bind is an internal hook for binding a function to
+	// a Dispatch endpoint, allowing the BuildCall and Dispatch
+	// methods to be called on the function.
+	bind(endpoint *Dispatch)
 }
 
 // NewFunction creates a Dispatch function.
@@ -38,8 +38,7 @@ type GenericFunction[Input, Output proto.Message] struct {
 	name string
 	fn   func(ctx context.Context, input Input) (Output, error)
 
-	endpoint string
-	client   *Client
+	endpoint *Dispatch
 }
 
 // Name is the name of the function.
@@ -131,29 +130,29 @@ func (f *GenericFunction[Input, Output]) Run(ctx context.Context, req *sdkv1.Run
 	return res
 }
 
-func (f *GenericFunction[Input, Output]) register(endpoint string, client *Client) {
+func (f *GenericFunction[Input, Output]) bind(endpoint *Dispatch) {
 	f.endpoint = endpoint
-	f.client = client
 }
 
 // BuildCall constructs a call for the function.
 func (f *GenericFunction[Input, Output]) BuildCall(input Input, opts ...CallOption) (Call, error) {
-	if f.endpoint == "" {
-		return Call{}, fmt.Errorf("cannot build function call: endpoint has not been registered")
+	if f.endpoint == nil {
+		return Call{}, fmt.Errorf("cannot build function call: function has not been registered with a Dispatch endpoint")
 	}
-	return NewCall(f.endpoint, f.name, input, opts...)
+	return NewCall(f.endpoint.URL(), f.name, input, opts...)
 }
 
 // Dispatch dispatches a call to the function.
 func (f *GenericFunction[Input, Output]) Dispatch(ctx context.Context, input Input, opts ...CallOption) (ID, error) {
-	if f.client == nil {
-		return "", fmt.Errorf("cannot dispatch function call: client has not been registered")
-	}
 	call, err := f.BuildCall(input, opts...)
 	if err != nil {
 		return "", err
 	}
-	return f.client.Dispatch(ctx, call)
+	client, err := f.endpoint.Client()
+	if err != nil {
+		return "", fmt.Errorf("cannot dispatch function call: %w", err)
+	}
+	return client.Dispatch(ctx, call)
 }
 
 //go:noinline
@@ -183,8 +182,7 @@ type PrimitiveFunction struct {
 	name string
 	fn   func(context.Context, *sdkv1.RunRequest) *sdkv1.RunResponse
 
-	endpoint string
-	client   *Client
+	endpoint *Dispatch
 }
 
 // Name is the name of the function.
@@ -197,28 +195,27 @@ func (f *PrimitiveFunction) Run(ctx context.Context, req *sdkv1.RunRequest) *sdk
 	return f.fn(ctx, req)
 }
 
+func (f *PrimitiveFunction) bind(endpoint *Dispatch) {
+	f.endpoint = endpoint
+}
+
 // BuildCall constructs a call for the function.
 func (f *PrimitiveFunction) BuildCall(input proto.Message, opts ...CallOption) (Call, error) {
-	if f.endpoint == "" {
-		return Call{}, fmt.Errorf("cannot build function call: endpoint has not been registered")
+	if f.endpoint == nil {
+		return Call{}, fmt.Errorf("cannot build function call: function has not been registered with a Dispatch endpoint")
 	}
-	return NewCall(f.endpoint, f.name, input, opts...)
+	return NewCall(f.endpoint.URL(), f.name, input, opts...)
 }
 
 // Dispatch dispatches a call to the function.
 func (f *PrimitiveFunction) Dispatch(ctx context.Context, input proto.Message, opts ...CallOption) (ID, error) {
-	if f.client == nil {
-		return "", fmt.Errorf("cannot dispatch function call: client has not been registered")
-	}
 	call, err := f.BuildCall(input, opts...)
 	if err != nil {
 		return "", err
 	}
-	return f.client.Dispatch(ctx, call)
-}
-
-// register registers an endpoint and client.
-func (f *PrimitiveFunction) register(endpoint string, client *Client) {
-	f.endpoint = endpoint
-	f.client = client
+	client, err := f.endpoint.Client()
+	if err != nil {
+		return "", fmt.Errorf("cannot dispatch function call: %w", err)
+	}
+	return client.Dispatch(ctx, call)
 }

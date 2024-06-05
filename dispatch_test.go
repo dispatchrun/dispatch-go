@@ -146,17 +146,17 @@ func TestDispatchCallEnvConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fn := dispatch.NewPrimitiveFunction("function1", func(ctx context.Context, req *sdkv1.RunRequest) *sdkv1.RunResponse {
+	fn := dispatch.NewFunction("function2", func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
 		panic("not implemented")
 	})
 	endpoint.Register(fn)
 
-	_, err = fn.Dispatch(context.Background(), wrapperspb.Int32(11), dispatch.WithExpiration(10*time.Second))
+	_, err = fn.Dispatch(context.Background(), wrapperspb.String("foo"), dispatch.WithVersion("xyzzy"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	wantCall, err := dispatch.NewCall("http://example.com", "function1", wrapperspb.Int32(11), dispatch.WithExpiration(10*time.Second))
+	wantCall, err := dispatch.NewCall("http://example.com", "function2", wrapperspb.String("foo"), dispatch.WithVersion("xyzzy"))
 	if err != nil {
 		t.Fatal(err)
 	}

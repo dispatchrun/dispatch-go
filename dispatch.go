@@ -181,7 +181,7 @@ func (d *Dispatch) Register(fn Function) {
 	// Bind the function to this endpoint, so that the function's
 	// BuildCall and Dispatch methods can be used to build and
 	// dispatch calls.
-	fn.register(d.endpointUrl, d.client)
+	fn.bind(d)
 }
 
 func (d *Dispatch) lookupFunction(name string) Function {
@@ -189,6 +189,11 @@ func (d *Dispatch) lookupFunction(name string) Function {
 	defer d.mu.Unlock()
 
 	return d.functions[name]
+}
+
+// URL is the URL of the Dispatch endpoint.
+func (d *Dispatch) URL() string {
+	return d.endpointUrl
 }
 
 // Handler returns an HTTP handler for Dispatch, along with the path

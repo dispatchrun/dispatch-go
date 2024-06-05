@@ -87,3 +87,67 @@ func TestFunctionRunResult(t *testing.T) {
 		t.Fatalf("unexpected coroutine response type: %T", coro)
 	}
 }
+
+func TestPrimitiveFunctionBuildCallWithoutEndpoint(t *testing.T) {
+	fn := dispatch.NewPrimitiveFunction("foo", func(ctx context.Context, req *sdkv1.RunRequest) *sdkv1.RunResponse {
+		panic("not implemented")
+	})
+
+	_, err := fn.BuildCall(wrapperspb.String("bar"))
+	if err == nil {
+		t.Fatal("expected an error")
+	} else if err.Error() != "cannot build function call: function has not been registered with a Dispatch endpoint" {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestFunctionBuildCallWithoutEndpoint(t *testing.T) {
+	fn := dispatch.NewFunction("foo", func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
+		panic("not implemented")
+	})
+
+	_, err := fn.BuildCall(wrapperspb.String("bar"))
+	if err == nil {
+		t.Fatal("expected an error")
+	} else if err.Error() != "cannot build function call: function has not been registered with a Dispatch endpoint" {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestPrimitiveFunctionDispatchWithoutClient(t *testing.T) {
+	endpoint, err := dispatch.New(dispatch.WithEndpointUrl("http://example.com"), dispatch.WithEnv( /* i.e. no env vars */ ))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fn := dispatch.NewPrimitiveFunction("foo", func(ctx context.Context, req *sdkv1.RunRequest) *sdkv1.RunResponse {
+		panic("not implemented")
+	})
+	endpoint.Register(fn)
+
+	_, err = fn.Dispatch(context.Background(), wrapperspb.String("bar"))
+	if err == nil {
+		t.Fatal("expected an error")
+	} else if err.Error() != "cannot dispatch function call: Dispatch API key has not been set. Use WithAPIKey(..), or set the DISPATCH_API_KEY environment variable" {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestFunctionDispatchWithoutClient(t *testing.T) {
+	endpoint, err := dispatch.New(dispatch.WithEndpointUrl("http://example.com"), dispatch.WithEnv( /* i.e. no env vars */ ))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fn := dispatch.NewFunction("foo", func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
+		panic("not implemented")
+	})
+	endpoint.Register(fn)
+
+	_, err = fn.Dispatch(context.Background(), wrapperspb.String("bar"))
+	if err == nil {
+		t.Fatal("expected an error")
+	} else if err.Error() != "cannot dispatch function call: Dispatch API key has not been set. Use WithAPIKey(..), or set the DISPATCH_API_KEY environment variable" {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
