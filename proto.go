@@ -730,8 +730,8 @@ func NewResponse(status Status, directive ResponseDirective) Response {
 	return response
 }
 
-// NewOutputResponse creates a Response from the specified output value.
-func NewOutputResponse(output Any) Response {
+// NewResponseWithOutput creates a Response from the specified output value.
+func NewResponseWithOutput(output Any) Response {
 	result := NewCallResult(WithOutput(output))
 	exit := NewExit(WithResult(result))
 	status := statusOf(output)
@@ -741,8 +741,8 @@ func NewOutputResponse(output Any) Response {
 	return NewResponse(status, exit)
 }
 
-// NewErrorResponse creates a Response from the specified error.
-func NewErrorResponse(err error) Response {
+// NewResponseWithError creates a Response from the specified error.
+func NewResponseWithError(err error) Response {
 	error := NewGoError(err)
 	result := NewCallResult(WithError(error))
 	exit := NewExit(WithResult(result))
@@ -750,10 +750,10 @@ func NewErrorResponse(err error) Response {
 	return NewResponse(status, exit)
 }
 
-// NewErrorfResponse creates a Response from the specified error message
+// NewResponseWithErrorf creates a Response from the specified error message
 // and args.
-func NewErrorfResponse(msg string, args ...any) Response {
-	return NewErrorResponse(fmt.Errorf(msg, args...))
+func NewResponseWithErrorf(msg string, args ...any) Response {
+	return NewResponseWithError(fmt.Errorf(msg, args...))
 }
 
 // ResponseDirective is either Exit or Poll.

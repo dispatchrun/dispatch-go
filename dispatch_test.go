@@ -28,9 +28,9 @@ func TestDispatchEndpoint(t *testing.T) {
 	endpoint.Register(dispatch.NewPrimitiveFunction("identity", func(ctx context.Context, req dispatch.Request) dispatch.Response {
 		input, ok := req.Input()
 		if !ok {
-			return dispatch.NewErrorfResponse("%w: unexpected request: %v", dispatch.ErrInvalidArgument, req)
+			return dispatch.NewResponseWithErrorf("%w: unexpected request: %v", dispatch.ErrInvalidArgument, req)
 		}
-		return dispatch.NewOutputResponse(input)
+		return dispatch.NewResponseWithOutput(input)
 	}))
 
 	// Send a request for the identity function, and check that the

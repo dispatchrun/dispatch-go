@@ -51,22 +51,22 @@ func (f *GenericFunction[Input, Output]) Run(ctx context.Context, req Request) R
 	if boxedInput, ok := req.Input(); ok {
 		message, err := boxedInput.Proto()
 		if err != nil {
-			return NewErrorfResponse("%w: invalid input: %v", ErrInvalidArgument, err)
+			return NewResponseWithErrorf("%w: invalid input: %v", ErrInvalidArgument, err)
 		}
 		input, ok := message.(Input)
 		if !ok {
-			return NewErrorfResponse("%w: invalid input type: %T", ErrInvalidArgument, message)
+			return NewResponseWithErrorf("%w: invalid input type: %T", ErrInvalidArgument, message)
 		}
 		coro = coroutine.NewWithReturn[any, any](f.entrypoint(input))
 
 	} else if pollResult, ok := req.PollResult(); ok {
 		coro = coroutine.NewWithReturn[any, any](f.entrypoint(zero))
 		if err := coro.Context().Unmarshal(pollResult.CoroutineState()); err != nil {
-			return NewErrorfResponse("%w: invalid coroutine state: %v", ErrIncompatibleState, err)
+			return NewResponseWithErrorf("%w: invalid coroutine state: %v", ErrIncompatibleState, err)
 		}
 
 	} else {
-		return NewErrorfResponse("%w: unsupported request directive: %v", ErrInvalidArgument, req)
+		return NewResponseWithErrorf("%w: unsupported request directive: %v", ErrInvalidArgument, req)
 	}
 
 	// When running in volatile mode, we cannot snapshot the coroutine state
@@ -79,7 +79,7 @@ func (f *GenericFunction[Input, Output]) Run(ctx context.Context, req Request) R
 			return nil
 		})
 		if canceled {
-			return NewErrorResponse(context.Cause(ctx))
+			return NewResponseWithError(context.Cause(ctx))
 		}
 	}
 
@@ -87,12 +87,12 @@ func (f *GenericFunction[Input, Output]) Run(ctx context.Context, req Request) R
 	if coro.Next() {
 		coroutineState, err := coro.Context().Marshal()
 		if err != nil {
-			return NewErrorfResponse("%w: cannot serialize coroutine: %v", ErrPermanent, err)
+			return NewResponseWithErrorf("%w: cannot serialize coroutine: %v", ErrPermanent, err)
 		}
 		switch yield := coro.Recv().(type) {
 		// TODO
 		default:
-			res = NewErrorfResponse("%w: unsupported coroutine yield: %T", ErrInvalidResponse, yield)
+			res = NewResponseWithErrorf("%w: unsupported coroutine yield: %T", ErrInvalidResponse, yield)
 		}
 		// TODO
 		_ = coroutineState
@@ -101,14 +101,14 @@ func (f *GenericFunction[Input, Output]) Run(ctx context.Context, req Request) R
 		case proto.Message:
 			output, err := NewAny(ret)
 			if err != nil {
-				res = NewErrorfResponse("%w: cannot serialize return value: %v", ErrInvalidResponse, err)
+				res = NewResponseWithErrorf("%w: cannot serialize return value: %v", ErrInvalidResponse, err)
 			} else {
-				res = NewOutputResponse(output)
+				res = NewResponseWithOutput(output)
 			}
 		case error:
-			res = NewErrorResponse(ret)
+			res = NewResponseWithError(ret)
 		default:
-			res = NewErrorfResponse("%w: unsupported coroutine return: %T", ErrInvalidResponse, ret)
+			res = NewResponseWithErrorf("%w: unsupported coroutine return: %T", ErrInvalidResponse, ret)
 		}
 	}
 
