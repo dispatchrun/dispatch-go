@@ -17,10 +17,11 @@ import (
 //
 // The Client can be used to dispatch function calls.
 type Client struct {
-	apiKey     string
-	apiUrl     string
-	env        []string
-	httpClient *http.Client
+	apiKey        string
+	apiKeyFromEnv bool
+	apiUrl        string
+	env           []string
+	httpClient    *http.Client
 
 	client sdkv1connect.DispatchServiceClient
 }
@@ -36,6 +37,7 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 
 	if c.apiKey == "" {
 		c.apiKey = getenv(c.env, "DISPATCH_API_KEY")
+		c.apiKeyFromEnv = true
 	}
 	if c.apiKey == "" {
 		return nil, fmt.Errorf("Dispatch API key has not been set. Use WithAPIKey(..), or set the DISPATCH_API_KEY environment variable")
@@ -114,12 +116,12 @@ func (c *Client) Dispatch(ctx context.Context, call Call) (ID, error) {
 
 // Batch creates a Batch.
 func (c *Client) Batch() Batch {
-	return Batch{client: c.client}
+	return Batch{client: c}
 }
 
 // Batch is used to submit a batch of function calls to Dispatch.
 type Batch struct {
-	client sdkv1connect.DispatchServiceClient
+	client *Client
 
 	calls []*sdkv1.Call
 }
@@ -139,19 +141,33 @@ func (b *Batch) Add(calls ...Call) {
 // Dispatch dispatches the batch of function calls.
 func (b *Batch) Dispatch(ctx context.Context) ([]ID, error) {
 	req := connect.NewRequest(&sdkv1.DispatchRequest{Calls: b.calls})
-	res, err := b.client.Dispatch(ctx, req)
+	res, err := b.client.client.Dispatch(ctx, req)
 	if err != nil {
+		if connect.CodeOf(err) == connect.CodeUnauthenticated {
+			if b.client.apiKeyFromEnv {
+				return nil, fmt.Errorf("invalid DISPATCH_API_KEY: %s", redact(b.client.apiKey))
+			}
+			return nil, fmt.Errorf("invalid Dispatch API key provided with WithAPIKey(): %s", redact(b.client.apiKey))
+		}
 		return nil, err
 	}
 	return res.Msg.DispatchIds, nil
 }
 
 func getenv(env []string, name string) string {
+	var value string
 	for _, s := range env {
 		n, v, ok := strings.Cut(s, "=")
 		if ok && n == name {
-			return v
+			value = v
 		}
 	}
-	return ""
+	return value
+}
+
+func redact(s string) string {
+	if len(s) <= 3 {
+		return s
+	}
+	return s[:3] + "********"
 }
