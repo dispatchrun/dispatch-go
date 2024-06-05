@@ -2,7 +2,6 @@ package dispatch_test
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -28,23 +27,16 @@ func TestDispatchEndpoint(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	endpoint.Register(dispatch.NewPrimitiveFunction("identity", func(ctx context.Context, req *sdkv1.RunRequest) *sdkv1.RunResponse {
-		var input *anypb.Any
+	endpoint.Register(dispatch.NewPrimitiveFunction("identity", func(ctx context.Context, req *sdkv1.RunRequest) dispatch.Response {
 		switch d := req.Directive.(type) {
 		case *sdkv1.RunRequest_Input:
-			input = d.Input
+			input, err := d.Input.UnmarshalNew()
+			if err != nil {
+				return dispatch.NewErrorResponse(err)
+			}
+			return dispatch.NewOutputResponse(input)
 		default:
-			return dispatch.ErrorResponse(fmt.Errorf("%w: unexpected run directive: %T", dispatch.ErrInvalidArgument, d))
-		}
-		return &sdkv1.RunResponse{
-			Status: sdkv1.Status_STATUS_OK,
-			Directive: &sdkv1.RunResponse_Exit{
-				Exit: &sdkv1.Exit{
-					Result: &sdkv1.CallResult{
-						Output: input,
-					},
-				},
-			},
+			return dispatch.NewErrorfResponse("%w: unexpected run directive: %T", dispatch.ErrInvalidArgument, d)
 		}
 	}))
 
@@ -62,17 +54,15 @@ func TestDispatchEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Status != sdkv1.Status_STATUS_OK {
-		t.Fatalf("unexpected response status: %v", res.Status)
+	if res.Status() != dispatch.OKStatus {
+		t.Fatalf("unexpected response status: %v", res.Status())
 	}
-	if d, ok := res.Directive.(*sdkv1.RunResponse_Exit); !ok {
-		t.Errorf("unexpected response directive: %T", res.Directive)
-	} else if output := d.Exit.GetResult().GetOutput(); output == nil {
-		t.Error("exit directive result or output was nil")
-	} else if message, err := output.UnmarshalNew(); err != nil {
+	output, err := res.Output()
+	if err != nil {
+		t.Fatalf("invalid response: %v (%v)", res, err)
+	}
+	if v, ok := output.(*wrapperspb.Int32Value); !ok || v.Value != inputValue {
 		t.Errorf("exit directive result or output was invalid: %v", output)
-	} else if v, ok := message.(*wrapperspb.Int32Value); !ok || v.Value != inputValue {
-		t.Errorf("exit directive result or output was invalid: %v", v)
 	}
 
 	// Try running a function that has not been registered.
@@ -80,8 +70,8 @@ func TestDispatchEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Status != sdkv1.Status_STATUS_NOT_FOUND {
-		t.Fatalf("unexpected response status: %v", res.Status)
+	if res.Status() != dispatch.NotFoundStatus {
+		t.Fatalf("unexpected response status: %v", res.Status())
 	}
 
 	// Try with a client that does not sign requests. The Dispatch
@@ -110,7 +100,7 @@ func TestDispatchCall(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fn := dispatch.NewPrimitiveFunction("function1", func(ctx context.Context, req *sdkv1.RunRequest) *sdkv1.RunResponse {
+	fn := dispatch.NewPrimitiveFunction("function1", func(ctx context.Context, req *sdkv1.RunRequest) dispatch.Response {
 		panic("not implemented")
 	})
 	endpoint.Register(fn)
@@ -181,7 +171,7 @@ func TestDispatchCallsBatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fn1 := dispatch.NewPrimitiveFunction("function1", func(ctx context.Context, req *sdkv1.RunRequest) *sdkv1.RunResponse {
+	fn1 := dispatch.NewPrimitiveFunction("function1", func(ctx context.Context, req *sdkv1.RunRequest) dispatch.Response {
 		panic("not implemented")
 	})
 	fn2 := dispatch.NewFunction("function2", func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {

@@ -52,7 +52,7 @@ func (h *handler) Invoke(ctx context.Context, payload []byte) ([]byte, error) {
 
 	res := h.function.Run(ctx, req)
 
-	rawResponse, err := proto.Marshal(res)
+	rawResponse, err := res.Marshal()
 	if err != nil {
 		return nil, err
 	}

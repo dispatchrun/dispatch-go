@@ -17,8 +17,12 @@ func TestFunctionRunInvalidCoroutineType(t *testing.T) {
 	})
 
 	res := fn.Run(context.Background(), &sdkv1.RunRequest{})
-	if err := res.GetExit().GetResult().GetError(); err == nil || err.Message != "InvalidArgument: unsupported coroutine directive: <nil>" {
-		t.Fatalf("unexpected error: %#v", err)
+	error, ok := res.Error()
+	if !ok {
+		t.Fatalf("invalid response: %v", res)
+	}
+	if error.Message() != "InvalidArgument: unsupported coroutine directive: <nil>" {
+		t.Errorf("unexpected error: %v", error)
 	}
 }
 
@@ -40,17 +44,15 @@ func TestFunctionRunError(t *testing.T) {
 		},
 	})
 
-	switch coro := res.Directive.(type) {
-	case *sdkv1.RunResponse_Exit:
-		err := coro.Exit.GetResult().GetError()
-		if err.Type != "errorString" {
-			t.Fatalf("unexpected coroutine error type: %s", err.Type)
-		}
-		if err.Message != "oops" {
-			t.Fatalf("unexpected coroutine error message: %s", err.Message)
-		}
-	default:
-		t.Fatalf("unexpected coroutine response type: %T", coro)
+	error, ok := res.Error()
+	if !ok {
+		t.Fatalf("invalid response: %v", res)
+	}
+	if error.Type() != "errorString" {
+		t.Errorf("unexpected coroutine error type: %s", error.Type())
+	}
+	if error.Message() != "oops" {
+		t.Errorf("unexpected coroutine error message: %s", error.Message())
 	}
 }
 
@@ -70,26 +72,19 @@ func TestFunctionRunResult(t *testing.T) {
 		},
 	})
 
-	switch coro := res.Directive.(type) {
-	case *sdkv1.RunResponse_Exit:
-		out := coro.Exit.GetResult().GetOutput()
-		if out.TypeUrl != "type.googleapis.com/google.protobuf.StringValue" {
-			t.Fatalf("unexpected coroutine output type: %s", out.TypeUrl)
-		}
-		var output wrapperspb.StringValue
-		if err := out.UnmarshalTo(&output); err != nil {
-			t.Fatal(err)
-		}
-		if output.Value != "world" {
-			t.Fatalf("unexpected coroutine output value: %s", output.Value)
-		}
-	default:
-		t.Fatalf("unexpected coroutine response type: %T", coro)
+	output, err := res.Output()
+	if err != nil {
+		t.Fatalf("invalid response: %v (%v)", res, err)
+	}
+	if str, ok := output.(*wrapperspb.StringValue); !ok {
+		t.Fatalf("unexpected output: %T (%v)", output, output)
+	} else if str.Value != "world" {
+		t.Errorf("unexpected output: %s", str.Value)
 	}
 }
 
 func TestPrimitiveFunctionNewCallAndDispatchWithoutEndpoint(t *testing.T) {
-	fn := dispatch.NewPrimitiveFunction("foo", func(ctx context.Context, req *sdkv1.RunRequest) *sdkv1.RunResponse {
+	fn := dispatch.NewPrimitiveFunction("foo", func(ctx context.Context, req *sdkv1.RunRequest) dispatch.Response {
 		panic("not implemented")
 	})
 
@@ -131,7 +126,7 @@ func TestPrimitiveFunctionDispatchWithoutClient(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fn := dispatch.NewPrimitiveFunction("foo", func(ctx context.Context, req *sdkv1.RunRequest) *sdkv1.RunResponse {
+	fn := dispatch.NewPrimitiveFunction("foo", func(ctx context.Context, req *sdkv1.RunRequest) dispatch.Response {
 		panic("not implemented")
 	})
 	endpoint.Register(fn)

@@ -10,7 +10,6 @@ import (
 	"github.com/stealthrocket/coroutine"
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/anypb"
 )
 
 // Function is a Dispatch function.
@@ -19,7 +18,7 @@ type Function interface {
 	Name() string
 
 	// Run runs the function.
-	Run(context.Context, *sdkv1.RunRequest) *sdkv1.RunResponse
+	Run(context.Context, *sdkv1.RunRequest) Response
 
 	// bind is an internal hook for binding a function to
 	// a Dispatch endpoint, allowing the NewCall and Dispatch
@@ -47,7 +46,7 @@ func (f *GenericFunction[Input, Output]) Name() string {
 }
 
 // Run runs the function.
-func (f *GenericFunction[Input, Output]) Run(ctx context.Context, req *sdkv1.RunRequest) *sdkv1.RunResponse {
+func (f *GenericFunction[Input, Output]) Run(ctx context.Context, req *sdkv1.RunRequest) Response {
 	var coro coroutine.Coroutine[any, any]
 	var zero Input
 
@@ -55,7 +54,7 @@ func (f *GenericFunction[Input, Output]) Run(ctx context.Context, req *sdkv1.Run
 	case *sdkv1.RunRequest_PollResult:
 		coro = coroutine.NewWithReturn[any, any](f.entrypoint(zero))
 		if err := coro.Context().Unmarshal(c.PollResult.GetCoroutineState()); err != nil {
-			return ErrorResponse(fmt.Errorf("%w: invalid coroutine state: %v", ErrIncompatibleState, err))
+			return NewErrorfResponse("%w: invalid coroutine state: %v", ErrIncompatibleState, err)
 		}
 	case *sdkv1.RunRequest_Input:
 		var input Input
@@ -66,19 +65,17 @@ func (f *GenericFunction[Input, Output]) Run(ctx context.Context, req *sdkv1.Run
 				RecursionLimit: protowire.DefaultRecursionLimit,
 			}
 			if err := options.Unmarshal(c.Input.Value, message.Interface()); err != nil {
-				return ErrorResponse(fmt.Errorf("%w: invalid function input: %v", ErrInvalidArgument, err))
+				return NewErrorfResponse("%w: invalid function input: %v", ErrInvalidArgument, err)
 			}
 			input = message.Interface().(Input)
 		}
 		coro = coroutine.NewWithReturn[any, any](f.entrypoint(input))
 
 	default:
-		return ErrorResponse(fmt.Errorf("%w: unsupported coroutine directive: %T", ErrInvalidArgument, c))
+		return NewErrorfResponse("%w: unsupported coroutine directive: %T", ErrInvalidArgument, c)
 	}
 
-	res := &sdkv1.RunResponse{
-		Status: sdkv1.Status_STATUS_OK,
-	}
+	var res Response
 
 	// When running in volatile mode, we cannot snapshot the coroutine state
 	// and return it to the caller. Instead, we run the coroutine to completion
@@ -90,40 +87,30 @@ func (f *GenericFunction[Input, Output]) Run(ctx context.Context, req *sdkv1.Run
 			return nil
 		})
 		if canceled {
-			return ErrorResponse(context.Cause(ctx))
+			return NewErrorResponse(context.Cause(ctx))
 		}
 	}
 
 	if coro.Next() {
 		coroutineState, err := coro.Context().Marshal()
 		if err != nil {
-			return ErrorResponse(fmt.Errorf("%w: cannot serialize coroutine: %v", ErrPermanent, err))
+			return NewErrorfResponse("%w: cannot serialize coroutine: %v", ErrPermanent, err)
 		}
 		switch yield := coro.Recv().(type) {
 		// TODO
 		default:
-			res = ErrorResponse(fmt.Errorf("%w: unsupported coroutine yield: %T", ErrInvalidResponse, yield))
+			res = NewErrorfResponse("%w: unsupported coroutine yield: %T", ErrInvalidResponse, yield)
 		}
 		// TODO
 		_ = coroutineState
 	} else {
 		switch ret := coro.Result().(type) {
 		case proto.Message:
-			output, _ := anypb.New(ret)
-			if status := statusOf(ret); status != UnspecifiedStatus {
-				res.Status = status.proto()
-			}
-			res.Directive = &sdkv1.RunResponse_Exit{
-				Exit: &sdkv1.Exit{
-					Result: &sdkv1.CallResult{
-						Output: output,
-					},
-				},
-			}
+			res = NewOutputResponse(ret)
 		case error:
-			res = ErrorResponse(ret)
+			res = NewErrorResponse(ret)
 		default:
-			res = ErrorResponse(fmt.Errorf("%w: unsupported coroutine return: %T", ErrInvalidResponse, ret))
+			res = NewErrorfResponse("%w: unsupported coroutine return: %T", ErrInvalidResponse, ret)
 		}
 	}
 
@@ -172,15 +159,15 @@ func (f *GenericFunction[Input, Output]) entrypoint(input Input) func() any {
 }
 
 // NewPrimitiveFunction creates a PrimitiveFunction.
-func NewPrimitiveFunction(name string, fn func(context.Context, *sdkv1.RunRequest) *sdkv1.RunResponse) *PrimitiveFunction {
+func NewPrimitiveFunction(name string, fn func(context.Context, *sdkv1.RunRequest) Response) *PrimitiveFunction {
 	return &PrimitiveFunction{name: name, fn: fn}
 }
 
 // PrimitiveFunction is a function that's close to the underlying
-// Dispatch protocol, accepting a RunRequest and returning a RunResponse.
+// Dispatch protocol, accepting a Request and returning a Response.
 type PrimitiveFunction struct {
 	name string
-	fn   func(context.Context, *sdkv1.RunRequest) *sdkv1.RunResponse
+	fn   func(context.Context, *sdkv1.RunRequest) Response
 
 	endpoint *Dispatch
 }
@@ -191,7 +178,7 @@ func (f *PrimitiveFunction) Name() string {
 }
 
 // Run runs the function.
-func (f *PrimitiveFunction) Run(ctx context.Context, req *sdkv1.RunRequest) *sdkv1.RunResponse {
+func (f *PrimitiveFunction) Run(ctx context.Context, req *sdkv1.RunRequest) Response {
 	return f.fn(ctx, req)
 }
 

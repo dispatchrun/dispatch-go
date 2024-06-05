@@ -148,6 +148,15 @@ func NewCallResult(opts ...CallResultOption) (CallResult, error) {
 	return result, nil
 }
 
+// NewErrorCallResult constructs a CallResult from a Go error.
+func NewErrorCallResult(err error) CallResult {
+	result, err := NewCallResult(WithCallResultError(NewGoError(err)))
+	if err != nil {
+		panic(err) // unreachable; no output was specified
+	}
+	return result
+}
+
 // CallResultOption configures a CallResult.
 type CallResultOption func(*CallResult)
 
@@ -248,7 +257,7 @@ type Error struct {
 	proto *sdkv1.Error
 }
 
-// NewError creates an error.
+// NewError creates an Error.
 func NewError(typ, message string, opts ...ErrorOption) Error {
 	err := Error{&sdkv1.Error{
 		Type:    typ,
@@ -258,6 +267,11 @@ func NewError(typ, message string, opts ...ErrorOption) Error {
 		opt(&err)
 	}
 	return err
+}
+
+// NewGoError creates an Error from a Go error.
+func NewGoError(err error) Error {
+	return NewError(errorTypeOf(err), err.Error())
 }
 
 // ErrorOption configures an Error.
@@ -351,14 +365,31 @@ func WithTailCall(tailCall Call) ExitOption {
 
 // Result is the function call result the exit directive carries.
 func (e Exit) Result() (CallResult, bool) {
-	r := e.proto.GetResult()
-	return CallResult{proto: r}, r != nil
+	proto := e.proto.GetResult()
+	return CallResult{proto: proto}, proto != nil
+}
+
+// Error is the error from the function call result the
+// exit directive carries.
+func (e Exit) Error() (Error, bool) {
+	proto := e.proto.GetResult().GetError()
+	return Error{proto: proto}, proto != nil
+}
+
+// Output is the output from the function call result the
+// exit directive carries.
+func (e Exit) Output() (proto.Message, error) {
+	output := e.proto.GetResult().GetOutput()
+	if output == nil {
+		return nil, nil
+	}
+	return output.UnmarshalNew()
 }
 
 // TailCall is the tail call the exit directive carries.
 func (e Exit) TailCall() (Call, bool) {
-	c := e.proto.GetTailCall()
-	return Call{proto: c}, c != nil
+	proto := e.proto.GetTailCall()
+	return Call{proto: proto}, proto != nil
 }
 
 // String is the string representation of the Exit directive.
@@ -502,9 +533,38 @@ func NewResponse(status Status, directive ResponseDirective) Response {
 	case Poll:
 		response.proto.Directive = &sdkv1.RunResponse_Poll{Poll: d.proto}
 	default:
-		panic("nil directive")
+		response.proto.Directive = &sdkv1.RunResponse_Exit{Exit: &sdkv1.Exit{Result: &sdkv1.CallResult{}}}
 	}
 	return response
+}
+
+// NewOutputResponse creates a Response from the specified output value.
+func NewOutputResponse(output proto.Message) Response {
+	result, err := NewCallResult(WithCallResultOutput(output))
+	if err != nil {
+		return NewErrorfResponse("cannot serialize output: %w", err)
+	}
+	exit := NewExit(WithExitResult(result))
+
+	status := statusOf(output)
+	if status == UnspecifiedStatus {
+		status = OKStatus
+	}
+
+	return NewResponse(status, exit)
+}
+
+// NewErrorResponse creates a Response for the specified error.
+func NewErrorResponse(err error) Response {
+	result := NewErrorCallResult(err)
+	exit := NewExit(WithExitResult(result))
+	return NewResponse(errorStatusOf(err), exit)
+}
+
+// NewErrorfResponse creates a Response from the specified error message
+// and args.
+func NewErrorfResponse(msg string, args ...any) Response {
+	return NewErrorResponse(fmt.Errorf(msg, args...))
 }
 
 // ResponseDirective is either Exit or Poll.
@@ -538,6 +598,24 @@ func (r Response) Exit() (Exit, bool) {
 	return Exit{proto}, proto != nil
 }
 
+// Error is the error from an exit directive.
+func (r Response) Error() (Error, bool) {
+	exit, ok := r.Exit()
+	if !ok {
+		return Error{}, false
+	}
+	return exit.Error()
+}
+
+// Output is the output from an exit directive.
+func (r Response) Output() (proto.Message, error) {
+	exit, ok := r.Exit()
+	if !ok {
+		return nil, fmt.Errorf("not an exit directive")
+	}
+	return exit.Output()
+}
+
 // Poll is the poll directive on the response.
 func (r Response) Poll() (Poll, bool) {
 	proto := r.proto.GetPoll()
@@ -569,4 +647,18 @@ func (r Response) Equal(other Response) bool {
 		return false
 	}
 	return true
+}
+
+// Marshal marshals the response.
+func (r Response) Marshal() ([]byte, error) {
+	return proto.Marshal(r.proto)
+}
+
+// UnmarshalResponse unmarshals a response.
+func UnmarshalResponse(b []byte) (Response, error) {
+	var r sdkv1.RunResponse
+	if err := proto.Unmarshal(b, &r); err != nil {
+		return Response{}, err
+	}
+	return Response{&r}, nil
 }

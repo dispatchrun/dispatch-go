@@ -14,6 +14,7 @@ import (
 	"connectrpc.com/validate"
 	"github.com/dispatchrun/dispatch-go"
 	"github.com/dispatchrun/dispatch-go/internal/auth"
+	"google.golang.org/protobuf/proto"
 )
 
 // NewEndpoint creates a Dispatch endpoint, like dispatch.New.
@@ -111,10 +112,22 @@ func WithSigningKey(signingKey string) EndpointClientOption {
 }
 
 // Run sends a RunRequest and returns a RunResponse.
-func (c *EndpointClient) Run(ctx context.Context, req *sdkv1.RunRequest) (*sdkv1.RunResponse, error) {
+func (c *EndpointClient) Run(ctx context.Context, req *sdkv1.RunRequest) (dispatch.Response, error) {
 	res, err := c.client.Run(ctx, connect.NewRequest(req))
 	if err != nil {
-		return nil, err
+		return dispatch.Response{}, err
 	}
-	return res.Msg, nil
+	return wrapResponse(res.Msg), nil
+}
+
+func wrapResponse(r *sdkv1.RunResponse) dispatch.Response {
+	b, err := proto.Marshal(r)
+	if err != nil {
+		panic(err)
+	}
+	response, err := dispatch.UnmarshalResponse(b)
+	if err != nil {
+		panic(err)
+	}
+	return response
 }

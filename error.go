@@ -4,8 +4,6 @@ import (
 	"errors"
 	"reflect"
 	"strings"
-
-	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
 )
 
 var (
@@ -130,21 +128,4 @@ type temporary interface {
 
 type timeout interface {
 	Timeout() bool
-}
-
-// ErrorResponse creates a RunResponse for the specified error.
-func ErrorResponse(err error) *sdkv1.RunResponse {
-	return &sdkv1.RunResponse{
-		Status: errorStatusOf(err).proto(),
-		Directive: &sdkv1.RunResponse_Exit{
-			Exit: &sdkv1.Exit{
-				Result: &sdkv1.CallResult{
-					Error: &sdkv1.Error{
-						Type:    errorTypeOf(err),
-						Message: err.Error(),
-					},
-				},
-			},
-		},
-	}
 }

@@ -214,14 +214,14 @@ type dispatchFunctionServiceHandler struct {
 }
 
 func (d *dispatchFunctionServiceHandler) Run(ctx context.Context, req *connect.Request[sdkv1.RunRequest]) (*connect.Response[sdkv1.RunResponse], error) {
-	var res *sdkv1.RunResponse
+	var res Response
 	fn := d.dispatch.lookupFunction(req.Msg.Function)
 	if fn == nil {
-		res = ErrorResponse(fmt.Errorf("%w: function %q not found", ErrNotFound, req.Msg.Function))
+		res = NewErrorfResponse("%w: function %q not found", ErrNotFound, req.Msg.Function)
 	} else {
 		res = fn.Run(ctx, req.Msg)
 	}
-	return connect.NewResponse(res), nil
+	return connect.NewResponse(res.proto), nil
 }
 
 // ListenAndServe serves the Dispatch endpoint on the specified address.
