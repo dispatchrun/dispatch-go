@@ -9,6 +9,7 @@ import (
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // Call is a function call.
@@ -539,7 +540,181 @@ func (r PollResult) Equal(other PollResult) bool {
 		bytes.Equal(r.CoroutineState(), other.CoroutineState())
 }
 
+// Request is a request from Dispatch to run a function.
+//
+// The Request carries a "directive", to either start execution
+// with input (Input), or to resume execution with the results
+// of a previous Response directive (e.g. PollResult).
+type Request struct {
+	proto *sdkv1.RunRequest
+}
+
+// NewRequest creates a Request.
+func NewRequest(function string, directive RequestDirective, opts ...RequestOption) Request {
+	request := Request{&sdkv1.RunRequest{
+		Function: function,
+	}}
+	for _, opt := range opts {
+		opt(&request)
+	}
+	switch d := directive.(type) {
+	case Input:
+		request.proto.Directive = &sdkv1.RunRequest_Input{Input: d.Value().proto}
+	case PollResult:
+		request.proto.Directive = &sdkv1.RunRequest_PollResult{PollResult: d.proto}
+	default:
+		panic("invalid request directive")
+	}
+	return request
+}
+
+// RequestDirective is a request directive, either Input or PollResult.
+type RequestDirective interface {
+	requestDirective()
+}
+
+func (Input) requestDirective()      {}
+func (PollResult) requestDirective() {}
+
+// Input is a directive to start execution of a function
+// with an input value.
+type Input Any
+
+// Value is the input value.
+func (i Input) Value() Any {
+	return Any(i)
+}
+
+// RequestOption configures a Request.
+type RequestOption func(*Request)
+
+// WithIDs sets call identifiers on a Request.
+func WithIDs(id, parentID, rootID ID) RequestOption {
+	return func(r *Request) {
+		r.proto.DispatchId = id
+		r.proto.ParentDispatchId = parentID
+		r.proto.RootDispatchId = rootID
+	}
+}
+
+// WithCreationTime sets the creation time for the function call.
+func WithCreationTime(timestamp time.Time) RequestOption {
+	return func(r *Request) { r.proto.CreationTime = timestamppb.New(timestamp) }
+}
+
+// WithExpirationTime sets the expiration time for the function call.
+func WithExpirationTime(timestamp time.Time) RequestOption {
+	return func(r *Request) { r.proto.ExpirationTime = timestamppb.New(timestamp) }
+}
+
+// Function is the identifier of the function to run.
+func (r Request) Function() string {
+	return r.proto.GetFunction()
+}
+
+// RequestDirective is the RequestDirective, either Input or PollResult.
+func (r Request) Directive() RequestDirective {
+	switch d := r.proto.GetDirective().(type) {
+	case *sdkv1.RunRequest_Input:
+		return Input(Any{d.Input})
+	case *sdkv1.RunRequest_PollResult:
+		return PollResult{d.PollResult}
+	default:
+		return nil
+	}
+}
+
+// Input is input to the function, along with a boolean
+// flag that indicates whether the request carries a directive
+// to start the function with the input.
+func (r Request) Input() (Input, bool) {
+	proto := r.proto.GetInput()
+	return Input(Any{proto}), proto != nil
+}
+
+// PollResult is the poll result, along with a boolean
+// flag that indicates whether the request carries a directive
+// to resume a function with poll results.
+func (r Request) PollResult() (PollResult, bool) {
+	proto := r.proto.GetPollResult()
+	return PollResult{proto}, proto != nil
+}
+
+// ID is the opaque identifier for the function call.
+func (r Request) ID() ID {
+	return r.proto.GetDispatchId()
+}
+
+// ParentID is the opaque identifier for the parent function call.
+//
+// Functions can call other functions via Poll. If this function call
+// has a parent function call, the identifier of the parent can be found
+// here. If the function call does not have a parent, the field will
+// be empty.
+func (r Request) ParentID() ID {
+	return r.proto.GetParentDispatchId()
+}
+
+// RootID is the opaque identifier for the root function call.
+//
+// When functions call other functions, an additional level on the call
+// hierarchy tree is created. This field carries the identifier of the
+// root function call in the tree.
+func (r Request) RootID() ID {
+	return r.proto.GetRootDispatchId()
+}
+
+// CreationTime is the creation time of the function call.
+func (r Request) CreationTime() (time.Time, bool) {
+	return r.optionalTimestamp(r.proto.GetCreationTime())
+}
+
+// ExpirationTime is the expiration time of the function call.
+func (r Request) ExpirationTime() (time.Time, bool) {
+	return r.optionalTimestamp(r.proto.GetExpirationTime())
+}
+
+func (r Request) optionalTimestamp(ts *timestamppb.Timestamp) (time.Time, bool) {
+	if ts != nil {
+		t := ts.AsTime()
+		return t, ts.IsValid() && !t.IsZero()
+	}
+	return time.Time{}, false
+}
+
+// String is the string representation of the request.
+func (r Request) String() string {
+	return fmt.Sprintf("Request(%s)", r.proto)
+}
+
+// Equal is true if the request is equal to another.
+func (r Request) Equal(other Request) bool {
+	if r.proto == nil && other.proto == nil {
+		return false
+	}
+	input, _ := r.Input()
+	otherInput, _ := other.Input()
+	pollResult, _ := r.PollResult()
+	otherPollResult, _ := other.PollResult()
+	creation, _ := r.CreationTime()
+	otherCreation, _ := other.CreationTime()
+	expiration, _ := r.ExpirationTime()
+	otherExpiration, _ := other.ExpirationTime()
+	return r.Function() == other.Function() &&
+		input.Value().Equal(otherInput.Value()) &&
+		pollResult.Equal(otherPollResult) &&
+		creation.Equal(otherCreation) &&
+		expiration.Equal(otherExpiration) &&
+		r.ID() == other.ID() &&
+		r.ParentID() == other.ParentID() &&
+		r.RootID() == other.RootID()
+}
+
 // Response is a response to Dispatch after a function has run.
+//
+// The Response carries a "directive" to either terminate execution
+// (Exit), or to suspend the function while waiting and/or performing
+// operations on the Dispatch side (e.g. Poll).
 type Response struct {
 	proto *sdkv1.RunResponse
 }
