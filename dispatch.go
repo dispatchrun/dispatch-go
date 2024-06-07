@@ -25,9 +25,8 @@ type Dispatch struct {
 	serveAddr       string
 	env             []string
 
-	client     *Client
-	clientOpts []ClientOption
-	clientErr  error
+	client    *Client
+	clientErr error
 
 	path    string
 	handler http.Handler
@@ -110,12 +109,7 @@ func New(opts ...DispatchOption) (*Dispatch, error) {
 
 	// Optionally attach a client.
 	if d.client == nil {
-		var err error
-		d.client, err = NewClient(append(d.clientOpts, Env(d.env...))...)
-		if err != nil {
-			slog.Debug("failed to setup client for the Dispatch endpoint", "error", err)
-			d.clientErr = err
-		}
+		d.client, d.clientErr = NewClient(Env(d.env...))
 	}
 
 	return d, nil
