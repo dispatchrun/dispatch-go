@@ -24,27 +24,39 @@ func NewCall(endpoint, function string, input Any, opts ...CallOption) Call {
 		Input:    input.proto,
 	}}
 	for _, opt := range opts {
-		opt(&call)
+		opt.configureCall(&call)
 	}
 	return call
 }
 
-// CallOption configures a call.
-type CallOption func(*Call)
+// CallOption configures a Call.
+type CallOption interface{ configureCall(*Call) }
 
-// WithExpiration sets a function call expiration.
-func WithExpiration(expiration time.Duration) CallOption {
-	return func(call *Call) { call.proto.Expiration = durationpb.New(expiration) }
+type callOptionFunc func(*Call)
+
+func (fn callOptionFunc) configureCall(c *Call) { fn(c) }
+
+// Expiration sets a function call expiration.
+func Expiration(expiration time.Duration) CallOption {
+	return callOptionFunc(func(c *Call) { c.proto.Expiration = durationpb.New(expiration) })
 }
 
-// WithCallCorrelationID sets a function call correlation ID.
-func WithCallCorrelationID(correlationID uint64) CallOption {
-	return func(call *Call) { call.proto.CorrelationId = correlationID }
+// CorrelationID sets the correlation ID on a function call or result.
+func CorrelationID(correlationID uint64) interface {
+	CallOption
+	CallResultOption
+} {
+	return correlationIDOption(correlationID)
 }
 
-// WithVersion sets a function call version.
-func WithVersion(version string) CallOption {
-	return func(call *Call) { call.proto.Version = version }
+type correlationIDOption uint64
+
+func (id correlationIDOption) configureCall(c *Call)             { c.proto.CorrelationId = uint64(id) }
+func (id correlationIDOption) configureCallResult(r *CallResult) { r.proto.CorrelationId = uint64(id) }
+
+// Version sets a function call version.
+func Version(version string) CallOption {
+	return callOptionFunc(func(c *Call) { c.proto.Version = version })
 }
 
 // Endpoint is the URL of the service where the function resides.
@@ -99,33 +111,35 @@ type CallResult struct {
 func NewCallResult(opts ...CallResultOption) CallResult {
 	result := CallResult{&sdkv1.CallResult{}}
 	for _, opt := range opts {
-		opt(&result)
+		opt.configureCallResult(&result)
 	}
 	return result
 }
 
 // CallResultOption configures a CallResult.
-type CallResultOption func(*CallResult)
+type CallResultOption interface{ configureCallResult(*CallResult) }
 
-// WithCallResultCorrelationID sets a function call result correlation ID.
-func WithCallResultCorrelationID(correlationID uint64) CallResultOption {
-	return func(result *CallResult) { result.proto.CorrelationId = correlationID }
+type callResultOptionFunc func(*CallResult)
+
+func (fn callResultOptionFunc) configureCallResult(r *CallResult) { fn(r) }
+
+// Output sets the output from the function call.
+func Output(output Any) CallResultOption {
+	return callResultOptionFunc(func(result *CallResult) { result.proto.Output = output.proto })
 }
 
-// WithOutput sets the output from the function call.
-func WithOutput(output Any) CallResultOption {
-	return func(result *CallResult) { result.proto.Output = output.proto }
+// DispatchID sets the opaque identifier for the function call.
+func DispatchID(id ID) interface {
+	CallResultOption
+	RequestOption
+} {
+	return dispatchIDOption(id)
 }
 
-// WithError sets the error from the function call.
-func WithError(err Error) CallResultOption {
-	return func(result *CallResult) { result.proto.Error = err.proto }
-}
+type dispatchIDOption ID
 
-// WithCallResultID sets the opaque identifier for the function call.
-func WithCallResultID(id ID) CallResultOption {
-	return func(result *CallResult) { result.proto.DispatchId = string(id) }
-}
+func (id dispatchIDOption) configureCallResult(r *CallResult) { r.proto.DispatchId = string(id) }
+func (id dispatchIDOption) configureRequest(r *Request)       { r.proto.DispatchId = string(id) }
 
 // CorrelationID is the value that was originally passed in the Call message.
 //
@@ -150,8 +164,8 @@ func (r CallResult) Error() (Error, bool) {
 	return Error{proto}, proto != nil
 }
 
-// ID is the opaque identifier for the function call.
-func (r CallResult) ID() ID {
+// DispatchID is the opaque identifier for the function call.
+func (r CallResult) DispatchID() ID {
 	return ID(r.proto.GetDispatchId())
 }
 
@@ -163,6 +177,10 @@ func (r CallResult) String() string {
 // Equal is true if the call result is equal to another.
 func (r CallResult) Equal(other CallResult) bool {
 	return proto.Equal(r.proto, other.proto)
+}
+
+func (r CallResult) configureExit(e *Exit) {
+	e.proto.Result = r.proto
 }
 
 // Error is an error that occurred during execution of a function.
@@ -182,22 +200,22 @@ func NewError(typ, message string, opts ...ErrorOption) Error {
 	return err
 }
 
-// NewGoError creates an Error from a Go error.
-func NewGoError(err error) Error {
-	// TODO: use WithErrorValue/WithErrorTraceback
+// FromError creates an Error from a Go error.
+func FromError(err error) Error {
+	// TODO: use ErrorValue / Traceback
 	return NewError(errorTypeOf(err), err.Error())
 }
 
 // ErrorOption configures an Error.
 type ErrorOption func(*Error)
 
-// WithErrorValue sets the language-specific representation of the error.
-func WithErrorValue(value []byte) ErrorOption {
+// ErrorValue sets the language-specific representation of the error.
+func ErrorValue(value []byte) ErrorOption {
 	return func(e *Error) { e.proto.Value = value }
 }
 
-// WithErrorTraceback sets the encoded stack trace for the error.
-func WithErrorTraceback(traceback []byte) ErrorOption {
+// Traceback sets the encoded stack trace for the error.
+func Traceback(traceback []byte) ErrorOption {
 	return func(e *Error) { e.proto.Traceback = traceback }
 }
 
@@ -242,6 +260,14 @@ func (e Error) Equal(other Error) bool {
 	return proto.Equal(e.proto, other.proto)
 }
 
+func (e Error) configureCallResult(r *CallResult) {
+	r.proto.Error = e.proto
+}
+
+func (e Error) configurePollResult(p *PollResult) {
+	p.proto.Error = e.proto
+}
+
 // Exit is a directive that terminates a function call.
 type Exit struct {
 	proto *sdkv1.Exit
@@ -253,22 +279,21 @@ func NewExit(opts ...ExitOption) Exit {
 		Result: &sdkv1.CallResult{},
 	}}
 	for _, opt := range opts {
-		opt(&exit)
+		opt.configureExit(&exit)
 	}
 	return exit
 }
 
 // ExitOption configures an Exit directive.
-type ExitOption func(*Exit)
+type ExitOption interface{ configureExit(*Exit) }
 
-// WithResult sets the result of the function call.
-func WithResult(result CallResult) ExitOption {
-	return func(e *Exit) { e.proto.Result = result.proto }
-}
+type exitOptionFunc func(*Exit)
 
-// WithTailCall sets the tail call.
-func WithTailCall(tailCall Call) ExitOption {
-	return func(e *Exit) { e.proto.TailCall = tailCall.proto }
+func (fn exitOptionFunc) configureExit(e *Exit) { fn(e) }
+
+// TailCall sets the tail call.
+func TailCall(tailCall Call) ExitOption {
+	return exitOptionFunc(func(e *Exit) { e.proto.TailCall = tailCall.proto })
 }
 
 // Result is the function call result the exit directive carries.
@@ -328,26 +353,38 @@ func NewPoll(minResults, maxResults int32, maxWait time.Duration, opts ...PollOp
 		MaxWait:    durationpb.New(maxWait),
 	}}
 	for _, opt := range opts {
-		opt(&poll)
+		opt.configurePoll(&poll)
 	}
 	return poll
 }
 
 // PollOption configures a Poll directive.
-type PollOption func(*Poll)
+type PollOption interface{ configurePoll(*Poll) }
 
-// WithPollCoroutineState sets the coroutine state.
-func WithPollCoroutineState(state []byte) PollOption {
-	return func(p *Poll) { p.proto.CoroutineState = state }
+type pollOptionFunc func(*Poll)
+
+func (fn pollOptionFunc) configurePoll(p *Poll) { fn(p) }
+
+// CoroutineState sets the coroutine state.
+func CoroutineState(state []byte) interface {
+	PollOption
+	PollResultOption
+} {
+	return coroutineStateOption(state)
 }
 
-// WithPollCalls adds calls to a Poll directive.
-func WithPollCalls(calls ...Call) PollOption {
-	return func(p *Poll) {
+type coroutineStateOption []byte
+
+func (b coroutineStateOption) configurePoll(p *Poll)             { p.proto.CoroutineState = b }
+func (b coroutineStateOption) configurePollResult(r *PollResult) { r.proto.CoroutineState = b }
+
+// Calls adds calls to a Poll directive.
+func Calls(calls ...Call) PollOption {
+	return pollOptionFunc(func(p *Poll) {
 		for i := range calls {
 			p.proto.Calls = append(p.proto.Calls, calls[i].proto)
 		}
-	}
+	})
 }
 
 // MinResults is the minimum number of call results to wait for before the
@@ -410,31 +447,25 @@ type PollResult struct {
 func NewPollResult(opts ...PollResultOption) PollResult {
 	result := PollResult{&sdkv1.PollResult{}}
 	for _, opt := range opts {
-		opt(&result)
+		opt.configurePollResult(&result)
 	}
 	return result
 }
 
 // PollResultOption configures a PollResult.
-type PollResultOption func(*PollResult)
+type PollResultOption interface{ configurePollResult(*PollResult) }
 
-// WithPollResultCoroutineState sets the coroutine state.
-func WithPollResultCoroutineState(state []byte) PollResultOption {
-	return func(r *PollResult) { r.proto.CoroutineState = state }
-}
+type pollResultOptionFunc func(*PollResult)
 
-// WithPollResults sets the call results for the poll operation.
-func WithPollResults(results ...CallResult) PollResultOption {
-	return func(r *PollResult) {
+func (fn pollResultOptionFunc) configurePollResult(r *PollResult) { fn(r) }
+
+// CallResults sets the call results for the poll operation.
+func CallResults(results ...CallResult) PollResultOption {
+	return pollResultOptionFunc(func(r *PollResult) {
 		for i := range results {
 			r.proto.Results = append(r.proto.Results, results[i].proto)
 		}
-	}
-}
-
-// WithPollError sets the error from the poll operation.
-func WithPollError(error Error) PollResultOption {
-	return func(r *PollResult) { r.proto.Error = error.proto }
+	})
 }
 
 // CoroutineState is the state recorded when the function was
@@ -490,7 +521,7 @@ func NewRequest(function string, directive RequestDirective, opts ...RequestOpti
 		Function: function,
 	}}
 	for _, opt := range opts {
-		opt(&request)
+		opt.configureRequest(&request)
 	}
 	switch d := directive.(type) {
 	case Input:
@@ -504,9 +535,7 @@ func NewRequest(function string, directive RequestDirective, opts ...RequestOpti
 }
 
 // RequestDirective is a request directive, either Input or PollResult.
-type RequestDirective interface {
-	requestDirective()
-}
+type RequestDirective interface{ requestDirective() }
 
 func (Input) requestDirective()      {}
 func (PollResult) requestDirective() {}
@@ -516,25 +545,30 @@ func (PollResult) requestDirective() {}
 type Input Any
 
 // RequestOption configures a Request.
-type RequestOption func(*Request)
+type RequestOption interface{ configureRequest(*Request) }
 
-// WithIDs sets call identifiers on a Request.
-func WithIDs(id, parentID, rootID ID) RequestOption {
-	return func(r *Request) {
-		r.proto.DispatchId = string(id)
-		r.proto.ParentDispatchId = string(parentID)
-		r.proto.RootDispatchId = string(rootID)
-	}
+type requestOptionFunc func(*Request)
+
+func (fn requestOptionFunc) configureRequest(r *Request) { fn(r) }
+
+// ParentDispatchID sets the opaque identifier of the parent function call.
+func ParentDispatchID(id ID) RequestOption {
+	return requestOptionFunc(func(r *Request) { r.proto.ParentDispatchId = string(id) })
 }
 
-// WithCreationTime sets the creation time for the function call.
-func WithCreationTime(timestamp time.Time) RequestOption {
-	return func(r *Request) { r.proto.CreationTime = timestamppb.New(timestamp) }
+// ParentDispatchID sets the opaque identifier of the root function call.
+func RootDispatchID(id ID) RequestOption {
+	return requestOptionFunc(func(r *Request) { r.proto.RootDispatchId = string(id) })
 }
 
-// WithExpirationTime sets the expiration time for the function call.
-func WithExpirationTime(timestamp time.Time) RequestOption {
-	return func(r *Request) { r.proto.ExpirationTime = timestamppb.New(timestamp) }
+// CreationTime sets the creation time for the function call.
+func CreationTime(timestamp time.Time) RequestOption {
+	return requestOptionFunc(func(r *Request) { r.proto.CreationTime = timestamppb.New(timestamp) })
+}
+
+// ExpirationTime sets the expiration time for the function call.
+func ExpirationTime(timestamp time.Time) RequestOption {
+	return requestOptionFunc(func(r *Request) { r.proto.ExpirationTime = timestamppb.New(timestamp) })
 }
 
 // Function is the identifier of the function to run.
@@ -570,8 +604,8 @@ func (r Request) PollResult() (PollResult, bool) {
 	return PollResult{proto}, proto != nil
 }
 
-// ID is the opaque identifier for the function call.
-func (r Request) ID() ID {
+// DispatchID is the opaque identifier for the function call.
+func (r Request) DispatchID() ID {
 	return ID(r.proto.GetDispatchId())
 }
 
@@ -649,8 +683,7 @@ func NewResponse(status Status, directive ResponseDirective) Response {
 
 // NewResponseWithOutput creates a Response from the specified output value.
 func NewResponseWithOutput(output Any) Response {
-	result := NewCallResult(WithOutput(output))
-	exit := NewExit(WithResult(result))
+	result := NewCallResult(Output(output))
 
 	// FIXME: the interface{ Status() Status } implementation
 	//  is lost earlier when an any is converted to Any. Do
@@ -661,15 +694,13 @@ func NewResponseWithOutput(output Any) Response {
 		status = OKStatus
 	}
 
-	return NewResponse(status, exit)
+	return NewResponse(status, NewExit(result))
 }
 
 // NewResponseWithError creates a Response from the specified error.
 func NewResponseWithError(err error) Response {
-	error := NewGoError(err)
-	result := NewCallResult(WithError(error))
-	exit := NewExit(WithResult(result))
-	return NewResponse(ErrorStatus(err), exit)
+	result := NewCallResult(FromError(err))
+	return NewResponse(ErrorStatus(err), NewExit(result))
 }
 
 // NewResponseWithErrorf creates a Response from the specified error message
@@ -679,9 +710,7 @@ func NewResponseWithErrorf(msg string, args ...any) Response {
 }
 
 // ResponseDirective is either Exit or Poll.
-type ResponseDirective interface {
-	responseDirective()
-}
+type ResponseDirective interface{ responseDirective() }
 
 func (Poll) responseDirective() {}
 func (Exit) responseDirective() {}

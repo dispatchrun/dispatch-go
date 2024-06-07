@@ -93,7 +93,7 @@ func TestDispatchCall(t *testing.T) {
 	})
 	endpoint.Register(fn)
 
-	_, err = fn.Dispatch(context.Background(), dispatch.Int(11), dispatch.WithExpiration(10*time.Second))
+	_, err = fn.Dispatch(context.Background(), dispatch.Int(11), dispatch.Expiration(10*time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestDispatchCall(t *testing.T) {
 		ApiKey: "foobar",
 		Calls: []dispatch.Call{
 			dispatch.NewCall("http://example.com", "function1", dispatch.Int(11),
-				dispatch.WithExpiration(10*time.Second)),
+				dispatch.Expiration(10*time.Second)),
 		},
 	})
 }
@@ -125,7 +125,7 @@ func TestDispatchCallEnvConfig(t *testing.T) {
 	})
 	endpoint.Register(fn)
 
-	_, err = fn.Dispatch(context.Background(), wrapperspb.String("foo"), dispatch.WithVersion("xyzzy"))
+	_, err = fn.Dispatch(context.Background(), wrapperspb.String("foo"), dispatch.Version("xyzzy"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +133,7 @@ func TestDispatchCallEnvConfig(t *testing.T) {
 	recorder.Assert(t, dispatchtest.DispatchRequest{
 		ApiKey: "foobar",
 		Calls: []dispatch.Call{
-			dispatch.NewCall("http://example.com", "function2", dispatch.String("foo"), dispatch.WithVersion("xyzzy")),
+			dispatch.NewCall("http://example.com", "function2", dispatch.String("foo"), dispatch.Version("xyzzy")),
 		},
 	})
 }
@@ -164,11 +164,11 @@ func TestDispatchCallsBatch(t *testing.T) {
 	endpoint.Register(fn1)
 	endpoint.Register(fn2)
 
-	call1, err := fn1.NewCall(dispatch.Int(11), dispatch.WithExpiration(10*time.Second))
+	call1, err := fn1.NewCall(dispatch.Int(11), dispatch.Expiration(10*time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
-	call2, err := fn2.NewCall(wrapperspb.String("foo"), dispatch.WithVersion("xyzzy"))
+	call2, err := fn2.NewCall(wrapperspb.String("foo"), dispatch.Version("xyzzy"))
 	if err != nil {
 		t.Fatal(err)
 	}
