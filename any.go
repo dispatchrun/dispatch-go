@@ -2,6 +2,7 @@ package dispatch
 
 import (
 	"fmt"
+	"reflect"
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -14,8 +15,20 @@ type Any struct {
 }
 
 // NewAny creates an Any from a proto.Message.
-func NewAny(message proto.Message) (Any, error) {
-	proto, err := anypb.New(message)
+func NewAny(v any) (Any, error) {
+	var m proto.Message
+	switch vv := v.(type) {
+	case proto.Message:
+		m = vv
+	case int:
+		m = wrapperspb.Int64(int64(vv))
+	case string:
+		m = wrapperspb.String(vv)
+	default:
+		// TODO: support more types
+		return Any{}, fmt.Errorf("unsupported type: %T", v)
+	}
+	proto, err := anypb.New(m)
 	if err != nil {
 		return Any{}, err
 	}
@@ -23,8 +36,8 @@ func NewAny(message proto.Message) (Any, error) {
 }
 
 // Int creates an Any that contains an integer value.
-func Int(v int64) Any {
-	any, err := NewAny(wrapperspb.Int64(v))
+func Int(v int) Any {
+	any, err := NewAny(wrapperspb.Int64(int64(v)))
 	if err != nil {
 		panic(err)
 	}
@@ -40,45 +53,53 @@ func String(v string) Any {
 	return any
 }
 
+// Unmarshal unmarshals the value.
+func (a Any) Unmarshal(v any) error {
+	if a.proto == nil {
+		return fmt.Errorf("empty Any")
+	}
+
+	r := reflect.ValueOf(v)
+	if r.Kind() != reflect.Pointer || r.IsNil() {
+		panic("Any.Unmarshal expects a pointer")
+	}
+	elem := r.Elem()
+
+	m, err := a.proto.UnmarshalNew()
+	if err != nil {
+		return err
+	}
+
+	rm := reflect.ValueOf(m)
+	if rm.Type() == elem.Type() {
+		elem.Set(rm)
+		return nil
+	}
+
+	switch elem.Kind() {
+	case reflect.Int:
+		v, ok := m.(*wrapperspb.Int64Value)
+		if !ok {
+			return fmt.Errorf("cannot unmarshal %T into int", m)
+		}
+		elem.SetInt(v.Value)
+	case reflect.String:
+		v, ok := m.(*wrapperspb.StringValue)
+		if !ok {
+			return fmt.Errorf("cannot unmarshal %T into string", m)
+		}
+		elem.SetString(v.Value)
+	default:
+		// TODO: support more types
+		return fmt.Errorf("unsupported type: %T", elem.Interface())
+	}
+	return nil
+}
+
 // TypeURL is a URL that uniquely identifies the type of the
 // serialized value.
 func (a Any) TypeURL() string {
 	return a.proto.GetTypeUrl()
-}
-
-// Proto returns the underlying proto.Message contained
-// within the Any container.
-func (a Any) Proto() (proto.Message, error) {
-	if a.proto == nil {
-		return nil, fmt.Errorf("empty Any")
-	}
-	return a.proto.UnmarshalNew()
-}
-
-// Int extracts the integer value, if applicable.
-func (a Any) Int() (int64, error) {
-	m, err := a.Proto()
-	if err != nil {
-		return 0, err
-	}
-	v, ok := m.(*wrapperspb.Int64Value)
-	if !ok {
-		return 0, fmt.Errorf("Any contains %T, not an integer value", m)
-	}
-	return v.Value, nil
-}
-
-// String extracts the string value, if applicable.
-func (a Any) String() (string, error) {
-	m, err := a.Proto()
-	if err != nil {
-		return "", err
-	}
-	v, ok := m.(*wrapperspb.StringValue)
-	if !ok {
-		return "", fmt.Errorf("Any contains %T, not a string value", m)
-	}
-	return v.Value, nil
 }
 
 func (a Any) Format(f fmt.State, verb rune) {

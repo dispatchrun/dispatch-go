@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"slices"
-
-	"google.golang.org/protobuf/proto"
 )
 
 // Function is a Dispatch function.
@@ -23,13 +21,13 @@ type Function interface {
 }
 
 // NewFunction creates a Dispatch function.
-func NewFunction[I, O proto.Message](name string, fn func(context.Context, I) (O, error)) *GenericFunction[I, O] {
+func NewFunction[I, O any](name string, fn func(context.Context, I) (O, error)) *GenericFunction[I, O] {
 	return &GenericFunction[I, O]{name: name, fn: fn}
 }
 
 // GenericFunction is a Dispatch function that accepts arbitrary input
 // and returns arbitrary output.
-type GenericFunction[I, O proto.Message] struct {
+type GenericFunction[I, O any] struct {
 	name string
 	fn   func(ctx context.Context, input I) (O, error)
 
@@ -47,13 +45,9 @@ func (f *GenericFunction[I, O]) Run(ctx context.Context, req Request) Response {
 	if !ok {
 		return NewResponseErrorf("%w: unsupported request directive: %v", ErrInvalidArgument, req)
 	}
-	message, err := boxedInput.Proto()
-	if err != nil {
-		return NewResponseErrorf("%w: invalid input: %v", ErrInvalidArgument, err)
-	}
-	input, ok := message.(I)
-	if !ok {
-		return NewResponseErrorf("%w: invalid input type: %T", ErrInvalidArgument, message)
+	var input I
+	if err := boxedInput.Unmarshal(&input); err != nil {
+		return NewResponseErrorf("%w: invalid input %v: %v", ErrInvalidArgument, boxedInput, err)
 	}
 	output, err := f.fn(ctx, input)
 	if err != nil {

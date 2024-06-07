@@ -39,26 +39,23 @@ func TestDispatchEndpoint(t *testing.T) {
 	res, err := client.Run(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
-	}
-	if res.Status() != dispatch.OKStatus {
+	} else if res.Status() != dispatch.OKStatus {
 		t.Fatalf("unexpected response status: %v", res.Status())
 	}
-	output, ok := res.Output()
-	if !ok {
+	var output int
+	if boxed, ok := res.Output(); !ok {
 		t.Fatalf("invalid response: %v (%v)", res, err)
-	}
-	if v, err := output.Int(); err != nil {
+	} else if err := boxed.Unmarshal(&output); err != nil {
 		t.Fatalf("invalid output: %v", err)
-	} else if v != 11 {
-		t.Fatalf("invalid output: %v", v)
+	} else if output != 11 {
+		t.Fatalf("invalid output: %v", output)
 	}
 
 	// Try running a function that has not been registered.
 	res, err = client.Run(context.Background(), dispatch.NewRequest("not_found", dispatch.Input(dispatch.Int(22))))
 	if err != nil {
 		t.Fatal(err)
-	}
-	if res.Status() != dispatch.NotFoundStatus {
+	} else if res.Status() != dispatch.NotFoundStatus {
 		t.Fatalf("unexpected response status: %v", res.Status())
 	}
 

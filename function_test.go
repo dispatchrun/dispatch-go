@@ -38,13 +38,13 @@ func TestFunctionRunResult(t *testing.T) {
 	if error, ok := res.Error(); ok {
 		t.Fatalf("unexpected response error: %v", error)
 	}
-	output, ok := res.Output()
-	if !ok {
+	var output string
+	if boxed, ok := res.Output(); !ok {
 		t.Fatalf("invalid response: %v", res)
-	} else if str, err := output.String(); err != nil {
+	} else if err := boxed.Unmarshal(&output); err != nil {
 		t.Fatalf("unexpected output: %v", err)
-	} else if str != "world" {
-		t.Errorf("unexpected output: %s", str)
+	} else if output != "world" {
+		t.Errorf("unexpected output: %s", output)
 	}
 }
 
