@@ -1,7 +1,6 @@
 package dispatch
 
 import (
-	"bytes"
 	"fmt"
 
 	"google.golang.org/protobuf/proto"
@@ -90,12 +89,5 @@ func (a Any) Format(f fmt.State, verb rune) {
 
 // Equal is true if this Any is equal to another.
 func (a Any) Equal(other Any) bool {
-	if (a.proto == nil) != (other.proto == nil) {
-		return false
-	}
-	// TODO: this is probably not sufficient; a proto message
-	//  can be equal but have a different serialized representation
-	//  due to field ordering
-	return a.TypeURL() == other.TypeURL() &&
-		bytes.Equal(a.proto.GetValue(), other.proto.GetValue())
+	return proto.Equal(a.proto, other.proto)
 }
