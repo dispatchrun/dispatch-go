@@ -3,8 +3,6 @@ package dispatchserver
 import (
 	"context"
 	"crypto/ed25519"
-	"encoding/base64"
-	"fmt"
 	"net/http"
 	_ "unsafe"
 
@@ -23,7 +21,7 @@ import (
 // useful when testing a Dispatch endpoint.
 type EndpointClient struct {
 	httpClient connect.HTTPClient
-	signingKey string
+	signingKey ed25519.PrivateKey
 
 	client sdkv1connect.FunctionServiceClient
 }
@@ -40,12 +38,8 @@ func NewEndpointClient(endpointUrl string, opts ...EndpointClientOption) (*Endpo
 	}
 
 	// Setup request signing.
-	if c.signingKey != "" {
-		privateKey, err := base64.StdEncoding.DecodeString(c.signingKey)
-		if err != nil || len(privateKey) != ed25519.PrivateKeySize {
-			return nil, fmt.Errorf("invalid signing key: %v", c.signingKey)
-		}
-		signer := auth.NewSigner(ed25519.PrivateKey(privateKey))
+	if c.signingKey != nil {
+		signer := auth.NewSigner(c.signingKey)
 		c.httpClient = signer.Client(c.httpClient)
 	}
 
@@ -65,11 +59,8 @@ type EndpointClientOption func(*EndpointClient)
 // SigningKey sets the signing key to use when signing requests bound
 // for the endpoint.
 //
-// The signing key should be a base64-encoded ed25519.PrivateKey, e.g.
-// one provided by the KeyPair helper function.
-//
 // By default the EndpointClient does not sign requests to the endpoint.
-func SigningKey(signingKey string) EndpointClientOption {
+func SigningKey(signingKey ed25519.PrivateKey) EndpointClientOption {
 	return func(c *EndpointClient) { c.signingKey = signingKey }
 }
 

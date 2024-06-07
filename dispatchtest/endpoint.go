@@ -1,6 +1,9 @@
 package dispatchtest
 
 import (
+	"crypto/ed25519"
+	"encoding/base64"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 
@@ -55,5 +58,9 @@ func (e *EndpointServer) Close() {
 // The signing key should be a base64-encoded ed25519.PrivateKey, e.g.
 // one provided by the KeyPair helper function.
 func SigningKey(signingKey string) dispatchserver.EndpointClientOption {
-	return dispatchserver.SigningKey(signingKey)
+	pk, err := base64.StdEncoding.DecodeString(signingKey)
+	if err != nil || len(pk) != ed25519.PrivateKeySize {
+		panic(fmt.Errorf("invalid signing key: %v", signingKey))
+	}
+	return dispatchserver.SigningKey(pk)
 }
