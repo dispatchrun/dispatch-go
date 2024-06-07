@@ -153,7 +153,11 @@ func (b *Batch) Dispatch(ctx context.Context) ([]ID, error) {
 		}
 		return nil, err
 	}
-	return res.Msg.DispatchIds, nil
+	ids := make([]ID, len(res.Msg.DispatchIds))
+	for i, id := range res.Msg.DispatchIds {
+		ids[i] = ID(id)
+	}
+	return ids, nil
 }
 
 func getenv(env []string, name string) string {

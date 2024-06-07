@@ -62,8 +62,12 @@ func (d *dispatchServiceHandler) Dispatch(ctx context.Context, req *connect.Requ
 	if len(ids) != len(calls) {
 		panic("invalid handler response")
 	}
+	dispatchIDs := make([]string, len(ids))
+	for i, id := range ids {
+		dispatchIDs[i] = string(id)
+	}
 	return connect.NewResponse(&sdkv1.DispatchResponse{
-		DispatchIds: ids,
+		DispatchIds: dispatchIDs,
 	}), nil
 }
 
@@ -93,7 +97,7 @@ func (r *CallRecorder) Handle(ctx context.Context, apiKey string, calls []dispat
 
 	ids := make([]dispatch.ID, len(calls))
 	for i := range calls {
-		ids[i] = strconv.Itoa(base + i)
+		ids[i] = dispatch.ID(strconv.Itoa(base + i))
 	}
 	return ids, nil
 }

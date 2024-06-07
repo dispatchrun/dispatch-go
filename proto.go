@@ -136,7 +136,7 @@ func WithError(err Error) CallResultOption {
 
 // WithCallResultID sets the opaque identifier for the function call.
 func WithCallResultID(id ID) CallResultOption {
-	return func(result *CallResult) { result.proto.DispatchId = id }
+	return func(result *CallResult) { result.proto.DispatchId = string(id) }
 }
 
 // CorrelationID is the value that was originally passed in the Call message.
@@ -164,7 +164,7 @@ func (r CallResult) Error() (Error, bool) {
 
 // ID is the opaque identifier for the function call.
 func (r CallResult) ID() ID {
-	return r.proto.GetDispatchId()
+	return ID(r.proto.GetDispatchId())
 }
 
 // String is the string representation of the function call result.
@@ -586,9 +586,9 @@ type RequestOption func(*Request)
 // WithIDs sets call identifiers on a Request.
 func WithIDs(id, parentID, rootID ID) RequestOption {
 	return func(r *Request) {
-		r.proto.DispatchId = id
-		r.proto.ParentDispatchId = parentID
-		r.proto.RootDispatchId = rootID
+		r.proto.DispatchId = string(id)
+		r.proto.ParentDispatchId = string(parentID)
+		r.proto.RootDispatchId = string(rootID)
 	}
 }
 
@@ -637,7 +637,7 @@ func (r Request) PollResult() (PollResult, bool) {
 
 // ID is the opaque identifier for the function call.
 func (r Request) ID() ID {
-	return r.proto.GetDispatchId()
+	return ID(r.proto.GetDispatchId())
 }
 
 // ParentID is the opaque identifier for the parent function call.
@@ -647,7 +647,7 @@ func (r Request) ID() ID {
 // here. If the function call does not have a parent, the field will
 // be empty.
 func (r Request) ParentID() ID {
-	return r.proto.GetParentDispatchId()
+	return ID(r.proto.GetParentDispatchId())
 }
 
 // RootID is the opaque identifier for the root function call.
@@ -656,7 +656,7 @@ func (r Request) ParentID() ID {
 // hierarchy tree is created. This field carries the identifier of the
 // root function call in the tree.
 func (r Request) RootID() ID {
-	return r.proto.GetRootDispatchId()
+	return ID(r.proto.GetRootDispatchId())
 }
 
 // CreationTime is the creation time of the function call.
