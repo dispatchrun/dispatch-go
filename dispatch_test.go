@@ -8,7 +8,6 @@ import (
 	"connectrpc.com/connect"
 	"github.com/dispatchrun/dispatch-go"
 	"github.com/dispatchrun/dispatch-go/dispatchtest"
-	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 func TestDispatchEndpoint(t *testing.T) {
@@ -118,12 +117,12 @@ func TestDispatchCallEnvConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fn := dispatch.NewFunction("function2", func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
+	fn := dispatch.NewFunction("function2", func(ctx context.Context, input string) (string, error) {
 		panic("not implemented")
 	})
 	endpoint.Register(fn)
 
-	_, err = fn.Dispatch(context.Background(), wrapperspb.String("foo"), dispatch.Version("xyzzy"))
+	_, err = fn.Dispatch(context.Background(), "foo", dispatch.Version("xyzzy"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +156,7 @@ func TestDispatchCallsBatch(t *testing.T) {
 	fn1 := dispatch.NewPrimitiveFunction("function1", func(ctx context.Context, req dispatch.Request) dispatch.Response {
 		panic("not implemented")
 	})
-	fn2 := dispatch.NewFunction("function2", func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
+	fn2 := dispatch.NewFunction("function2", func(ctx context.Context, input string) (string, error) {
 		panic("not implemented")
 	})
 
@@ -168,7 +167,7 @@ func TestDispatchCallsBatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	call2, err := fn2.NewCall(wrapperspb.String("foo"), dispatch.Version("xyzzy"))
+	call2, err := fn2.NewCall("foo", dispatch.Version("xyzzy"))
 	if err != nil {
 		t.Fatal(err)
 	}

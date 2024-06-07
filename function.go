@@ -43,7 +43,7 @@ func (f *GenericFunction[I, O]) Name() string {
 func (f *GenericFunction[I, O]) Run(ctx context.Context, req Request) Response {
 	boxedInput, ok := req.Input()
 	if !ok {
-		return NewResponseErrorf("%w: unsupported request directive: %v", ErrInvalidArgument, req)
+		return NewResponseErrorf("%w: unsupported request: %v", ErrInvalidArgument, req)
 	}
 	var input I
 	if err := boxedInput.Unmarshal(&input); err != nil {
@@ -55,7 +55,7 @@ func (f *GenericFunction[I, O]) Run(ctx context.Context, req Request) Response {
 	}
 	boxedOutput, err := NewAny(output)
 	if err != nil {
-		return NewResponseErrorf("%w: cannot serialize return value %v: %v", ErrInvalidResponse, output, err)
+		return NewResponseErrorf("%w: invalid output %v: %v", ErrInvalidResponse, output, err)
 	}
 	return NewResponse(StatusOf(output), Output(boxedOutput))
 }
@@ -69,11 +69,11 @@ func (f *GenericFunction[I, O]) NewCall(input I, opts ...CallOption) (Call, erro
 	if f.endpoint == nil {
 		return Call{}, fmt.Errorf("cannot build function call: function has not been registered with a Dispatch endpoint")
 	}
-	anyInput, err := NewAny(input)
+	boxedInput, err := NewAny(input)
 	if err != nil {
 		return Call{}, fmt.Errorf("cannot serialize input: %v", err)
 	}
-	opts = append(slices.Clip(opts), Input(anyInput))
+	opts = append(slices.Clip(opts), Input(boxedInput))
 	return NewCall(f.endpoint.URL(), f.name, opts...), nil
 }
 

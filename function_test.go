@@ -6,12 +6,11 @@ import (
 	"testing"
 
 	"github.com/dispatchrun/dispatch-go"
-	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 func TestFunctionRunError(t *testing.T) {
-	fn := dispatch.NewFunction("foo", func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
-		return nil, errors.New("oops")
+	fn := dispatch.NewFunction("foo", func(ctx context.Context, input string) (string, error) {
+		return "", errors.New("oops")
 	})
 
 	req := dispatch.NewRequest("foo", dispatch.Input(dispatch.String("hello")))
@@ -29,8 +28,8 @@ func TestFunctionRunError(t *testing.T) {
 }
 
 func TestFunctionRunResult(t *testing.T) {
-	fn := dispatch.NewFunction("foo", func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
-		return wrapperspb.String("world"), nil
+	fn := dispatch.NewFunction("foo", func(ctx context.Context, input string) (string, error) {
+		return "world", nil
 	})
 
 	req := dispatch.NewRequest("foo", dispatch.Input(dispatch.String("hello")))
@@ -66,17 +65,17 @@ func TestPrimitiveFunctionNewCallAndDispatchWithoutEndpoint(t *testing.T) {
 }
 
 func TestFunctionNewCallAndDispatchWithoutEndpoint(t *testing.T) {
-	fn := dispatch.NewFunction("foo", func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
+	fn := dispatch.NewFunction("foo", func(ctx context.Context, input string) (string, error) {
 		panic("not implemented")
 	})
 
 	wantErr := "cannot build function call: function has not been registered with a Dispatch endpoint"
 
-	_, err := fn.NewCall(wrapperspb.String("bar"))
+	_, err := fn.NewCall("bar")
 	if err == nil || err.Error() != wantErr {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	_, err = fn.Dispatch(context.Background(), wrapperspb.String("bar"))
+	_, err = fn.Dispatch(context.Background(), "bar")
 	if err == nil || err.Error() != wantErr {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -119,18 +118,18 @@ func TestFunctionDispatchWithoutClient(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fn := dispatch.NewFunction("foo", func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
+	fn := dispatch.NewFunction("foo", func(ctx context.Context, input string) (string, error) {
 		panic("not implemented")
 	})
 	endpoint.Register(fn)
 
 	// It's possible to create a call since an endpoint URL is available.
-	if _, err := fn.NewCall(wrapperspb.String("bar")); err != nil {
+	if _, err := fn.NewCall("bar"); err != nil {
 		t.Fatal(err)
 	}
 
 	// However, a client is not available.
-	_, err = fn.Dispatch(context.Background(), wrapperspb.String("bar"))
+	_, err = fn.Dispatch(context.Background(), "bar")
 	if err == nil {
 		t.Fatal("expected an error")
 	} else if err.Error() != "cannot dispatch function call: Dispatch API key has not been set. Use APIKey(..), or set the DISPATCH_API_KEY environment variable" {
