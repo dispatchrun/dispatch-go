@@ -746,8 +746,7 @@ func NewResponseWithError(err error) Response {
 	error := NewGoError(err)
 	result := NewCallResult(WithError(error))
 	exit := NewExit(WithResult(result))
-	status := errorStatusOf(err)
-	return NewResponse(status, exit)
+	return NewResponse(ErrorStatus(err), exit)
 }
 
 // NewResponseWithErrorf creates a Response from the specified error message

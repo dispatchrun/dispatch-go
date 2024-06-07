@@ -10,6 +10,7 @@ require (
 	github.com/aws/aws-lambda-go v1.47.0
 	github.com/offblocks/httpsig v0.8.1
 	github.com/stealthrocket/coroutine v0.7.0
+	golang.org/x/sys v0.6.0
 	google.golang.org/protobuf v1.34.1
 )
 
