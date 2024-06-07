@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 
@@ -148,7 +149,7 @@ func WithVerificationKey(verificationKey string) DispatchOption {
 //
 // It defaults to os.Environ().
 func WithEnv(env ...string) DispatchOption {
-	return func(d *Dispatch) { d.env = env }
+	return func(d *Dispatch) { d.env = slices.Clone(env) }
 }
 
 // WithClient binds a Client to a Dispatch endpoint.

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 
 	"buf.build/gen/go/stealthrocket/dispatch-proto/connectrpc/go/dispatch/sdk/v1/sdkv1connect"
@@ -100,7 +101,7 @@ const DefaultApiUrl = "https://api.dispatch.run"
 //
 // It defaults to os.Environ().
 func WithClientEnv(env ...string) ClientOption {
-	return func(c *Client) { c.env = env }
+	return func(c *Client) { c.env = slices.Clone(env) }
 }
 
 // Dispatch dispatches a function call.
@@ -128,6 +129,7 @@ type Batch struct {
 
 // Reset resets the batch.
 func (b *Batch) Reset() {
+	clear(b.calls)
 	b.calls = b.calls[:0]
 }
 
@@ -145,9 +147,9 @@ func (b *Batch) Dispatch(ctx context.Context) ([]ID, error) {
 	if err != nil {
 		if connect.CodeOf(err) == connect.CodeUnauthenticated {
 			if b.client.apiKeyFromEnv {
-				return nil, fmt.Errorf("invalid DISPATCH_API_KEY: %s", redact(b.client.apiKey))
+				return nil, fmt.Errorf("invalid DISPATCH_API_KEY: %s", redactAPIKey(b.client.apiKey))
 			}
-			return nil, fmt.Errorf("invalid Dispatch API key provided with WithAPIKey(): %s", redact(b.client.apiKey))
+			return nil, fmt.Errorf("invalid Dispatch API key provided with WithAPIKey(): %s", redactAPIKey(b.client.apiKey))
 		}
 		return nil, err
 	}
@@ -165,8 +167,12 @@ func getenv(env []string, name string) string {
 	return value
 }
 
-func redact(s string) string {
+func redactAPIKey(s string) string {
 	if len(s) <= 3 {
+		// Don't redact the string if it's this short. It's not a valid API
+		// key if so, and even if it was it would be easy to brute force and so
+		// redaction would not serve a purpose. The idea is that we show a bit
+		// of the API key to help the user fix an issue.
 		return s
 	}
 	return s[:3] + "********"
