@@ -23,6 +23,7 @@ import (
 type Dispatch struct {
 	endpointUrl     string
 	verificationKey string
+	serveAddr       string
 	env             []string
 
 	client     *Client
@@ -67,6 +68,14 @@ func New(opts ...DispatchOption) (*Dispatch, error) {
 			return nil, fmt.Errorf("invalid %s: %v", endpointUrlFromEnv, d.endpointUrl)
 		}
 		return nil, fmt.Errorf("invalid endpoint URL provided via WithEndpointUrl: %v", d.endpointUrl)
+	}
+
+	// Prepare the address to serve on.
+	if d.serveAddr == "" {
+		d.serveAddr = getenv(d.env, "DISPATCH_ENDPOINT_ADDR")
+		if d.serveAddr == "" {
+			d.serveAddr = "127.0.0.1:8000"
+		}
 	}
 
 	// Prepare the verification key.
@@ -163,6 +172,19 @@ func WithClient(client *Client) DispatchOption {
 	return func(d *Dispatch) { d.client = client }
 }
 
+// WithServeAddress sets the address that the Dispatch endpoint
+// is served on (see Dispatch.Serve).
+//
+// Note that this is not the same as the endpoint URL, which is the
+// URL that this Dispatch endpoint is publicly accessible from.
+//
+// It defaults to the value of the DISPATCH_ENDPOINT_ADDR environment
+// variable, which is automatically set by the Dispatch CLI. If this
+// is unset, it defaults to 127.0.0.1:8000.
+func WithServeAddress(addr string) DispatchOption {
+	return func(d *Dispatch) { d.serveAddr = addr }
+}
+
 // Register registers a function.
 func (d *Dispatch) Register(fn Function) {
 	d.mu.Lock()
@@ -216,30 +238,13 @@ func (d *dispatchFunctionServiceHandler) Run(ctx context.Context, req *connect.R
 	return connect.NewResponse(res.proto), nil
 }
 
-// ListenAndServe serves the Dispatch endpoint on the specified address.
-//
-// If the address is omitted, the endpoint is served on the address found
-// in the DISPATCH_ENDPOINT_ADDR environment variable. If this is unset,
-// the endpoint is served at 127.0.0.1:8000.
-func (d *Dispatch) ListenAndServe(optionalAddr ...string) error {
-	var addr string
-	switch len(optionalAddr) {
-	case 0:
-		addr = getenv(d.env, "DISPATCH_ENDPOINT_ADDR")
-		if addr == "" {
-			addr = "127.0.0.1:8000"
-		}
-	case 1:
-		addr = optionalAddr[0]
-	default:
-		return fmt.Errorf("more than one address provided")
-	}
-
+// Serve serves the Dispatch endpoint.
+func (d *Dispatch) Serve() error {
 	mux := http.NewServeMux()
 	mux.Handle(d.Handler())
 
-	slog.Info("serving Dispatching endpoint", "addr", addr)
+	slog.Info("serving Dispatch endpoint", "addr", d.serveAddr)
 
-	server := &http.Server{Addr: addr, Handler: mux}
+	server := &http.Server{Addr: d.serveAddr, Handler: mux}
 	return server.ListenAndServe()
 }
