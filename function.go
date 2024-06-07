@@ -1,5 +1,3 @@
-//go:build !durable
-
 package dispatch
 
 import (
@@ -7,7 +5,6 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/stealthrocket/coroutine"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -46,75 +43,27 @@ func (f *GenericFunction[I, O]) Name() string {
 
 // Run runs the function.
 func (f *GenericFunction[I, O]) Run(ctx context.Context, req Request) Response {
-	var coro coroutine.Coroutine[any, any]
-	var zero I
-
-	if boxedInput, ok := req.Input(); ok {
-		message, err := boxedInput.Proto()
-		if err != nil {
-			return NewResponseErrorf("%w: invalid input: %v", ErrInvalidArgument, err)
-		}
-		input, ok := message.(I)
-		if !ok {
-			return NewResponseErrorf("%w: invalid input type: %T", ErrInvalidArgument, message)
-		}
-		coro = coroutine.NewWithReturn[any, any](f.entrypoint(input))
-
-	} else if pollResult, ok := req.PollResult(); ok {
-		coro = coroutine.NewWithReturn[any, any](f.entrypoint(zero))
-		if err := coro.Context().Unmarshal(pollResult.CoroutineState()); err != nil {
-			return NewResponseErrorf("%w: invalid coroutine state: %v", ErrIncompatibleState, err)
-		}
-
-	} else {
+	boxedInput, ok := req.Input()
+	if !ok {
 		return NewResponseErrorf("%w: unsupported request directive: %v", ErrInvalidArgument, req)
 	}
-
-	// When running in volatile mode, we cannot snapshot the coroutine state
-	// and return it to the caller. Instead, we run the coroutine to completion
-	// in a blocking fashion until it returns a result or an error.
-	if !coroutine.Durable {
-		var canceled bool
-		coroutine.Run(coro, func(v any) any {
-			// TODO
-			return nil
-		})
-		if canceled {
-			return NewResponseError(context.Cause(ctx))
-		}
+	message, err := boxedInput.Proto()
+	if err != nil {
+		return NewResponseErrorf("%w: invalid input: %v", ErrInvalidArgument, err)
 	}
-
-	var res Response
-	if coro.Next() {
-		coroutineState, err := coro.Context().Marshal()
-		if err != nil {
-			return NewResponseErrorf("%w: cannot serialize coroutine: %v", ErrPermanent, err)
-		}
-		switch yield := coro.Recv().(type) {
-		// TODO
-		default:
-			res = NewResponseErrorf("%w: unsupported coroutine yield: %T", ErrInvalidResponse, yield)
-		}
-		// TODO
-		_ = coroutineState
-	} else {
-		switch ret := coro.Result().(type) {
-		case proto.Message:
-			output, err := NewAny(ret)
-			if err != nil {
-				res = NewResponseErrorf("%w: cannot serialize return value: %v", ErrInvalidResponse, err)
-			} else {
-				// TODO: automatically derive a status from the ret value
-				res = NewResponse(StatusOf(ret), Output(output))
-			}
-		case error:
-			res = NewResponseError(ret)
-		default:
-			res = NewResponseErrorf("%w: unsupported coroutine return: %T", ErrInvalidResponse, ret)
-		}
+	input, ok := message.(I)
+	if !ok {
+		return NewResponseErrorf("%w: invalid input type: %T", ErrInvalidArgument, message)
 	}
-
-	return res
+	output, err := f.fn(ctx, input)
+	if err != nil {
+		return NewResponseError(err)
+	}
+	boxedOutput, err := NewAny(output)
+	if err != nil {
+		return NewResponseErrorf("%w: cannot serialize return value %v: %v", ErrInvalidResponse, output, err)
+	}
+	return NewResponse(StatusOf(output), Output(boxedOutput))
 }
 
 func (f *GenericFunction[I, O]) bind(endpoint *Dispatch) {
@@ -145,22 +94,6 @@ func (f *GenericFunction[I, O]) Dispatch(ctx context.Context, input I, opts ...C
 		return "", fmt.Errorf("cannot dispatch function call: %w", err)
 	}
 	return client.Dispatch(ctx, call)
-}
-
-//go:noinline
-func (f *GenericFunction[I, O]) entrypoint(input I) func() any {
-	return func() any {
-		// The context that gets passed as argument here should be recreated
-		// each time the coroutine is resumed, ideally inheriting from the
-		// parent context passed to the Run method. This is difficult to
-		// do right in durable mode because we shouldn't capture the parent
-		// context in the coroutine state.
-		if res, err := f.fn(context.TODO(), input); err != nil {
-			return err
-		} else {
-			return res
-		}
-	}
 }
 
 // NewPrimitiveFunction creates a PrimitiveFunction.

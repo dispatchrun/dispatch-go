@@ -31,8 +31,6 @@ github.com/offblocks/httpsig v0.8.1 h1:yhPNaIS0W8f7Rr6Wjg76i4psgJEqvv8oJG3LiUQWn
 github.com/offblocks/httpsig v0.8.1/go.mod h1:0+40VSLg4GX71fnwqQ17tKcmsXXDBFA0Gqg/y/EuVi8=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
-github.com/stealthrocket/coroutine v0.7.0 h1:7zdUw1JKy50gDcY8UYXYoyFBRmdfTBJhRLVxrEahMIg=
-github.com/stealthrocket/coroutine v0.7.0/go.mod h1:Hjg/Wcmn8ybpji5FQnxuY5D+eU8lUV0eD0bV0GMvUwI=
 github.com/stoewer/go-strcase v1.3.0 h1:g0eASXYtp+yvN9fK8sH94oCIk0fau9uV1/ZdJ0AVEzs=
 github.com/stoewer/go-strcase v1.3.0/go.mod h1:fAH5hQ5pehh+j3nZfvwdk2RgEgQjAoM8wodgtPmh1xo=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
