@@ -22,6 +22,7 @@ import (
 // is a client for the Dispatch API. The client here is
 // useful when testing a Dispatch endpoint.
 type EndpointClient struct {
+	httpClient connect.HTTPClient
 	signingKey string
 
 	client sdkv1connect.FunctionServiceClient
@@ -34,15 +35,18 @@ func NewEndpointClient(endpointUrl string, opts ...EndpointClientOption) (*Endpo
 		opt(c)
 	}
 
+	if c.httpClient == nil {
+		c.httpClient = http.DefaultClient
+	}
+
 	// Setup request signing.
-	var httpClient connect.HTTPClient = http.DefaultClient
 	if c.signingKey != "" {
 		privateKey, err := base64.StdEncoding.DecodeString(c.signingKey)
 		if err != nil || len(privateKey) != ed25519.PrivateKeySize {
 			return nil, fmt.Errorf("invalid signing key: %v", c.signingKey)
 		}
 		signer := auth.NewSigner(ed25519.PrivateKey(privateKey))
-		httpClient = signer.Client(httpClient)
+		c.httpClient = signer.Client(c.httpClient)
 	}
 
 	// Setup the gRPC client.
@@ -50,7 +54,7 @@ func NewEndpointClient(endpointUrl string, opts ...EndpointClientOption) (*Endpo
 	if err != nil {
 		return nil, err
 	}
-	c.client = sdkv1connect.NewFunctionServiceClient(httpClient, endpointUrl, connect.WithInterceptors(validator))
+	c.client = sdkv1connect.NewFunctionServiceClient(c.httpClient, endpointUrl, connect.WithInterceptors(validator))
 
 	return c, nil
 }
@@ -67,6 +71,13 @@ type EndpointClientOption func(*EndpointClient)
 // By default the EndpointClient does not sign requests to the endpoint.
 func SigningKey(signingKey string) EndpointClientOption {
 	return func(c *EndpointClient) { c.signingKey = signingKey }
+}
+
+// HTTPClient sets the HTTP client to use when making requests to the endpoint.
+//
+// By default http.DefaultClient is used.
+func HTTPClient(client connect.HTTPClient) EndpointClientOption {
+	return func(c *EndpointClient) { c.httpClient = client }
 }
 
 // Run sends a RunRequest and returns a RunResponse.
