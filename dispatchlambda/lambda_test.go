@@ -9,6 +9,7 @@ import (
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
 	"github.com/aws/aws-lambda-go/lambda/messages"
 	"github.com/aws/aws-lambda-go/lambdacontext"
+	"github.com/dispatchrun/dispatch-go"
 	"github.com/dispatchrun/dispatch-go/dispatchlambda"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -16,33 +17,37 @@ import (
 )
 
 func TestHandlerEmptyPayload(t *testing.T) {
-	h := dispatchlambda.Handler(func(ctx context.Context, input *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
-		return nil, nil
+	fn := dispatch.NewFunction("handler", func(ctx context.Context, input string) (string, error) {
+		return "", nil
 	})
+	h := dispatchlambda.Handler(fn)
 	_, err := h.Invoke(context.Background(), nil)
 	assertInvokeError(t, err, "Bad Request", "empty payload")
 }
 
 func TestHandlerShortPayload(t *testing.T) {
-	h := dispatchlambda.Handler(func(ctx context.Context, input *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
-		return nil, nil
+	fn := dispatch.NewFunction("handler", func(ctx context.Context, input string) (string, error) {
+		return "", nil
 	})
+	h := dispatchlambda.Handler(fn)
 	_, err := h.Invoke(context.Background(), []byte(`@`))
 	assertInvokeError(t, err, "Bad Request", "payload is too short")
 }
 
 func TestHandlerNonBase64Payload(t *testing.T) {
-	h := dispatchlambda.Handler(func(ctx context.Context, input *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
-		return nil, nil
+	fn := dispatch.NewFunction("handler", func(ctx context.Context, input string) (string, error) {
+		return "", nil
 	})
+	h := dispatchlambda.Handler(fn)
 	_, err := h.Invoke(context.Background(), []byte(`"not base64"`))
 	assertInvokeError(t, err, "Bad Request", "payload is not base64 encoded")
 }
 
 func TestHandlerInvokePayloadNotProtobufMessage(t *testing.T) {
-	h := dispatchlambda.Handler(func(ctx context.Context, input *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
-		return nil, nil
+	fn := dispatch.NewFunction("handler", func(ctx context.Context, input string) (string, error) {
+		return "", nil
 	})
+	h := dispatchlambda.Handler(fn)
 	ctx := lambdacontext.NewContext(context.Background(), &lambdacontext.LambdaContext{
 		InvokedFunctionArn: "arn:aws:lambda:us-east-1:123456789012:function:my-function:1",
 	})
@@ -51,9 +56,10 @@ func TestHandlerInvokePayloadNotProtobufMessage(t *testing.T) {
 }
 
 func TestHandlerInvokeError(t *testing.T) {
-	h := dispatchlambda.Handler(func(ctx context.Context, input *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
-		return nil, errors.New("invoke error")
+	fn := dispatch.NewFunction("handler", func(ctx context.Context, input string) (string, error) {
+		return "", errors.New("invoke error")
 	})
+	h := dispatchlambda.Handler(fn)
 	ctx := lambdacontext.NewContext(context.Background(), &lambdacontext.LambdaContext{
 		InvokedFunctionArn: "arn:aws:lambda:us-east-1:123456789012:function:my-function:1",
 	})
@@ -108,9 +114,10 @@ func TestHandlerInvokeError(t *testing.T) {
 }
 
 func TestHandlerInvokeFunction(t *testing.T) {
-	h := dispatchlambda.Handler(func(ctx context.Context, input *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
-		return wrapperspb.String("output"), nil
+	fn := dispatch.NewFunction("handler", func(ctx context.Context, input string) (string, error) {
+		return input + "output", nil
 	})
+	h := dispatchlambda.Handler(fn)
 
 	const (
 		functionVersion        = "1"
@@ -172,8 +179,8 @@ func TestHandlerInvokeFunction(t *testing.T) {
 		if err := out.UnmarshalTo(&output); err != nil {
 			t.Fatalf("unexpected error unmarshaling output: %v", err)
 		}
-		if output.Value != "output" {
-			t.Errorf("expected coroutine to return an output with value %q, got %q", "output", output.Value)
+		if output.Value != "inputoutput" {
+			t.Errorf("expected coroutine to return an output with value %q, got %q", "inputoutput", output.Value)
 		}
 	default:
 		t.Errorf("expected coroutine to return an error, got %T", coro)

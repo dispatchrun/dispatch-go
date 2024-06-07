@@ -4,134 +4,135 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
-	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
 	"github.com/dispatchrun/dispatch-go"
-	"google.golang.org/protobuf/types/known/anypb"
-	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-func TestFunctionRunInvalidCoroutineType(t *testing.T) {
-	f := dispatch.Func(func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
-		return nil, nil
-	})
-
-	_, err := f.Run(context.Background(), &sdkv1.RunRequest{})
-	if err == nil {
-		t.Fatal("expected error")
-	}
-	if err.Error() != "unsupported coroutine type: <nil>" {
-		t.Fatalf("unexpected error: %s", err)
-	}
-}
-
 func TestFunctionRunError(t *testing.T) {
-	oops := errors.New("oops")
-
-	f := dispatch.Func(func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
-		return nil, oops
+	fn := dispatch.NewFunction("foo", func(ctx context.Context, input string) (string, error) {
+		return "", errors.New("oops")
 	})
 
-	input, err := anypb.New(wrapperspb.String("hello"))
-	if err != nil {
-		t.Fatal(err)
+	req := dispatch.NewRequest("foo", dispatch.Input(dispatch.String("hello")))
+	res := fn.Run(context.Background(), req)
+	error, ok := res.Error()
+	if !ok {
+		t.Fatalf("invalid response: %v", res)
 	}
-
-	r, err := f.Run(context.Background(), &sdkv1.RunRequest{
-		Directive: &sdkv1.RunRequest_Input{
-			Input: input,
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
+	if error.Type() != "errorString" {
+		t.Errorf("unexpected coroutine error type: %s", error.Type())
 	}
-
-	switch coro := r.Directive.(type) {
-	case *sdkv1.RunResponse_Exit:
-		err := coro.Exit.GetResult().GetError()
-		if err.Type != "errorString" {
-			t.Fatalf("unexpected coroutine error type: %s", err.Type)
-		}
-		if err.Message != "oops" {
-			t.Fatalf("unexpected coroutine error message: %s", err.Message)
-		}
-	default:
-		t.Fatalf("unexpected coroutine response type: %T", coro)
+	if error.Message() != "oops" {
+		t.Errorf("unexpected coroutine error message: %s", error.Message())
 	}
 }
 
 func TestFunctionRunResult(t *testing.T) {
-	f := dispatch.Func(func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
-		return wrapperspb.String("world"), nil
+	fn := dispatch.NewFunction("foo", func(ctx context.Context, input string) (string, error) {
+		return "world", nil
 	})
 
-	input, err := anypb.New(wrapperspb.String("hello"))
-	if err != nil {
-		t.Fatal(err)
+	req := dispatch.NewRequest("foo", dispatch.Input(dispatch.String("hello")))
+	res := fn.Run(context.Background(), req)
+	if error, ok := res.Error(); ok {
+		t.Fatalf("unexpected response error: %v", error)
 	}
-
-	r, err := f.Run(context.Background(), &sdkv1.RunRequest{
-		Directive: &sdkv1.RunRequest_Input{
-			Input: input,
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	switch coro := r.Directive.(type) {
-	case *sdkv1.RunResponse_Exit:
-		out := coro.Exit.GetResult().GetOutput()
-		if out.TypeUrl != "type.googleapis.com/google.protobuf.StringValue" {
-			t.Fatalf("unexpected coroutine output type: %s", out.TypeUrl)
-		}
-		var output wrapperspb.StringValue
-		if err := out.UnmarshalTo(&output); err != nil {
-			t.Fatal(err)
-		}
-		if output.Value != "world" {
-			t.Fatalf("unexpected coroutine output value: %s", output.Value)
-		}
-	default:
-		t.Fatalf("unexpected coroutine response type: %T", coro)
+	var output string
+	if boxed, ok := res.Output(); !ok {
+		t.Fatalf("invalid response: %v", res)
+	} else if err := boxed.Unmarshal(&output); err != nil {
+		t.Fatalf("unexpected output: %v", err)
+	} else if output != "world" {
+		t.Errorf("unexpected output: %s", output)
 	}
 }
 
-func TestFunctionRunSleep(t *testing.T) {
-	const sleep = 20 * time.Millisecond
-
-	f := dispatch.Func(func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
-		dispatch.Sleep(sleep)
-		return req, nil
+func TestPrimitiveFunctionNewCallAndDispatchWithoutEndpoint(t *testing.T) {
+	fn := dispatch.NewPrimitiveFunction("foo", func(ctx context.Context, req dispatch.Request) dispatch.Response {
+		panic("not implemented")
 	})
 
-	start := time.Now()
-	_, err := f.Run(context.Background(), &sdkv1.RunRequest{
-		Directive: &sdkv1.RunRequest_Input{},
-	})
-	if err != nil {
-		t.Fatal(err)
+	wantErr := "cannot build function call: function has not been registered with a Dispatch endpoint"
+
+	_, err := fn.NewCall(dispatch.String("bar"))
+	if err == nil || err.Error() != wantErr {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if delay := time.Since(start); delay < sleep {
-		t.Fatalf("expected coroutine to sleep for at least %s, slept for %s", sleep, delay)
+	_, err = fn.Dispatch(context.Background(), dispatch.String("bar"))
+	if err == nil || err.Error() != wantErr {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
-func TestFunctionRunCancel(t *testing.T) {
-	f := dispatch.Func(func(ctx context.Context, req *wrapperspb.StringValue) (*wrapperspb.StringValue, error) {
-		dispatch.Sleep(10 * time.Second) // won't wait for that long beccause the context is canceled
-		return req, nil
+func TestFunctionNewCallAndDispatchWithoutEndpoint(t *testing.T) {
+	fn := dispatch.NewFunction("foo", func(ctx context.Context, input string) (string, error) {
+		panic("not implemented")
 	})
 
-	ctx, cancel := context.WithCancelCause(context.Background())
-	cause := errors.New("oops")
-	cancel(cause)
+	wantErr := "cannot build function call: function has not been registered with a Dispatch endpoint"
 
-	_, err := f.Run(ctx, &sdkv1.RunRequest{
-		Directive: &sdkv1.RunRequest_Input{},
+	_, err := fn.NewCall("bar")
+	if err == nil || err.Error() != wantErr {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	_, err = fn.Dispatch(context.Background(), "bar")
+	if err == nil || err.Error() != wantErr {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestPrimitiveFunctionDispatchWithoutClient(t *testing.T) {
+	// It's not necessary to have valid Client configuration when
+	// creating a Dispatch endpoint. In this case, there's no
+	// Dispatch API key available.
+	endpoint, err := dispatch.New(dispatch.EndpointUrl("http://example.com"), dispatch.Env( /* i.e. no env vars */ ))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fn := dispatch.NewPrimitiveFunction("foo", func(ctx context.Context, req dispatch.Request) dispatch.Response {
+		panic("not implemented")
 	})
-	if !errors.Is(err, cause) {
-		t.Fatalf("expected coroutine to return an error: %v", err)
+	endpoint.Register(fn)
+
+	// It's possible to create a call since an endpoint URL is available.
+	if _, err := fn.NewCall(dispatch.String("bar")); err != nil {
+		t.Fatal(err)
+	}
+
+	// However, a client is not available.
+	_, err = fn.Dispatch(context.Background(), dispatch.String("bar"))
+	if err == nil {
+		t.Fatal("expected an error")
+	} else if err.Error() != "cannot dispatch function call: Dispatch API key has not been set. Use APIKey(..), or set the DISPATCH_API_KEY environment variable" {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestFunctionDispatchWithoutClient(t *testing.T) {
+	// It's not necessary to have valid Client configuration when
+	// creating a Dispatch endpoint. In this case, there's no
+	// Dispatch API key available.
+	endpoint, err := dispatch.New(dispatch.EndpointUrl("http://example.com"), dispatch.Env( /* i.e. no env vars */ ))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fn := dispatch.NewFunction("foo", func(ctx context.Context, input string) (string, error) {
+		panic("not implemented")
+	})
+	endpoint.Register(fn)
+
+	// It's possible to create a call since an endpoint URL is available.
+	if _, err := fn.NewCall("bar"); err != nil {
+		t.Fatal(err)
+	}
+
+	// However, a client is not available.
+	_, err = fn.Dispatch(context.Background(), "bar")
+	if err == nil {
+		t.Fatal("expected an error")
+	} else if err.Error() != "cannot dispatch function call: Dispatch API key has not been set. Use APIKey(..), or set the DISPATCH_API_KEY environment variable" {
+		t.Errorf("unexpected error: %v", err)
 	}
 }
