@@ -28,9 +28,9 @@ func TestDispatchEndpoint(t *testing.T) {
 	endpoint.Register(dispatch.NewPrimitiveFunction("identity", func(ctx context.Context, req dispatch.Request) dispatch.Response {
 		input, ok := req.Input()
 		if !ok {
-			return dispatch.NewResponseWithErrorf("%w: unexpected request: %v", dispatch.ErrInvalidArgument, req)
+			return dispatch.NewResponseErrorf("%w: unexpected request: %v", dispatch.ErrInvalidArgument, req)
 		}
-		return dispatch.NewResponseWithOutput(input)
+		return dispatch.NewResponse(dispatch.OKStatus, dispatch.Output(input))
 	}))
 
 	// Send a request for the identity function, and check that the
@@ -101,7 +101,8 @@ func TestDispatchCall(t *testing.T) {
 	recorder.Assert(t, dispatchtest.DispatchRequest{
 		ApiKey: "foobar",
 		Calls: []dispatch.Call{
-			dispatch.NewCall("http://example.com", "function1", dispatch.Int(11),
+			dispatch.NewCall("http://example.com", "function1",
+				dispatch.Input(dispatch.Int(11)),
 				dispatch.Expiration(10*time.Second)),
 		},
 	})
@@ -133,7 +134,9 @@ func TestDispatchCallEnvConfig(t *testing.T) {
 	recorder.Assert(t, dispatchtest.DispatchRequest{
 		ApiKey: "foobar",
 		Calls: []dispatch.Call{
-			dispatch.NewCall("http://example.com", "function2", dispatch.String("foo"), dispatch.Version("xyzzy")),
+			dispatch.NewCall("http://example.com", "function2",
+				dispatch.Input(dispatch.String("foo")),
+				dispatch.Version("xyzzy")),
 		},
 	})
 }

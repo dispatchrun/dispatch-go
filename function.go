@@ -5,6 +5,7 @@ package dispatch
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/stealthrocket/coroutine"
 	"google.golang.org/protobuf/proto"
@@ -25,48 +26,48 @@ type Function interface {
 }
 
 // NewFunction creates a Dispatch function.
-func NewFunction[Input, Output proto.Message](name string, fn func(context.Context, Input) (Output, error)) *GenericFunction[Input, Output] {
-	return &GenericFunction[Input, Output]{name: name, fn: fn}
+func NewFunction[I, O proto.Message](name string, fn func(context.Context, I) (O, error)) *GenericFunction[I, O] {
+	return &GenericFunction[I, O]{name: name, fn: fn}
 }
 
 // GenericFunction is a Dispatch function that accepts arbitrary input
 // and returns arbitrary output.
-type GenericFunction[Input, Output proto.Message] struct {
+type GenericFunction[I, O proto.Message] struct {
 	name string
-	fn   func(ctx context.Context, input Input) (Output, error)
+	fn   func(ctx context.Context, input I) (O, error)
 
 	endpoint *Dispatch
 }
 
 // Name is the name of the function.
-func (f *GenericFunction[Input, Output]) Name() string {
+func (f *GenericFunction[I, O]) Name() string {
 	return f.name
 }
 
 // Run runs the function.
-func (f *GenericFunction[Input, Output]) Run(ctx context.Context, req Request) Response {
+func (f *GenericFunction[I, O]) Run(ctx context.Context, req Request) Response {
 	var coro coroutine.Coroutine[any, any]
-	var zero Input
+	var zero I
 
 	if boxedInput, ok := req.Input(); ok {
 		message, err := boxedInput.Proto()
 		if err != nil {
-			return NewResponseWithErrorf("%w: invalid input: %v", ErrInvalidArgument, err)
+			return NewResponseErrorf("%w: invalid input: %v", ErrInvalidArgument, err)
 		}
-		input, ok := message.(Input)
+		input, ok := message.(I)
 		if !ok {
-			return NewResponseWithErrorf("%w: invalid input type: %T", ErrInvalidArgument, message)
+			return NewResponseErrorf("%w: invalid input type: %T", ErrInvalidArgument, message)
 		}
 		coro = coroutine.NewWithReturn[any, any](f.entrypoint(input))
 
 	} else if pollResult, ok := req.PollResult(); ok {
 		coro = coroutine.NewWithReturn[any, any](f.entrypoint(zero))
 		if err := coro.Context().Unmarshal(pollResult.CoroutineState()); err != nil {
-			return NewResponseWithErrorf("%w: invalid coroutine state: %v", ErrIncompatibleState, err)
+			return NewResponseErrorf("%w: invalid coroutine state: %v", ErrIncompatibleState, err)
 		}
 
 	} else {
-		return NewResponseWithErrorf("%w: unsupported request directive: %v", ErrInvalidArgument, req)
+		return NewResponseErrorf("%w: unsupported request directive: %v", ErrInvalidArgument, req)
 	}
 
 	// When running in volatile mode, we cannot snapshot the coroutine state
@@ -79,7 +80,7 @@ func (f *GenericFunction[Input, Output]) Run(ctx context.Context, req Request) R
 			return nil
 		})
 		if canceled {
-			return NewResponseWithError(context.Cause(ctx))
+			return NewResponseError(context.Cause(ctx))
 		}
 	}
 
@@ -87,12 +88,12 @@ func (f *GenericFunction[Input, Output]) Run(ctx context.Context, req Request) R
 	if coro.Next() {
 		coroutineState, err := coro.Context().Marshal()
 		if err != nil {
-			return NewResponseWithErrorf("%w: cannot serialize coroutine: %v", ErrPermanent, err)
+			return NewResponseErrorf("%w: cannot serialize coroutine: %v", ErrPermanent, err)
 		}
 		switch yield := coro.Recv().(type) {
 		// TODO
 		default:
-			res = NewResponseWithErrorf("%w: unsupported coroutine yield: %T", ErrInvalidResponse, yield)
+			res = NewResponseErrorf("%w: unsupported coroutine yield: %T", ErrInvalidResponse, yield)
 		}
 		// TODO
 		_ = coroutineState
@@ -101,26 +102,27 @@ func (f *GenericFunction[Input, Output]) Run(ctx context.Context, req Request) R
 		case proto.Message:
 			output, err := NewAny(ret)
 			if err != nil {
-				res = NewResponseWithErrorf("%w: cannot serialize return value: %v", ErrInvalidResponse, err)
+				res = NewResponseErrorf("%w: cannot serialize return value: %v", ErrInvalidResponse, err)
 			} else {
-				res = NewResponseWithOutput(output)
+				// TODO: automatically derive a status from the ret value
+				res = NewResponse(StatusOf(ret), Output(output))
 			}
 		case error:
-			res = NewResponseWithError(ret)
+			res = NewResponseError(ret)
 		default:
-			res = NewResponseWithErrorf("%w: unsupported coroutine return: %T", ErrInvalidResponse, ret)
+			res = NewResponseErrorf("%w: unsupported coroutine return: %T", ErrInvalidResponse, ret)
 		}
 	}
 
 	return res
 }
 
-func (f *GenericFunction[Input, Output]) bind(endpoint *Dispatch) {
+func (f *GenericFunction[I, O]) bind(endpoint *Dispatch) {
 	f.endpoint = endpoint
 }
 
 // NewCall creates a Call for the function.
-func (f *GenericFunction[Input, Output]) NewCall(input Input, opts ...CallOption) (Call, error) {
+func (f *GenericFunction[I, O]) NewCall(input I, opts ...CallOption) (Call, error) {
 	if f.endpoint == nil {
 		return Call{}, fmt.Errorf("cannot build function call: function has not been registered with a Dispatch endpoint")
 	}
@@ -128,11 +130,12 @@ func (f *GenericFunction[Input, Output]) NewCall(input Input, opts ...CallOption
 	if err != nil {
 		return Call{}, fmt.Errorf("cannot serialize input: %v", err)
 	}
-	return NewCall(f.endpoint.URL(), f.name, anyInput, opts...), nil
+	opts = append(slices.Clip(opts), Input(anyInput))
+	return NewCall(f.endpoint.URL(), f.name, opts...), nil
 }
 
 // Dispatch dispatches a call to the function.
-func (f *GenericFunction[Input, Output]) Dispatch(ctx context.Context, input Input, opts ...CallOption) (ID, error) {
+func (f *GenericFunction[I, O]) Dispatch(ctx context.Context, input I, opts ...CallOption) (ID, error) {
 	call, err := f.NewCall(input, opts...)
 	if err != nil {
 		return "", err
@@ -145,7 +148,7 @@ func (f *GenericFunction[Input, Output]) Dispatch(ctx context.Context, input Inp
 }
 
 //go:noinline
-func (f *GenericFunction[Input, Output]) entrypoint(input Input) func() any {
+func (f *GenericFunction[I, O]) entrypoint(input I) func() any {
 	return func() any {
 		// The context that gets passed as argument here should be recreated
 		// each time the coroutine is resumed, ideally inheriting from the
@@ -193,7 +196,8 @@ func (f *PrimitiveFunction) NewCall(input Any, opts ...CallOption) (Call, error)
 	if f.endpoint == nil {
 		return Call{}, fmt.Errorf("cannot build function call: function has not been registered with a Dispatch endpoint")
 	}
-	return NewCall(f.endpoint.URL(), f.name, input, opts...), nil
+	opts = append(slices.Clip(opts), Input(input))
+	return NewCall(f.endpoint.URL(), f.name, opts...), nil
 }
 
 // Dispatch dispatches a call to the function.

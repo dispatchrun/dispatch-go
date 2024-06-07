@@ -17,11 +17,10 @@ type Call struct {
 }
 
 // NewCall creates a Call.
-func NewCall(endpoint, function string, input Any, opts ...CallOption) Call {
+func NewCall(endpoint, function string, opts ...CallOption) Call {
 	call := Call{&sdkv1.Call{
 		Endpoint: endpoint,
 		Function: function,
-		Input:    input.proto,
 	}}
 	for _, opt := range opts {
 		opt.configureCall(&call)
@@ -35,6 +34,22 @@ type CallOption interface{ configureCall(*Call) }
 type callOptionFunc func(*Call)
 
 func (fn callOptionFunc) configureCall(c *Call) { fn(c) }
+
+// Input sets the output from a function call or Response.
+func Input(input Any) interface {
+	CallOption
+	RequestOption
+} {
+	return inputOption(input)
+}
+
+type inputOption Any
+
+func (i inputOption) configureCall(r *Call) { r.proto.Input = i.proto }
+
+func (i inputOption) configureRequest(r *Request) {
+	r.proto.Directive = &sdkv1.RunRequest_Input{Input: i.proto}
+}
 
 // Expiration sets a function call expiration.
 func Expiration(expiration time.Duration) CallOption {
@@ -119,14 +134,18 @@ func NewCallResult(opts ...CallResultOption) CallResult {
 // CallResultOption configures a CallResult.
 type CallResultOption interface{ configureCallResult(*CallResult) }
 
-type callResultOptionFunc func(*CallResult)
-
-func (fn callResultOptionFunc) configureCallResult(r *CallResult) { fn(r) }
-
-// Output sets the output from the function call.
-func Output(output Any) CallResultOption {
-	return callResultOptionFunc(func(result *CallResult) { result.proto.Output = output.proto })
+// Output sets the output from a function call or Response.
+func Output(output Any) interface {
+	CallResultOption
+	ResponseOption
+} {
+	return outputOption(output)
 }
+
+type outputOption Any
+
+func (o outputOption) configureCallResult(r *CallResult) { r.proto.Output = o.proto }
+func (o outputOption) configureResponse(r *Response)     { ensureResponseExitResult(r).Output = o.proto }
 
 // DispatchID sets the opaque identifier for the function call.
 func DispatchID(id ID) interface {
@@ -188,8 +207,14 @@ type Error struct {
 	proto *sdkv1.Error
 }
 
-// NewError creates an Error.
-func NewError(typ, message string, opts ...ErrorOption) Error {
+// NewError creates an Error from a Go error.
+func NewError(err error) Error {
+	// TODO: use ErrorValue / Traceback
+	return NewErrorMessage(errorTypeOf(err), err.Error())
+}
+
+// NewErrorMessage creates an Error.
+func NewErrorMessage(typ, message string, opts ...ErrorOption) Error {
 	err := Error{&sdkv1.Error{
 		Type:    typ,
 		Message: message,
@@ -198,12 +223,6 @@ func NewError(typ, message string, opts ...ErrorOption) Error {
 		opt(&err)
 	}
 	return err
-}
-
-// FromError creates an Error from a Go error.
-func FromError(err error) Error {
-	// TODO: use ErrorValue / Traceback
-	return NewError(errorTypeOf(err), err.Error())
 }
 
 // ErrorOption configures an Error.
@@ -266,6 +285,14 @@ func (e Error) configureCallResult(r *CallResult) {
 
 func (e Error) configurePollResult(p *PollResult) {
 	p.proto.Error = e.proto
+}
+
+func (e Error) configureExit(x *Exit) {
+	x.proto.Result = &sdkv1.CallResult{Error: e.proto}
+}
+
+func (e Error) configureResponse(r *Response) {
+	ensureResponseExitResult(r).Error = e.proto
 }
 
 // Exit is a directive that terminates a function call.
@@ -336,6 +363,10 @@ func (e Exit) String() string {
 // Equal is true if an Exit directive is equal to another.
 func (e Exit) Equal(other Exit) bool {
 	return proto.Equal(e.proto, other.proto)
+}
+
+func (e Exit) configureResponse(r *Response) {
+	r.proto.Directive = &sdkv1.RunResponse_Exit{Exit: e.proto}
 }
 
 // Poll is a general purpose directive used to spawn
@@ -438,6 +469,10 @@ func (p Poll) Equal(other Poll) bool {
 	return proto.Equal(p.proto, other.proto)
 }
 
+func (p Poll) configureResponse(r *Response) {
+	r.proto.Directive = &sdkv1.RunResponse_Poll{Poll: p.proto}
+}
+
 // PollResult is the result of a poll operation.
 type PollResult struct {
 	proto *sdkv1.PollResult
@@ -516,33 +551,15 @@ type Request struct {
 }
 
 // NewRequest creates a Request.
-func NewRequest(function string, directive RequestDirective, opts ...RequestOption) Request {
+func NewRequest(function string, opts ...RequestOption) Request {
 	request := Request{&sdkv1.RunRequest{
 		Function: function,
 	}}
 	for _, opt := range opts {
 		opt.configureRequest(&request)
 	}
-	switch d := directive.(type) {
-	case Input:
-		request.proto.Directive = &sdkv1.RunRequest_Input{Input: Any(d).proto}
-	case PollResult:
-		request.proto.Directive = &sdkv1.RunRequest_PollResult{PollResult: d.proto}
-	default:
-		panic("invalid request directive")
-	}
 	return request
 }
-
-// RequestDirective is a request directive, either Input or PollResult.
-type RequestDirective interface{ requestDirective() }
-
-func (Input) requestDirective()      {}
-func (PollResult) requestDirective() {}
-
-// Input is a directive to start execution of a function
-// with an input value.
-type Input Any
 
 // RequestOption configures a Request.
 type RequestOption interface{ configureRequest(*Request) }
@@ -574,18 +591,6 @@ func ExpirationTime(timestamp time.Time) RequestOption {
 // Function is the identifier of the function to run.
 func (r Request) Function() string {
 	return r.proto.GetFunction()
-}
-
-// RequestDirective is the RequestDirective, either Input or PollResult.
-func (r Request) Directive() RequestDirective {
-	switch d := r.proto.GetDirective().(type) {
-	case *sdkv1.RunRequest_Input:
-		return Input(Any{d.Input})
-	case *sdkv1.RunRequest_PollResult:
-		return PollResult{d.PollResult}
-	default:
-		return nil
-	}
 }
 
 // Input is input to the function, along with a boolean
@@ -665,71 +670,37 @@ type Response struct {
 	proto *sdkv1.RunResponse
 }
 
+// ResponseOption configures a Response.
+type ResponseOption interface{ configureResponse(*Response) }
+
 // NewResponse creates a Response.
-func NewResponse(status Status, directive ResponseDirective) Response {
+func NewResponse(status Status, opts ...ResponseOption) Response {
 	response := Response{&sdkv1.RunResponse{
 		Status: sdkv1.Status(status),
 	}}
-	switch d := directive.(type) {
-	case Exit:
-		response.proto.Directive = &sdkv1.RunResponse_Exit{Exit: d.proto}
-	case Poll:
-		response.proto.Directive = &sdkv1.RunResponse_Poll{Poll: d.proto}
-	default:
-		response.proto.Directive = &sdkv1.RunResponse_Exit{Exit: &sdkv1.Exit{Result: &sdkv1.CallResult{}}}
+	for _, opt := range opts {
+		opt.configureResponse(&response)
+	}
+	if response.proto.Directive == nil {
+		ensureResponseExitResult(&response)
 	}
 	return response
 }
 
-// NewResponseWithOutput creates a Response from the specified output value.
-func NewResponseWithOutput(output Any) Response {
-	result := NewCallResult(Output(output))
-
-	// FIXME: the interface{ Status() Status } implementation
-	//  is lost earlier when an any is converted to Any. Do
-	//  the conversion here, so that the original object (and status)
-	//  is available.
-	status := StatusOf(output)
-	if status == UnspecifiedStatus {
-		status = OKStatus
-	}
-
-	return NewResponse(status, NewExit(result))
+// NewResponseError creates a Response from the specified error.
+func NewResponseError(err error) Response {
+	return NewResponse(ErrorStatus(err), NewError(err))
 }
 
-// NewResponseWithError creates a Response from the specified error.
-func NewResponseWithError(err error) Response {
-	result := NewCallResult(FromError(err))
-	return NewResponse(ErrorStatus(err), NewExit(result))
-}
-
-// NewResponseWithErrorf creates a Response from the specified error message
+// NewResponseErrorf creates a Response from the specified error message
 // and args.
-func NewResponseWithErrorf(msg string, args ...any) Response {
-	return NewResponseWithError(fmt.Errorf(msg, args...))
+func NewResponseErrorf(msg string, args ...any) Response {
+	return NewResponseError(fmt.Errorf(msg, args...))
 }
-
-// ResponseDirective is either Exit or Poll.
-type ResponseDirective interface{ responseDirective() }
-
-func (Poll) responseDirective() {}
-func (Exit) responseDirective() {}
 
 // Status is the response status.
 func (r Response) Status() Status {
 	return Status(r.proto.GetStatus())
-}
-
-// Directive is the response directive, either Exit or Poll.
-func (r Response) Directive() ResponseDirective {
-	switch d := r.proto.GetDirective().(type) {
-	case *sdkv1.RunResponse_Exit:
-		return Exit{d.Exit}
-	case *sdkv1.RunResponse_Poll:
-		return Poll{d.Poll}
-	default:
-		return nil
-	}
 }
 
 // Exit is the exit directive on the response.
@@ -775,6 +746,22 @@ func (r Response) Equal(other Response) bool {
 // Marshal marshals the response.
 func (r Response) Marshal() ([]byte, error) {
 	return proto.Marshal(r.proto)
+}
+
+func ensureResponseExitResult(r *Response) *sdkv1.CallResult {
+	var d *sdkv1.RunResponse_Exit
+	d, ok := r.proto.Directive.(*sdkv1.RunResponse_Exit)
+	if !ok {
+		d = &sdkv1.RunResponse_Exit{}
+		r.proto.Directive = d
+	}
+	if d.Exit == nil {
+		d.Exit = &sdkv1.Exit{}
+	}
+	if d.Exit.Result == nil {
+		d.Exit.Result = &sdkv1.CallResult{}
+	}
+	return d.Exit.Result
 }
 
 // These are hooks used by the dispatchlambda and dispatchtest

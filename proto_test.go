@@ -13,7 +13,7 @@ import (
 
 func TestCall(t *testing.T) {
 	t.Run("with no options", func(t *testing.T) {
-		call := NewCall("endpoint1", "function2", Int(11))
+		call := NewCall("endpoint1", "function2", Input(Int(11)))
 
 		if got := call.Endpoint(); got != "endpoint1" {
 			t.Errorf("unexpected call endpoint: %v", got)
@@ -46,8 +46,11 @@ func TestCall(t *testing.T) {
 	})
 
 	t.Run("with options", func(t *testing.T) {
-		call := NewCall("endpoint1", "function2", Int(11),
-			CorrelationID(1234), Expiration(10*time.Second), Version("xyzzy"))
+		call := NewCall("endpoint1", "function2",
+			Input(Int(11)),
+			CorrelationID(1234),
+			Expiration(10*time.Second),
+			Version("xyzzy"))
 
 		if got := call.Endpoint(); got != "endpoint1" {
 			t.Errorf("unexpected call endpoint: %v", got)

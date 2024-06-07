@@ -207,7 +207,7 @@ func (d *dispatchFunctionServiceHandler) Run(ctx context.Context, req *connect.R
 	var res Response
 	fn := d.dispatch.lookupFunction(req.Msg.Function)
 	if fn == nil {
-		res = NewResponseWithErrorf("%w: function %q not found", ErrNotFound, req.Msg.Function)
+		res = NewResponseErrorf("%w: function %q not found", ErrNotFound, req.Msg.Function)
 	} else {
 		res = fn.Run(ctx, Request{req.Msg})
 	}

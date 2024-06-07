@@ -68,14 +68,15 @@ func (s Status) GoString() string {
 // The object can provide a status by implementing
 // interface{ Status() Status }.
 func StatusOf(v any) Status {
-	if s, ok := v.(status); ok {
-		return s.Status()
-	}
 	if e, ok := v.(error); ok {
 		var s status
 		if errors.As(e, &s) {
 			return s.Status()
 		}
+		return ErrorStatus(e)
 	}
-	return UnspecifiedStatus
+	if s, ok := v.(status); ok {
+		return s.Status()
+	}
+	return OKStatus
 }
