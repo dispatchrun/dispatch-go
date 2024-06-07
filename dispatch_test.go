@@ -78,9 +78,12 @@ func TestDispatchCall(t *testing.T) {
 	recorder := &dispatchtest.CallRecorder{}
 	server := dispatchtest.NewDispatchServer(recorder)
 
-	endpoint, err := dispatch.New(
-		dispatch.WithEndpointUrl("http://example.com"),
-		dispatch.WithClientOptions(dispatch.WithAPIKey("foobar"), dispatch.WithAPIUrl(server.URL)))
+	client, err := dispatch.NewClient(dispatch.WithAPIKey("foobar"), dispatch.WithAPIUrl(server.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	endpoint, err := dispatch.New(dispatch.WithEndpointUrl("http://example.com"), dispatch.WithClient(client))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,12 +143,16 @@ func TestDispatchCallsBatch(t *testing.T) {
 
 	server := dispatchtest.NewDispatchServer(&recorder)
 
-	endpoint, err := dispatch.New(
-		dispatch.WithEndpointUrl("http://example.com"),
-		dispatch.WithClientOptions(dispatch.WithAPIKey("foobar"), dispatch.WithAPIUrl(server.URL)))
+	client, err := dispatch.NewClient(dispatch.WithAPIKey("foobar"), dispatch.WithAPIUrl(server.URL))
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	endpoint, err := dispatch.New(dispatch.WithEndpointUrl("http://example.com"), dispatch.WithClient(client))
+	if err != nil {
+		t.Fatal(err)
+	}
+	client = nil
 
 	fn1 := dispatch.NewPrimitiveFunction("function1", func(ctx context.Context, req dispatch.Request) dispatch.Response {
 		panic("not implemented")
@@ -166,7 +173,7 @@ func TestDispatchCallsBatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	client, err := endpoint.Client()
+	client, err = endpoint.Client()
 	if err != nil {
 		t.Fatal(err)
 	}

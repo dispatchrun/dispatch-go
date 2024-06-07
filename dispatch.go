@@ -157,19 +157,10 @@ func WithEnv(env ...string) DispatchOption {
 // Binding a Client allows functions calls to be directly dispatched from
 // functions registered with the endpoint, via function.Dispatch(...).
 //
-// The Dispatch endpoint can alternatively be configured with a set of
-// client options, via WithClientOptions.
+// The Dispatch endpoint will attempt to create a Client automatically,
+// using configuration from the environment.
 func WithClient(client *Client) DispatchOption {
 	return func(d *Dispatch) { d.client = client }
-}
-
-// WithClientOptions sets options for the Client bound to the Dispatch
-// endpoint.
-//
-// Binding a Client allows functions calls to be directly dispatched from
-// functions registered with the endpoint, via function.Dispatch(...).
-func WithClientOptions(opts ...ClientOption) DispatchOption {
-	return func(d *Dispatch) { d.clientOpts = opts }
 }
 
 // Register registers a function.
