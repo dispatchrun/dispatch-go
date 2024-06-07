@@ -14,13 +14,13 @@ import (
 func TestDispatchEndpoint(t *testing.T) {
 	signingKey, verificationKey := dispatchtest.KeyPair()
 
-	endpoint, server, err := dispatchtest.NewEndpoint(dispatch.WithVerificationKey(verificationKey))
+	endpoint, server, err := dispatchtest.NewEndpoint(dispatch.VerificationKey(verificationKey))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer server.Close()
 
-	client, err := server.Client(dispatchtest.WithSigningKey(signingKey))
+	client, err := server.Client(dispatchtest.SigningKey(signingKey))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,12 +78,12 @@ func TestDispatchCall(t *testing.T) {
 	recorder := &dispatchtest.CallRecorder{}
 	server := dispatchtest.NewDispatchServer(recorder)
 
-	client, err := dispatch.NewClient(dispatch.WithAPIKey("foobar"), dispatch.WithAPIUrl(server.URL))
+	client, err := dispatch.NewClient(dispatch.APIKey("foobar"), dispatch.APIUrl(server.URL))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	endpoint, err := dispatch.New(dispatch.WithEndpointUrl("http://example.com"), dispatch.WithClient(client))
+	endpoint, err := dispatch.New(dispatch.EndpointUrl("http://example.com"), client)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestDispatchCallEnvConfig(t *testing.T) {
 	recorder := &dispatchtest.CallRecorder{}
 	server := dispatchtest.NewDispatchServer(recorder)
 
-	endpoint, err := dispatch.New(dispatch.WithEnv(
+	endpoint, err := dispatch.New(dispatch.Env(
 		"DISPATCH_ENDPOINT_URL=http://example.com",
 		"DISPATCH_API_KEY=foobar",
 		"DISPATCH_API_URL="+server.URL,
@@ -143,12 +143,12 @@ func TestDispatchCallsBatch(t *testing.T) {
 
 	server := dispatchtest.NewDispatchServer(&recorder)
 
-	client, err := dispatch.NewClient(dispatch.WithAPIKey("foobar"), dispatch.WithAPIUrl(server.URL))
+	client, err := dispatch.NewClient(dispatch.APIKey("foobar"), dispatch.APIUrl(server.URL))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	endpoint, err := dispatch.New(dispatch.WithEndpointUrl("http://example.com"), dispatch.WithClient(client))
+	endpoint, err := dispatch.New(dispatch.EndpointUrl("http://example.com"), client)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,21 +192,21 @@ func TestDispatchCallsBatch(t *testing.T) {
 
 func TestDispatchEndpointURL(t *testing.T) {
 	t.Run("missing", func(t *testing.T) {
-		_, err := dispatch.New(dispatch.WithEnv( /* i.e. no env vars */ ))
-		if err == nil || err.Error() != "Dispatch endpoint URL has not been set. Use WithEndpointUrl(..), or set the DISPATCH_ENDPOINT_URL environment variable" {
+		_, err := dispatch.New(dispatch.Env( /* i.e. no env vars */ ))
+		if err == nil || err.Error() != "Dispatch endpoint URL has not been set. Use EndpointUrl(..), or set the DISPATCH_ENDPOINT_URL environment variable" {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 
 	t.Run("invalid", func(t *testing.T) {
-		_, err := dispatch.New(dispatch.WithEndpointUrl(":://::"))
-		if err == nil || err.Error() != "invalid endpoint URL provided via WithEndpointUrl: :://::" {
+		_, err := dispatch.New(dispatch.EndpointUrl(":://::"))
+		if err == nil || err.Error() != "invalid endpoint URL provided via EndpointUrl(..): :://::" {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 
 	t.Run("invalid env", func(t *testing.T) {
-		_, err := dispatch.New(dispatch.WithEnv(
+		_, err := dispatch.New(dispatch.Env(
 			"DISPATCH_ENDPOINT_URL=:://::",
 		))
 		if err == nil || err.Error() != "invalid DISPATCH_ENDPOINT_URL: :://::" {
@@ -218,21 +218,21 @@ func TestDispatchEndpointURL(t *testing.T) {
 func TestDispatchVerificationKey(t *testing.T) {
 	t.Run("missing", func(t *testing.T) {
 		// It's not an error to omit the verification key.
-		_, err := dispatch.New(dispatch.WithEndpointUrl("http://example.com"))
+		_, err := dispatch.New(dispatch.EndpointUrl("http://example.com"))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 
 	t.Run("invalid", func(t *testing.T) {
-		_, err := dispatch.New(dispatch.WithEndpointUrl("http://example.com"), dispatch.WithVerificationKey("foo"))
-		if err == nil || err.Error() != "invalid verification key provided via WithVerificationKey: foo" {
+		_, err := dispatch.New(dispatch.EndpointUrl("http://example.com"), dispatch.VerificationKey("foo"))
+		if err == nil || err.Error() != "invalid verification key provided via VerificationKey(..): foo" {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 
 	t.Run("invalid env", func(t *testing.T) {
-		_, err := dispatch.New(dispatch.WithEnv(
+		_, err := dispatch.New(dispatch.Env(
 			"DISPATCH_ENDPOINT_URL=http://example.com",
 			"DISPATCH_VERIFICATION_KEY=foo",
 		))

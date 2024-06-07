@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"slices"
 	"strings"
 	"sync"
 
@@ -44,30 +43,24 @@ func New(opts ...DispatchOption) (*Dispatch, error) {
 		functions: map[string]Function{},
 	}
 	for _, opt := range opts {
-		opt(d)
+		opt.configureDispatch(d)
 	}
 
 	// Prepare the endpoint URL.
-	var endpointUrlFromEnv string
+	var endpointUrlFromEnv bool
 	if d.endpointUrl == "" {
 		d.endpointUrl = getenv(d.env, "DISPATCH_ENDPOINT_URL")
-		endpointUrlFromEnv = "DISPATCH_ENDPOINT_URL"
+		endpointUrlFromEnv = true
 	}
 	if d.endpointUrl == "" {
-		if endpointAddr := getenv(d.env, "DISPATCH_ENDPOINT_ADDR"); endpointAddr != "" {
-			d.endpointUrl = fmt.Sprintf("http://%s", endpointAddr)
-			endpointUrlFromEnv = "DISPATCH_ENDPOINT_ADDR"
-		}
-	}
-	if d.endpointUrl == "" {
-		return nil, fmt.Errorf("Dispatch endpoint URL has not been set. Use WithEndpointUrl(..), or set the DISPATCH_ENDPOINT_URL environment variable")
+		return nil, fmt.Errorf("Dispatch endpoint URL has not been set. Use EndpointUrl(..), or set the DISPATCH_ENDPOINT_URL environment variable")
 	}
 	_, err := url.Parse(d.endpointUrl)
 	if err != nil {
-		if endpointUrlFromEnv != "" {
-			return nil, fmt.Errorf("invalid %s: %v", endpointUrlFromEnv, d.endpointUrl)
+		if endpointUrlFromEnv {
+			return nil, fmt.Errorf("invalid DISPATCH_ENDPOINT_URL: %v", d.endpointUrl)
 		}
-		return nil, fmt.Errorf("invalid endpoint URL provided via WithEndpointUrl: %v", d.endpointUrl)
+		return nil, fmt.Errorf("invalid endpoint URL provided via EndpointUrl(..): %v", d.endpointUrl)
 	}
 
 	// Prepare the address to serve on.
@@ -92,7 +85,7 @@ func New(opts ...DispatchOption) (*Dispatch, error) {
 			if verificationKeyFromEnv {
 				return nil, fmt.Errorf("invalid DISPATCH_VERIFICATION_KEY: %v", d.verificationKey)
 			}
-			return nil, fmt.Errorf("invalid verification key provided via WithVerificationKey: %v", d.verificationKey)
+			return nil, fmt.Errorf("invalid verification key provided via VerificationKey(..): %v", d.verificationKey)
 		}
 	}
 
@@ -118,7 +111,7 @@ func New(opts ...DispatchOption) (*Dispatch, error) {
 	// Optionally attach a client.
 	if d.client == nil {
 		var err error
-		d.client, err = NewClient(append(d.clientOpts, WithClientEnv(d.env...))...)
+		d.client, err = NewClient(append(d.clientOpts, Env(d.env...))...)
 		if err != nil {
 			slog.Debug("failed to setup client for the Dispatch endpoint", "error", err)
 			d.clientErr = err
@@ -129,17 +122,25 @@ func New(opts ...DispatchOption) (*Dispatch, error) {
 }
 
 // DispatchOption configures a Dispatch endpoint.
-type DispatchOption func(d *Dispatch)
+type DispatchOption interface {
+	configureDispatch(d *Dispatch)
+}
 
-// WithEndpointUrl sets the URL of the Dispatch endpoint.
+type dispatchOptionFunc func(d *Dispatch)
+
+func (fn dispatchOptionFunc) configureDispatch(d *Dispatch) {
+	fn(d)
+}
+
+// EndpointUrl sets the URL of the Dispatch endpoint.
 //
 // It defaults to the value of the DISPATCH_ENDPOINT_URL environment
 // variable.
-func WithEndpointUrl(endpointUrl string) DispatchOption {
-	return func(d *Dispatch) { d.endpointUrl = endpointUrl }
+func EndpointUrl(endpointUrl string) DispatchOption {
+	return dispatchOptionFunc(func(d *Dispatch) { d.endpointUrl = endpointUrl })
 }
 
-// WithVerificationKey sets the verification key to use when verifying
+// VerificationKey sets the verification key to use when verifying
 // Dispatch request signatures.
 //
 // The key should be a PEM or base64-encoded ed25519 public key.
@@ -149,30 +150,11 @@ func WithEndpointUrl(endpointUrl string) DispatchOption {
 //
 // If a verification key is not provided, request signatures will
 // not be validated.
-func WithVerificationKey(verificationKey string) DispatchOption {
-	return func(d *Dispatch) { d.verificationKey = verificationKey }
+func VerificationKey(verificationKey string) DispatchOption {
+	return dispatchOptionFunc(func(d *Dispatch) { d.verificationKey = verificationKey })
 }
 
-// WithEnv sets the environment variables that a Dispatch endpoint
-// parses its default configuration from.
-//
-// It defaults to os.Environ().
-func WithEnv(env ...string) DispatchOption {
-	return func(d *Dispatch) { d.env = slices.Clone(env) }
-}
-
-// WithClient binds a Client to a Dispatch endpoint.
-//
-// Binding a Client allows functions calls to be directly dispatched from
-// functions registered with the endpoint, via function.Dispatch(...).
-//
-// The Dispatch endpoint will attempt to create a Client automatically,
-// using configuration from the environment.
-func WithClient(client *Client) DispatchOption {
-	return func(d *Dispatch) { d.client = client }
-}
-
-// WithServeAddress sets the address that the Dispatch endpoint
+// ServeAddress sets the address that the Dispatch endpoint
 // is served on (see Dispatch.Serve).
 //
 // Note that this is not the same as the endpoint URL, which is the
@@ -181,8 +163,8 @@ func WithClient(client *Client) DispatchOption {
 // It defaults to the value of the DISPATCH_ENDPOINT_ADDR environment
 // variable, which is automatically set by the Dispatch CLI. If this
 // is unset, it defaults to 127.0.0.1:8000.
-func WithServeAddress(addr string) DispatchOption {
-	return func(d *Dispatch) { d.serveAddr = addr }
+func ServeAddress(addr string) DispatchOption {
+	return dispatchOptionFunc(func(d *Dispatch) { d.serveAddr = addr })
 }
 
 // Register registers a function.

@@ -25,7 +25,7 @@ func NewEndpoint(opts ...dispatch.DispatchOption) (*dispatch.Dispatch, *Endpoint
 	mux := http.NewServeMux()
 	server := httptest.NewServer(mux)
 
-	opts = append(opts, dispatch.WithEndpointUrl(server.URL))
+	opts = append(opts, dispatch.EndpointUrl(server.URL))
 	endpoint, err := dispatch.New(opts...)
 	if err != nil {
 		server.Close()
@@ -100,14 +100,14 @@ func NewEndpointClient(endpointUrl string, opts ...EndpointClientOption) (*Endpo
 // EndpointClientOption configures an EndpointClient.
 type EndpointClientOption func(*EndpointClient)
 
-// WithSigningKey sets the signing key to use when signing requests bound
+// SigningKey sets the signing key to use when signing requests bound
 // for the endpoint.
 //
 // The signing key should be a base64-encoded ed25519.PrivateKey, e.g.
 // one provided by the KeyPair helper function.
 //
 // By default the EndpointClient does not sign requests to the endpoint.
-func WithSigningKey(signingKey string) EndpointClientOption {
+func SigningKey(signingKey string) EndpointClientOption {
 	return func(c *EndpointClient) { c.signingKey = signingKey }
 }
 

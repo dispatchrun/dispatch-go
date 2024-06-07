@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"slices"
-	"strings"
 
 	"buf.build/gen/go/stealthrocket/dispatch-proto/connectrpc/go/dispatch/sdk/v1/sdkv1connect"
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
@@ -33,7 +31,7 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 		env: os.Environ(),
 	}
 	for _, opt := range opts {
-		opt(c)
+		opt.configureClient(c)
 	}
 
 	if c.apiKey == "" {
@@ -41,7 +39,7 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 		c.apiKeyFromEnv = true
 	}
 	if c.apiKey == "" {
-		return nil, fmt.Errorf("Dispatch API key has not been set. Use WithAPIKey(..), or set the DISPATCH_API_KEY environment variable")
+		return nil, fmt.Errorf("Dispatch API key has not been set. Use APIKey(..), or set the DISPATCH_API_KEY environment variable")
 	}
 
 	if c.apiUrl == "" {
@@ -75,34 +73,34 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 }
 
 // ClientOption configures a Client.
-type ClientOption func(*Client)
+type ClientOption interface {
+	configureClient(d *Client)
+}
 
-// WithAPIKey sets the Dispatch API key to use for authentication when
+type clientOptionFunc func(d *Client)
+
+func (fn clientOptionFunc) configureClient(d *Client) {
+	fn(d)
+}
+
+// APIKey sets the Dispatch API key to use for authentication when
 // dispatching function calls through a Client.
 //
 // It defaults to the value of the DISPATCH_API_KEY environment variable.
-func WithAPIKey(apiKey string) ClientOption {
-	return func(c *Client) { c.apiKey = apiKey }
+func APIKey(apiKey string) ClientOption {
+	return clientOptionFunc(func(c *Client) { c.apiKey = apiKey })
 }
 
-// WithAPIUrl sets the URL of the Dispatch API.
+// APIUrl sets the URL of the Dispatch API.
 //
 // It defaults to the value of the DISPATCH_API_URL environment variable,
 // or DefaultApiUrl if DISPATCH_API_URL is unset.
-func WithAPIUrl(apiUrl string) ClientOption {
-	return func(c *Client) { c.apiUrl = apiUrl }
+func APIUrl(apiUrl string) ClientOption {
+	return clientOptionFunc(func(c *Client) { c.apiUrl = apiUrl })
 }
 
 // DefaultApiUrl is the default Dispatch API URL.
 const DefaultApiUrl = "https://api.dispatch.run"
-
-// WithClientEnv sets the environment variables that a Client parses
-// its default configuration from.
-//
-// It defaults to os.Environ().
-func WithClientEnv(env ...string) ClientOption {
-	return func(c *Client) { c.env = slices.Clone(env) }
-}
 
 // Dispatch dispatches a function call.
 func (c *Client) Dispatch(ctx context.Context, call Call) (ID, error) {
@@ -113,6 +111,10 @@ func (c *Client) Dispatch(ctx context.Context, call Call) (ID, error) {
 		return "", err
 	}
 	return ids[0], nil
+}
+
+func (c *Client) configureDispatch(d *Dispatch) {
+	d.client = c
 }
 
 // Batch creates a Batch.
@@ -149,7 +151,7 @@ func (b *Batch) Dispatch(ctx context.Context) ([]ID, error) {
 			if b.client.apiKeyFromEnv {
 				return nil, fmt.Errorf("invalid DISPATCH_API_KEY: %s", redactAPIKey(b.client.apiKey))
 			}
-			return nil, fmt.Errorf("invalid Dispatch API key provided with WithAPIKey(): %s", redactAPIKey(b.client.apiKey))
+			return nil, fmt.Errorf("invalid Dispatch API key provided with APIKey(..): %s", redactAPIKey(b.client.apiKey))
 		}
 		return nil, err
 	}
@@ -158,17 +160,6 @@ func (b *Batch) Dispatch(ctx context.Context) ([]ID, error) {
 		ids[i] = ID(id)
 	}
 	return ids, nil
-}
-
-func getenv(env []string, name string) string {
-	var value string
-	for _, s := range env {
-		n, v, ok := strings.Cut(s, "=")
-		if ok && n == name {
-			value = v
-		}
-	}
-	return value
 }
 
 func redactAPIKey(s string) string {

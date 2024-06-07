@@ -86,7 +86,7 @@ func TestPrimitiveFunctionDispatchWithoutClient(t *testing.T) {
 	// It's not necessary to have valid Client configuration when
 	// creating a Dispatch endpoint. In this case, there's no
 	// Dispatch API key available.
-	endpoint, err := dispatch.New(dispatch.WithEndpointUrl("http://example.com"), dispatch.WithEnv( /* i.e. no env vars */ ))
+	endpoint, err := dispatch.New(dispatch.EndpointUrl("http://example.com"), dispatch.Env( /* i.e. no env vars */ ))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestPrimitiveFunctionDispatchWithoutClient(t *testing.T) {
 	_, err = fn.Dispatch(context.Background(), dispatch.String("bar"))
 	if err == nil {
 		t.Fatal("expected an error")
-	} else if err.Error() != "cannot dispatch function call: Dispatch API key has not been set. Use WithAPIKey(..), or set the DISPATCH_API_KEY environment variable" {
+	} else if err.Error() != "cannot dispatch function call: Dispatch API key has not been set. Use APIKey(..), or set the DISPATCH_API_KEY environment variable" {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -114,7 +114,7 @@ func TestFunctionDispatchWithoutClient(t *testing.T) {
 	// It's not necessary to have valid Client configuration when
 	// creating a Dispatch endpoint. In this case, there's no
 	// Dispatch API key available.
-	endpoint, err := dispatch.New(dispatch.WithEndpointUrl("http://example.com"), dispatch.WithEnv( /* i.e. no env vars */ ))
+	endpoint, err := dispatch.New(dispatch.EndpointUrl("http://example.com"), dispatch.Env( /* i.e. no env vars */ ))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +133,7 @@ func TestFunctionDispatchWithoutClient(t *testing.T) {
 	_, err = fn.Dispatch(context.Background(), wrapperspb.String("bar"))
 	if err == nil {
 		t.Fatal("expected an error")
-	} else if err.Error() != "cannot dispatch function call: Dispatch API key has not been set. Use WithAPIKey(..), or set the DISPATCH_API_KEY environment variable" {
+	} else if err.Error() != "cannot dispatch function call: Dispatch API key has not been set. Use APIKey(..), or set the DISPATCH_API_KEY environment variable" {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
