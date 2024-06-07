@@ -99,7 +99,7 @@ func TestStatus(t *testing.T) {
 		},
 	} {
 		t.Run(test.string, func(t *testing.T) {
-			if got := test.status.proto(); got != test.proto {
+			if got := sdkv1.Status(test.status); got != test.proto {
 				t.Errorf("unexpected proto status: got %v, want %v", got, test.proto)
 			}
 			if got := test.status.String(); got != test.string {

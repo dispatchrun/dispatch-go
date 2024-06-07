@@ -49,10 +49,6 @@ var statusNames = [...]string{
 	NotFoundStatus:          "NotFound",
 }
 
-func (s Status) proto() sdkv1.Status {
-	return sdkv1.Status(s)
-}
-
 func (s Status) String() string {
 	if s < 0 || int(s) >= len(statusNames) {
 		return fmt.Sprintf("Status(%d)", int(s))
@@ -67,19 +63,19 @@ func (s Status) GoString() string {
 	return statusNames[s] + "Status"
 }
 
-func statusOf(v any) Status {
-	if s, ok := v.(hasStatus); ok {
+// StatusOf returns the Status associated with an object.
+//
+// The object can provide a status by implementing
+// interface{ Status() Status }.
+func StatusOf(v any) Status {
+	if s, ok := v.(status); ok {
 		return s.Status()
 	}
 	if e, ok := v.(error); ok {
-		var s hasStatus
+		var s status
 		if errors.As(e, &s) {
 			return s.Status()
 		}
 	}
 	return UnspecifiedStatus
-}
-
-type hasStatus interface {
-	Status() Status
 }

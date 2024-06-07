@@ -717,7 +717,7 @@ type Response struct {
 // NewResponse creates a Response.
 func NewResponse(status Status, directive ResponseDirective) Response {
 	response := Response{&sdkv1.RunResponse{
-		Status: status.proto(),
+		Status: sdkv1.Status(status),
 	}}
 	switch d := directive.(type) {
 	case Exit:
@@ -734,10 +734,16 @@ func NewResponse(status Status, directive ResponseDirective) Response {
 func NewResponseWithOutput(output Any) Response {
 	result := NewCallResult(WithOutput(output))
 	exit := NewExit(WithResult(result))
-	status := statusOf(output)
+
+	// FIXME: the interface{ Status() Status } implementation
+	//  is lost earlier when an any is converted to Any. Do
+	//  the conversion here, so that the original object (and status)
+	//  is available.
+	status := StatusOf(output)
 	if status == UnspecifiedStatus {
 		status = OKStatus
 	}
+
 	return NewResponse(status, exit)
 }
 
