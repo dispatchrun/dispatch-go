@@ -1,7 +1,6 @@
 package dispatch
 
 import (
-	"bytes"
 	"fmt"
 	"time"
 	_ "unsafe"
@@ -88,18 +87,7 @@ func (c Call) String() string {
 
 // Equal is true if the call is equal to another.
 func (c Call) Equal(other Call) bool {
-	if (c.proto == nil) != (other.proto == nil) {
-		return false
-	}
-	if c.proto == nil {
-		return true
-	}
-	return c.Endpoint() == other.Endpoint() &&
-		c.Function() == other.Function() &&
-		c.CorrelationID() == other.CorrelationID() &&
-		c.Expiration() == other.Expiration() &&
-		c.Version() == other.Version() &&
-		c.Input().Equal(other.Input())
+	return proto.Equal(c.proto, other.proto)
 }
 
 // CallResult is a function call result.
@@ -174,20 +162,7 @@ func (r CallResult) String() string {
 
 // Equal is true if the call result is equal to another.
 func (r CallResult) Equal(other CallResult) bool {
-	if (r.proto == nil) != (other.proto == nil) {
-		return false
-	}
-	if r.proto == nil {
-		return true
-	}
-	output, _ := r.Output()
-	otherOutput, _ := other.Output()
-	error, _ := r.Error()
-	otherError, _ := other.Error()
-	return r.CorrelationID() == other.CorrelationID() &&
-		r.ID() == other.ID() &&
-		output.Equal(otherOutput) &&
-		error.Equal(otherError)
+	return proto.Equal(r.proto, other.proto)
 }
 
 // Error is an error that occurred during execution of a function.
@@ -264,16 +239,7 @@ func (e Error) String() string {
 
 // Equal is true if the error is equal to another.
 func (e Error) Equal(other Error) bool {
-	if (e.proto == nil) != (other.proto == nil) {
-		return false
-	}
-	if e.proto == nil {
-		return true
-	}
-	return e.Type() == other.Type() &&
-		e.Message() == other.Message() &&
-		bytes.Equal(e.Value(), other.Value()) &&
-		bytes.Equal(e.Traceback(), other.Traceback())
+	return proto.Equal(e.proto, other.proto)
 }
 
 // Exit is a directive that terminates a function call.
@@ -344,12 +310,7 @@ func (e Exit) String() string {
 
 // Equal is true if an Exit directive is equal to another.
 func (e Exit) Equal(other Exit) bool {
-	result, _ := e.Result()
-	otherResult, _ := other.Result()
-	tailCall, _ := e.TailCall()
-	otherTailCall, _ := other.TailCall()
-	return result.Equal(otherResult) &&
-		tailCall.Equal(otherTailCall)
+	return proto.Equal(e.proto, other.proto)
 }
 
 // Poll is a general purpose directive used to spawn
@@ -437,20 +398,7 @@ func (p Poll) String() string {
 
 // Equal is true if the poll directive is equal to another.
 func (p Poll) Equal(other Poll) bool {
-	calls := p.Calls()
-	otherCalls := other.Calls()
-	if len(calls) != len(otherCalls) {
-		return false
-	}
-	for i := range calls {
-		if !calls[i].Equal(otherCalls[i]) {
-			return false
-		}
-	}
-	return p.MinResults() == other.MinResults() &&
-		p.MaxResults() == other.MaxResults() &&
-		p.MaxWait() == other.MaxWait() &&
-		bytes.Equal(p.CoroutineState(), other.CoroutineState())
+	return proto.Equal(p.proto, other.proto)
 }
 
 // PollResult is the result of a poll operation.
@@ -524,20 +472,7 @@ func (r PollResult) String() string {
 
 // Equal is true if the poll result is equal to another.
 func (r PollResult) Equal(other PollResult) bool {
-	results := r.Results()
-	otherResults := other.Results()
-	if len(results) != len(otherResults) {
-		return false
-	}
-	for i := range results {
-		if !results[i].Equal(otherResults[i]) {
-			return false
-		}
-	}
-	error, _ := r.Error()
-	otherError, _ := other.Error()
-	return error.Equal(otherError) &&
-		bytes.Equal(r.CoroutineState(), other.CoroutineState())
+	return proto.Equal(r.proto, other.proto)
 }
 
 // Request is a request from Dispatch to run a function.
@@ -684,25 +619,7 @@ func (r Request) String() string {
 
 // Equal is true if the request is equal to another.
 func (r Request) Equal(other Request) bool {
-	if r.proto == nil && other.proto == nil {
-		return false
-	}
-	input, _ := r.Input()
-	otherInput, _ := other.Input()
-	pollResult, _ := r.PollResult()
-	otherPollResult, _ := other.PollResult()
-	creation, _ := r.CreationTime()
-	otherCreation, _ := other.CreationTime()
-	expiration, _ := r.ExpirationTime()
-	otherExpiration, _ := other.ExpirationTime()
-	return r.Function() == other.Function() &&
-		input.Equal(otherInput) &&
-		pollResult.Equal(otherPollResult) &&
-		creation.Equal(otherCreation) &&
-		expiration.Equal(otherExpiration) &&
-		r.ID() == other.ID() &&
-		r.ParentID() == other.ParentID() &&
-		r.RootID() == other.RootID()
+	return proto.Equal(r.proto, other.proto)
 }
 
 // Response is a response to Dispatch after a function has run.
@@ -823,15 +740,7 @@ func (r Response) String() string {
 
 // Equal is true if the response is equal to another.
 func (r Response) Equal(other Response) bool {
-	if r.Status() != other.Status() {
-		return false
-	}
-	exit, _ := r.Exit()
-	otherExit, _ := r.Exit()
-	poll, _ := r.Poll()
-	otherPoll, _ := r.Poll()
-	return exit.Equal(otherExit) &&
-		poll.Equal(otherPoll)
+	return proto.Equal(r.proto, other.proto)
 }
 
 // Marshal marshals the response.
