@@ -17,8 +17,9 @@ import (
 // EndpointClient is a client for a Dispatch endpoint.
 //
 // Note that this is not the same as dispatch.Client, which
-// is a client for the Dispatch API. The client here is
-// useful when testing a Dispatch endpoint.
+// is a client for the Dispatch API. The client here is used
+// by a Dispatch server to interact with the functions provided
+// by a Dispatch endpoint.
 type EndpointClient struct {
 	httpClient connect.HTTPClient
 	signingKey ed25519.PrivateKey
