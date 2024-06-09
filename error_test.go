@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"connectrpc.com/connect"
 	"github.com/dispatchrun/dispatch-go"
 )
 
@@ -701,6 +702,147 @@ func TestErrorStatus(t *testing.T) {
 				return err
 			},
 			status: dispatch.InvalidResponseStatus,
+		},
+
+		// The SDK uses the connect library when remotely interacting with functions.
+		// Connect uses gRPC error codes. Check that the correct Dispatch status is
+		// derived from these error codes.
+
+		{
+			scenario: "connect.CodeCanceled",
+			error: func(*testing.T) error {
+				return connect.NewError(connect.CodeCanceled, errors.New("the request was canceled"))
+			},
+			status: dispatch.TimeoutStatus,
+		},
+
+		{
+			scenario: "connect.CodeUnknown",
+			error: func(*testing.T) error {
+				return connect.NewError(connect.CodeUnknown, errors.New("unknown"))
+			},
+			status: dispatch.TemporaryErrorStatus,
+		},
+
+		{
+			scenario: "connect.CodeInvalidArgument",
+			error: func(*testing.T) error {
+				underlying := connect.NewError(connect.CodeInvalidArgument, errors.New("invalid argument"))
+				return fmt.Errorf("something went wrong: %w", underlying)
+			},
+			status: dispatch.InvalidArgumentStatus,
+		},
+
+		{
+			scenario: "connect.CodeDeadlineExceeded",
+			error: func(*testing.T) error {
+				return connect.NewError(connect.CodeDeadlineExceeded, errors.New("deadline exceeded"))
+			},
+			status: dispatch.TimeoutStatus,
+		},
+
+		{
+			scenario: "connect.CodeNotFound",
+			error: func(*testing.T) error {
+				return connect.NewError(connect.CodeNotFound, errors.New("not found"))
+			},
+			status: dispatch.NotFoundStatus,
+		},
+
+		{
+			scenario: "connect.CodeAlreadyExists",
+			error: func(*testing.T) error {
+				return connect.NewError(connect.CodeAlreadyExists, errors.New("already exists"))
+			},
+			status: dispatch.PermanentErrorStatus,
+		},
+
+		{
+			scenario: "connect.CodePermissionDenied",
+			error: func(*testing.T) error {
+				return connect.NewError(connect.CodePermissionDenied, errors.New("permission denied"))
+			},
+			status: dispatch.PermissionDeniedStatus,
+		},
+
+		{
+			scenario: "connect.CodeResourceExhausted",
+			error: func(*testing.T) error {
+				return connect.NewError(connect.CodeResourceExhausted, errors.New("resource exhausted"))
+			},
+			status: dispatch.ThrottledStatus,
+		},
+
+		{
+			scenario: "connect.CodeFailedPrecondition",
+			error: func(*testing.T) error {
+				return connect.NewError(connect.CodeFailedPrecondition, errors.New("failed precondition"))
+			},
+			status: dispatch.PermanentErrorStatus,
+		},
+
+		{
+			scenario: "connect.CodeAborted",
+			error: func(*testing.T) error {
+				return connect.NewError(connect.CodeAborted, errors.New("aborted"))
+			},
+			status: dispatch.PermanentErrorStatus,
+		},
+
+		{
+			scenario: "connect.CodeOutOfRange",
+			error: func(*testing.T) error {
+				return connect.NewError(connect.CodeOutOfRange, errors.New("out of range"))
+			},
+			status: dispatch.InvalidArgumentStatus,
+		},
+
+		{
+			scenario: "connect.CodeUnimplemented",
+			error: func(*testing.T) error {
+				return connect.NewError(connect.CodeUnimplemented, errors.New("unimplemented"))
+			},
+			status: dispatch.NotFoundStatus,
+		},
+
+		{
+			scenario: "connect.CodeInternal",
+			error: func(*testing.T) error {
+				return connect.NewError(connect.CodeInternal, errors.New("internal"))
+			},
+			status: dispatch.TemporaryErrorStatus,
+		},
+
+		{
+			scenario: "connect.CodeUnavailable",
+			error: func(*testing.T) error {
+				return connect.NewError(connect.CodeUnavailable, errors.New("unavailable"))
+			},
+			status: dispatch.TemporaryErrorStatus,
+		},
+
+		{
+			scenario: "connect.CodeDataLoss",
+			error: func(*testing.T) error {
+				return connect.NewError(connect.CodeDataLoss, errors.New("data loss"))
+			},
+			status: dispatch.PermanentErrorStatus,
+		},
+
+		{
+			scenario: "connect.CodeUnauthenticated",
+			error: func(*testing.T) error {
+				return connect.NewError(connect.CodeUnauthenticated, errors.New("unauthenticated"))
+			},
+			status: dispatch.UnauthenticatedStatus,
+		},
+
+		{
+			scenario: "connect.CodeUnauthenticated",
+			error: func(*testing.T) error {
+				return connect.NewError(connect.Code(9999), errors.New("unknown"))
+			},
+			status: dispatch.PermanentErrorStatus,
 		},
 
 		// The default behavior is to assume permanent errors, but we still want
