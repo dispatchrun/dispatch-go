@@ -18,16 +18,43 @@ type Any struct {
 func NewAny(v any) (Any, error) {
 	var m proto.Message
 	switch vv := v.(type) {
+
 	case proto.Message:
 		m = vv
+
+	case bool:
+		m = wrapperspb.Bool(vv)
+
 	case int:
 		m = wrapperspb.Int64(int64(vv))
+	case int8:
+		m = wrapperspb.Int64(int64(vv))
+	case int16:
+		m = wrapperspb.Int64(int64(vv))
+	case int32:
+		m = wrapperspb.Int64(int64(vv))
+	case int64:
+		m = wrapperspb.Int64(vv)
+
+	case uint:
+		m = wrapperspb.UInt64(uint64(vv))
+	case uint8:
+		m = wrapperspb.UInt64(uint64(vv))
+	case uint16:
+		m = wrapperspb.UInt64(uint64(vv))
+	case uint32:
+		m = wrapperspb.UInt64(uint64(vv))
+	case uint64:
+		m = wrapperspb.UInt64(uint64(vv))
+
 	case string:
 		m = wrapperspb.String(vv)
+
 	default:
 		// TODO: support more types
 		return Any{}, fmt.Errorf("unsupported type: %T", v)
 	}
+
 	proto, err := anypb.New(m)
 	if err != nil {
 		return Any{}, err
@@ -35,18 +62,28 @@ func NewAny(v any) (Any, error) {
 	return Any{proto}, nil
 }
 
+// Bool creates an Any that contains a boolean value.
+func Bool(v bool) Any {
+	return mustNewAny(wrapperspb.Bool(v))
+}
+
 // Int creates an Any that contains an integer value.
 func Int(v int) Any {
-	any, err := NewAny(wrapperspb.Int64(int64(v)))
-	if err != nil {
-		panic(err)
-	}
-	return any
+	return mustNewAny(wrapperspb.Int64(int64(v)))
+}
+
+// Uint creates an Any that contains an unsigned integer value.
+func Uint(v uint) Any {
+	return mustNewAny(wrapperspb.UInt64(uint64(v)))
 }
 
 // String creates an Any that contains a string value.
 func String(v string) Any {
-	any, err := NewAny(wrapperspb.String(v))
+	return mustNewAny(wrapperspb.String(v))
+}
+
+func mustNewAny(v any) Any {
+	any, err := NewAny(v)
 	if err != nil {
 		panic(err)
 	}
@@ -77,12 +114,24 @@ func (a Any) Unmarshal(v any) error {
 	}
 
 	switch elem.Kind() {
-	case reflect.Int:
+	case reflect.Bool:
+		v, ok := m.(*wrapperspb.BoolValue)
+		if !ok {
+			return fmt.Errorf("cannot unmarshal %T into bool", m)
+		}
+		elem.SetBool(v.Value)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		v, ok := m.(*wrapperspb.Int64Value)
 		if !ok {
 			return fmt.Errorf("cannot unmarshal %T into int", m)
 		}
 		elem.SetInt(v.Value)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		v, ok := m.(*wrapperspb.UInt64Value)
+		if !ok {
+			return fmt.Errorf("cannot unmarshal %T into uint", m)
+		}
+		elem.SetUint(v.Value)
 	case reflect.String:
 		v, ok := m.(*wrapperspb.StringValue)
 		if !ok {
