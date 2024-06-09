@@ -22,6 +22,7 @@ import (
 type EndpointClient struct {
 	httpClient connect.HTTPClient
 	signingKey ed25519.PrivateKey
+	opts       []connect.ClientOption
 
 	client sdkv1connect.FunctionServiceClient
 }
@@ -48,7 +49,8 @@ func NewEndpointClient(endpointUrl string, opts ...EndpointClientOption) (*Endpo
 	if err != nil {
 		return nil, err
 	}
-	c.client = sdkv1connect.NewFunctionServiceClient(c.httpClient, endpointUrl, connect.WithInterceptors(validator))
+	c.opts = append(c.opts, connect.WithInterceptors(validator))
+	c.client = sdkv1connect.NewFunctionServiceClient(c.httpClient, endpointUrl, c.opts...)
 
 	return c, nil
 }
@@ -71,9 +73,21 @@ func HTTPClient(client connect.HTTPClient) EndpointClientOption {
 	return func(c *EndpointClient) { c.httpClient = client }
 }
 
+// ClientOptions sets options on the underlying connect (gRPC) client.
+func ClientOptions(opts ...connect.ClientOption) EndpointClientOption {
+	return func(c *EndpointClient) { c.opts = append(c.opts, opts...) }
+}
+
 // Run sends a RunRequest and returns a RunResponse.
-func (c *EndpointClient) Run(ctx context.Context, req dispatch.Request) (dispatch.Response, error) {
-	res, err := c.client.Run(ctx, connect.NewRequest(requestProto(req)))
+func (c *EndpointClient) Run(ctx context.Context, header http.Header, req dispatch.Request) (dispatch.Response, error) {
+	connectReq := connect.NewRequest(requestProto(req))
+
+	connectReqHeader := connectReq.Header()
+	for name, values := range header {
+		connectReqHeader[name] = values
+	}
+
+	res, err := c.client.Run(ctx, connectReq)
 	if err != nil {
 		return dispatch.Response{}, err
 	}
