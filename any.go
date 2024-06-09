@@ -91,7 +91,7 @@ func (a Any) Unmarshal(v any) error {
 		elem.SetString(v.Value)
 	default:
 		// TODO: support more types
-		return fmt.Errorf("unsupported type: %T", elem.Interface())
+		return fmt.Errorf("unsupported type: %v (%v kind)", elem.Type(), elem.Kind())
 	}
 	return nil
 }
