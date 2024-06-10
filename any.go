@@ -13,15 +13,65 @@ import (
 )
 
 // Any represents any value.
-type Any struct {
-	proto *anypb.Any
+type Any struct{ proto *anypb.Any }
+
+// Bool creates an Any that contains a boolean value.
+func Bool(v bool) Any {
+	return knownAny(wrapperspb.Bool(v))
+}
+
+// Int creates an Any that contains an integer value.
+func Int(v int64) Any {
+	// Note: we serialize all integers using wrapperspb.Int64, even
+	// though wrapperspb.Int32 is available. A variable-length
+	// format is used for the wire representation of the integer, so
+	// there's no penalty for using a wider variable-length type.
+	// It simplifies the implementation here and elsewhere if there's
+	// only one wrapper used.
+	return knownAny(wrapperspb.Int64(v))
+}
+
+// Uint creates an Any that contains an unsigned integer value.
+func Uint(v uint64) Any {
+	// See note above about 64-bit wrapper.
+	return knownAny(wrapperspb.UInt64(v))
+}
+
+// Float creates an Any that contains a floating point value.
+func Float(v float64) Any {
+	// See notes above. We also exclusively use the Double (float64)
+	// wrapper to carry 32-bit and 64-bit floats. Although there
+	// is a size penalty in some cases, we're not shipping around
+	// so many floats that this is an issue. Prefer simplifying the
+	// implementation here and elsewhere by limiting the number of
+	// wrappers that are used.
+	return knownAny(wrapperspb.Double(v))
+}
+
+// String creates an Any that contains a string value.
+func String(v string) Any {
+	return knownAny(wrapperspb.String(v))
+}
+
+// Bytes creates an Any that contains a bytes value.
+func Bytes(v []byte) Any {
+	return knownAny(wrapperspb.Bytes(v))
+}
+
+// Time creates an Any that contains a time value.
+func Time(v time.Time) Any {
+	return knownAny(timestamppb.New(v))
+}
+
+// Duration creates an Any that contains a duration value.
+func Duration(v time.Duration) Any {
+	return knownAny(durationpb.New(v))
 }
 
 // NewAny creates an Any from a proto.Message.
 func NewAny(v any) (Any, error) {
 	var m proto.Message
 	switch vv := v.(type) {
-
 	case proto.Message:
 		m = vv
 
@@ -78,60 +128,7 @@ func NewAny(v any) (Any, error) {
 	return Any{proto}, nil
 }
 
-// Bool creates an Any that contains a boolean value.
-func Bool(v bool) Any {
-	return mustNewAny(wrapperspb.Bool(v))
-}
-
-// Int creates an Any that contains an integer value.
-func Int(v int64) Any {
-	// Note: we serialize all integers using wrapperspb.Int64, even
-	// though wrapperspb.Int32 is available. A variable-length
-	// format is used for the wire representation of the integer, so
-	// there's no penalty for using a wider variable-length type.
-	// It simplifies the implementation here and elsewhere if there's
-	// only one wrapper used.
-	return mustNewAny(wrapperspb.Int64(v))
-}
-
-// Uint creates an Any that contains an unsigned integer value.
-func Uint(v uint64) Any {
-	// See note above about 64-bit wrapper.
-	return mustNewAny(wrapperspb.UInt64(v))
-}
-
-// Float creates an Any that contains a floating point value.
-func Float(v float64) Any {
-	// See notes above. We also exclusively use the Double (float64)
-	// wrapper to carry 32-bit and 64-bit floats. Although there
-	// is a size penalty in some cases, we're not shipping around
-	// so many floats that this is an issue. Prefer simplifying the
-	// implementation here and elsewhere by limiting the number of
-	// wrappers that are used.
-	return mustNewAny(wrapperspb.Double(v))
-}
-
-// String creates an Any that contains a string value.
-func String(v string) Any {
-	return mustNewAny(wrapperspb.String(v))
-}
-
-// Bytes creates an Any that contains a bytes value.
-func Bytes(v []byte) Any {
-	return mustNewAny(wrapperspb.Bytes(v))
-}
-
-// Time creates an Any that contains a time value.
-func Time(v time.Time) Any {
-	return mustNewAny(timestamppb.New(v))
-}
-
-// Duration creates an Any that contains a duration value.
-func Duration(v time.Duration) Any {
-	return mustNewAny(durationpb.New(v))
-}
-
-func mustNewAny(v any) Any {
+func knownAny(v any) Any {
 	any, err := NewAny(v)
 	if err != nil {
 		panic(err)
