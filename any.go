@@ -85,16 +85,29 @@ func Bool(v bool) Any {
 
 // Int creates an Any that contains an integer value.
 func Int(v int64) Any {
+	// Note: we serialize all integers using wrapperspb.Int64, even
+	// though wrapperspb.Int32 is available. A variable-length
+	// format is used for the wire representation of the integer, so
+	// there's no penalty for using a wider variable-length type.
+	// It simplifies the implementation here and elsewhere if there's
+	// only one wrapper used.
 	return mustNewAny(wrapperspb.Int64(v))
 }
 
 // Uint creates an Any that contains an unsigned integer value.
 func Uint(v uint64) Any {
+	// See note above about 64-bit wrapper.
 	return mustNewAny(wrapperspb.UInt64(v))
 }
 
 // Float creates an Any that contains a floating point value.
 func Float(v float64) Any {
+	// See notes above. We also exclusively use the Double (float64)
+	// wrapper to carry 32-bit and 64-bit floats. Although there
+	// is a size penalty in some cases, we're not shipping around
+	// so many floats that this is an issue. Prefer simplifying the
+	// implementation here and elsewhere by limiting the number of
+	// wrappers that are used.
 	return mustNewAny(wrapperspb.Double(v))
 }
 
