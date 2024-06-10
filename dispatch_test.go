@@ -2,6 +2,7 @@ package dispatch_test
 
 import (
 	"context"
+	"net/http"
 	"testing"
 	"time"
 
@@ -72,7 +73,7 @@ func TestDispatchEndpoint(t *testing.T) {
 
 func TestDispatchCall(t *testing.T) {
 	recorder := &dispatchtest.CallRecorder{}
-	server := dispatchtest.NewDispatchServer(recorder)
+	server := dispatchtest.NewServer(recorder)
 
 	client, err := dispatch.NewClient(dispatch.APIKey("foobar"), dispatch.APIUrl(server.URL))
 	if err != nil {
@@ -95,7 +96,7 @@ func TestDispatchCall(t *testing.T) {
 	}
 
 	recorder.Assert(t, dispatchtest.DispatchRequest{
-		ApiKey: "foobar",
+		Header: http.Header{"Authorization": []string{"Bearer foobar"}},
 		Calls: []dispatch.Call{
 			dispatch.NewCall("http://example.com", "function1",
 				dispatch.Input(dispatch.Int(11)),
@@ -106,7 +107,7 @@ func TestDispatchCall(t *testing.T) {
 
 func TestDispatchCallEnvConfig(t *testing.T) {
 	recorder := &dispatchtest.CallRecorder{}
-	server := dispatchtest.NewDispatchServer(recorder)
+	server := dispatchtest.NewServer(recorder)
 
 	endpoint, err := dispatch.New(dispatch.Env(
 		"DISPATCH_ENDPOINT_URL=http://example.com",
@@ -128,7 +129,7 @@ func TestDispatchCallEnvConfig(t *testing.T) {
 	}
 
 	recorder.Assert(t, dispatchtest.DispatchRequest{
-		ApiKey: "foobar",
+		Header: http.Header{"Authorization": []string{"Bearer foobar"}},
 		Calls: []dispatch.Call{
 			dispatch.NewCall("http://example.com", "function2",
 				dispatch.Input(dispatch.String("foo")),
@@ -140,7 +141,7 @@ func TestDispatchCallEnvConfig(t *testing.T) {
 func TestDispatchCallsBatch(t *testing.T) {
 	var recorder dispatchtest.CallRecorder
 
-	server := dispatchtest.NewDispatchServer(&recorder)
+	server := dispatchtest.NewServer(&recorder)
 
 	client, err := dispatch.NewClient(dispatch.APIKey("foobar"), dispatch.APIUrl(server.URL))
 	if err != nil {
@@ -184,7 +185,7 @@ func TestDispatchCallsBatch(t *testing.T) {
 	}
 
 	recorder.Assert(t, dispatchtest.DispatchRequest{
-		ApiKey: "foobar",
+		Header: http.Header{"Authorization": []string{"Bearer foobar"}},
 		Calls:  []dispatch.Call{call1, call2},
 	})
 }
