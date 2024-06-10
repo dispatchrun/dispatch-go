@@ -10,8 +10,11 @@ import (
 	"time"
 
 	"github.com/dispatchrun/dispatch-go"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 func TestAnyBool(t *testing.T) {
@@ -196,17 +199,37 @@ func TestAny(t *testing.T) {
 		"foo",
 
 		[]byte("bar"),
+
+		time.Now().UTC(),
+
+		11 * time.Second,
+
+		// Raw proto.Message
+		&emptypb.Empty{},
+		&wrapperspb.Int32Value{Value: 11},
 	} {
 		t.Run(fmt.Sprintf("%v", v), func(t *testing.T) {
 			boxed, err := dispatch.NewAny(v)
 			if err != nil {
 				t.Fatalf("NewAny(%v): %v", v, err)
 			}
+
 			rv := reflect.New(reflect.TypeOf(v))
 			if err := boxed.Unmarshal(rv.Interface()); err != nil {
 				t.Fatal(err)
-			} else if !reflect.DeepEqual(rv.Elem().Interface(), reflect.ValueOf(v).Interface()) {
-				t.Errorf("unexpected NewAny(%v).Unmarshal result: %#v", v, rv.Elem())
+			}
+
+			got := rv.Elem().Interface()
+			want := reflect.ValueOf(v).Interface()
+
+			var equal bool
+			if wantProto, ok := want.(proto.Message); ok {
+				equal = proto.Equal(got.(proto.Message), wantProto)
+			} else {
+				equal = reflect.DeepEqual(got, want)
+			}
+			if !equal {
+				t.Errorf("unexpected NewAny(%v).Unmarshal result: %#v", v, got)
 			}
 		})
 	}
