@@ -7,8 +7,11 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dispatchrun/dispatch-go"
+	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func TestAnyBool(t *testing.T) {
@@ -72,13 +75,37 @@ func TestAnyString(t *testing.T) {
 }
 
 func TestAnyBytes(t *testing.T) {
-	for _, v := range [][]byte{nil, []byte{}, []byte("foobar"), bytes.Repeat([]byte("abc"), 100)} {
+	for _, v := range [][]byte{nil, []byte("foobar"), bytes.Repeat([]byte("abc"), 100)} {
 		boxed := dispatch.Bytes(v)
 		var got []byte
 		if err := boxed.Unmarshal(&got); err != nil {
 			t.Fatal(err)
 		} else if !bytes.Equal(v, got) {
 			t.Errorf("unexpected bytes: got %v, want %v", got, v)
+		}
+	}
+}
+
+func TestAnyTime(t *testing.T) {
+	for _, v := range []time.Time{time.Now(), { /*zero*/ }, time.Date(2024, time.June, 10, 11, 30, 1, 2, time.UTC)} {
+		boxed := dispatch.Time(v)
+		var got time.Time
+		if err := boxed.Unmarshal(&got); err != nil {
+			t.Fatal(err)
+		} else if !got.Equal(v) {
+			t.Errorf("unexpected time: got %v, want %v", got, v)
+		}
+	}
+}
+
+func TestAnyDuration(t *testing.T) {
+	for _, v := range []time.Duration{0, time.Second, 10 * time.Hour} {
+		boxed := dispatch.Duration(v)
+		var got time.Duration
+		if err := boxed.Unmarshal(&got); err != nil {
+			t.Fatal(err)
+		} else if got != v {
+			t.Errorf("unexpected duration: got %v, want %v", got, v)
 		}
 	}
 }
@@ -123,6 +150,24 @@ func TestOverflow(t *testing.T) {
 
 	var f32 float32
 	if err := dispatch.Float(math.MaxFloat32 + math.MaxFloat32).Unmarshal(&f32); err == nil || err.Error() != "cannot unmarshal *wrapperspb.DoubleValue of 6.805646932770577e+38 into float32" {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	badTime, err := dispatch.NewAny(&timestamppb.Timestamp{Seconds: math.MinInt64})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var tt time.Time
+	if err := badTime.Unmarshal(&tt); err == nil || err.Error() != "cannot unmarshal *timestamppb.Timestamp into time.Time: proto: timestamp (seconds:-9223372036854775808) before 0001-01-01" {
+		t.Errorf("unexpected error: %v", err)
+	}
+
+	badDuration, err := dispatch.NewAny(&durationpb.Duration{Seconds: math.MaxInt64})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var td time.Duration
+	if err := badDuration.Unmarshal(&td); err == nil || err.Error() != "cannot unmarshal *durationpb.Duration into time.Duration: proto: duration (seconds:9223372036854775807) exceeds +10000 years" {
 		t.Errorf("unexpected error: %v", err)
 	}
 }

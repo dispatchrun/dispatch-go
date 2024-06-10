@@ -3,9 +3,12 @@ package dispatch
 import (
 	"fmt"
 	"reflect"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
@@ -58,6 +61,11 @@ func NewAny(v any) (Any, error) {
 	case []byte:
 		m = wrapperspb.Bytes(vv)
 
+	case time.Time:
+		m = timestamppb.New(vv)
+	case time.Duration:
+		m = durationpb.New(vv)
+
 	default:
 		// TODO: support more types
 		return Any{}, fmt.Errorf("unsupported type: %T", v)
@@ -100,6 +108,16 @@ func Bytes(v []byte) Any {
 	return mustNewAny(wrapperspb.Bytes(v))
 }
 
+// Time creates an Any that contains a time value.
+func Time(v time.Time) Any {
+	return mustNewAny(timestamppb.New(v))
+}
+
+// Duration creates an Any that contains a duration value.
+func Duration(v time.Duration) Any {
+	return mustNewAny(durationpb.New(v))
+}
+
 func mustNewAny(v any) Any {
 	any, err := NewAny(v)
 	if err != nil {
@@ -108,26 +126,52 @@ func mustNewAny(v any) Any {
 	return any
 }
 
+var (
+	timeType     = reflect.TypeFor[time.Time]()
+	durationType = reflect.TypeFor[time.Duration]()
+)
+
 // Unmarshal unmarshals the value.
 func (a Any) Unmarshal(v any) error {
 	if a.proto == nil {
 		return fmt.Errorf("empty Any")
 	}
 
-	r := reflect.ValueOf(v)
-	if r.Kind() != reflect.Pointer || r.IsNil() {
+	rv := reflect.ValueOf(v)
+	if rv.Kind() != reflect.Pointer || rv.IsNil() {
 		panic("Any.Unmarshal expects a pointer")
 	}
-	elem := r.Elem()
+	elem := rv.Elem()
 
 	m, err := a.proto.UnmarshalNew()
 	if err != nil {
 		return err
 	}
-
 	rm := reflect.ValueOf(m)
-	if rm.Type() == elem.Type() {
+
+	switch elem.Type() {
+	case rm.Type(): // e.g. a proto.Message impl
 		elem.Set(rm)
+		return nil
+
+	case timeType:
+		v, ok := m.(*timestamppb.Timestamp)
+		if !ok {
+			return fmt.Errorf("cannot unmarshal %T into time.Time", m)
+		} else if err := v.CheckValid(); err != nil {
+			return fmt.Errorf("cannot unmarshal %T into time.Time: %w", m, err)
+		}
+		elem.Set(reflect.ValueOf(v.AsTime()))
+		return nil
+
+	case durationType:
+		v, ok := m.(*durationpb.Duration)
+		if !ok {
+			return fmt.Errorf("cannot unmarshal %T into time.Duration", m)
+		} else if err := v.CheckValid(); err != nil {
+			return fmt.Errorf("cannot unmarshal %T into time.Duration: %w", m, err)
+		}
+		elem.SetInt(int64(v.AsDuration()))
 		return nil
 	}
 
@@ -138,6 +182,7 @@ func (a Any) Unmarshal(v any) error {
 			return fmt.Errorf("cannot unmarshal %T into bool", m)
 		}
 		elem.SetBool(v.Value)
+		return nil
 
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		v, ok := m.(*wrapperspb.Int64Value)
@@ -147,6 +192,7 @@ func (a Any) Unmarshal(v any) error {
 			return fmt.Errorf("cannot unmarshal %T of %v into %T", m, v.Value, elem.Interface())
 		}
 		elem.SetInt(v.Value)
+		return nil
 
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		v, ok := m.(*wrapperspb.UInt64Value)
@@ -156,6 +202,7 @@ func (a Any) Unmarshal(v any) error {
 			return fmt.Errorf("cannot unmarshal %T of %v into %T", m, v.Value, elem.Interface())
 		}
 		elem.SetUint(v.Value)
+		return nil
 
 	case reflect.Float32, reflect.Float64:
 		v, ok := m.(*wrapperspb.DoubleValue)
@@ -165,6 +212,7 @@ func (a Any) Unmarshal(v any) error {
 			return fmt.Errorf("cannot unmarshal %T of %v into %T", m, v.Value, elem.Interface())
 		}
 		elem.SetFloat(v.Value)
+		return nil
 
 	case reflect.String:
 		v, ok := m.(*wrapperspb.StringValue)
@@ -172,6 +220,7 @@ func (a Any) Unmarshal(v any) error {
 			return fmt.Errorf("cannot unmarshal %T into string", m)
 		}
 		elem.SetString(v.Value)
+		return nil
 
 	default:
 		// Special case for []byte. Other reflect.Slice values aren't supported at this time.
@@ -187,7 +236,6 @@ func (a Any) Unmarshal(v any) error {
 		// TODO: support more types
 		return fmt.Errorf("unsupported type: %v (%v kind)", elem.Type(), elem.Kind())
 	}
-	return nil
 }
 
 // TypeURL is a URL that uniquely identifies the type of the
