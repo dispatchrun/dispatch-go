@@ -47,6 +47,11 @@ func NewAny(v any) (Any, error) {
 	case uint64:
 		m = wrapperspb.UInt64(uint64(vv))
 
+	case float32:
+		m = wrapperspb.Double(float64(vv))
+	case float64:
+		m = wrapperspb.Double(vv)
+
 	case string:
 		m = wrapperspb.String(vv)
 
@@ -75,6 +80,11 @@ func Int(v int) Any {
 // Uint creates an Any that contains an unsigned integer value.
 func Uint(v uint) Any {
 	return mustNewAny(wrapperspb.UInt64(uint64(v)))
+}
+
+// Float creates an Any that contains a floating point value.
+func Float(v float64) Any {
+	return mustNewAny(wrapperspb.Double(v))
 }
 
 // String creates an Any that contains a string value.
@@ -120,24 +130,35 @@ func (a Any) Unmarshal(v any) error {
 			return fmt.Errorf("cannot unmarshal %T into bool", m)
 		}
 		elem.SetBool(v.Value)
+
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		v, ok := m.(*wrapperspb.Int64Value)
 		if !ok {
 			return fmt.Errorf("cannot unmarshal %T into int", m)
 		}
 		elem.SetInt(v.Value)
+
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		v, ok := m.(*wrapperspb.UInt64Value)
 		if !ok {
 			return fmt.Errorf("cannot unmarshal %T into uint", m)
 		}
 		elem.SetUint(v.Value)
+
+	case reflect.Float32, reflect.Float64:
+		v, ok := m.(*wrapperspb.DoubleValue)
+		if !ok {
+			return fmt.Errorf("cannot unmarshal %T into float", m)
+		}
+		elem.SetFloat(v.Value)
+
 	case reflect.String:
 		v, ok := m.(*wrapperspb.StringValue)
 		if !ok {
 			return fmt.Errorf("cannot unmarshal %T into string", m)
 		}
 		elem.SetString(v.Value)
+
 	default:
 		// TODO: support more types
 		return fmt.Errorf("unsupported type: %v (%v kind)", elem.Type(), elem.Kind())

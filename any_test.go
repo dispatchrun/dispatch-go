@@ -46,6 +46,18 @@ func TestAnyUint(t *testing.T) {
 	}
 }
 
+func TestAnyFloat(t *testing.T) {
+	for _, v := range []float64{0, 3.14, 11.11, math.MaxFloat64} {
+		boxed := dispatch.Float(v)
+		var got float64
+		if err := boxed.Unmarshal(&got); err != nil {
+			t.Fatal(err)
+		} else if got != v {
+			t.Errorf("unexpected float: got %v, want %v", got, v)
+		}
+	}
+}
+
 func TestAnyString(t *testing.T) {
 	for _, v := range []string{"", "x", "foobar", strings.Repeat("abc", 100)} {
 		boxed := dispatch.String(v)
@@ -74,6 +86,9 @@ func TestAny(t *testing.T) {
 		uint16(math.MaxUint16),
 		uint32(0xDEADBEEF),
 		uint64(math.MaxUint64),
+
+		float32(3.14),
+		float64(11.11),
 
 		"foo",
 	} {
