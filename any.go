@@ -195,33 +195,48 @@ func (a Any) Unmarshal(v any) error {
 		return nil
 
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		v, ok := m.(*wrapperspb.Int64Value)
-		if !ok {
+		var i int64
+		if v, ok := m.(*wrapperspb.Int64Value); ok {
+			i = v.Value
+		} else if v, ok := m.(*wrapperspb.Int32Value); ok {
+			i = int64(v.Value)
+		} else {
 			return fmt.Errorf("cannot unmarshal %T into %T", m, elem.Interface())
-		} else if elem.OverflowInt(v.Value) {
-			return fmt.Errorf("cannot unmarshal %T of %v into %T", m, v.Value, elem.Interface())
 		}
-		elem.SetInt(v.Value)
+		if elem.OverflowInt(i) {
+			return fmt.Errorf("cannot unmarshal %T of %v into %T", m, i, elem.Interface())
+		}
+		elem.SetInt(i)
 		return nil
 
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		v, ok := m.(*wrapperspb.UInt64Value)
-		if !ok {
+		var u uint64
+		if v, ok := m.(*wrapperspb.UInt64Value); ok {
+			u = v.Value
+		} else if v, ok := m.(*wrapperspb.UInt32Value); ok {
+			u = uint64(v.Value)
+		} else {
 			return fmt.Errorf("cannot unmarshal %T into %T", m, elem.Interface())
-		} else if elem.OverflowUint(v.Value) {
-			return fmt.Errorf("cannot unmarshal %T of %v into %T", m, v.Value, elem.Interface())
 		}
-		elem.SetUint(v.Value)
+		if elem.OverflowUint(u) {
+			return fmt.Errorf("cannot unmarshal %T of %v into %T", m, u, elem.Interface())
+		}
+		elem.SetUint(u)
 		return nil
 
 	case reflect.Float32, reflect.Float64:
-		v, ok := m.(*wrapperspb.DoubleValue)
-		if !ok {
+		var f float64
+		if v, ok := m.(*wrapperspb.DoubleValue); ok {
+			f = v.Value
+		} else if v, ok := m.(*wrapperspb.FloatValue); ok {
+			f = float64(v.Value)
+		} else {
 			return fmt.Errorf("cannot unmarshal %T into %T", m, elem.Interface())
-		} else if elem.OverflowFloat(v.Value) {
-			return fmt.Errorf("cannot unmarshal %T of %v into %T", m, v.Value, elem.Interface())
 		}
-		elem.SetFloat(v.Value)
+		if elem.OverflowFloat(f) {
+			return fmt.Errorf("cannot unmarshal %T of %v into %T", m, f, elem.Interface())
+		}
+		elem.SetFloat(f)
 		return nil
 
 	case reflect.String:
