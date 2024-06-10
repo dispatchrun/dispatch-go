@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"strings"
 
+	"connectrpc.com/connect"
 	"golang.org/x/sys/unix"
 )
 
@@ -148,6 +149,9 @@ func errorStatus(err error, depth int) Status {
 	case *tls.RecordHeaderError:
 		return TLSErrorStatus
 
+	case *connect.Error:
+		return connectErrorStatus(e)
+
 	case status:
 		return e.Status()
 
@@ -206,6 +210,45 @@ func errnoStatus(errno unix.Errno) Status {
 		unix.ENFILE:
 		return TemporaryErrorStatus
 
+	default:
+		return PermanentErrorStatus
+	}
+}
+
+func connectErrorStatus(err *connect.Error) Status {
+	switch err.Code() {
+	case connect.CodeCanceled: // 408 Request Timeout
+		return TimeoutStatus
+	case connect.CodeUnknown: // 500 Internal Server Error
+		return TemporaryErrorStatus
+	case connect.CodeInvalidArgument: // 400 Bad Request
+		return InvalidArgumentStatus
+	case connect.CodeDeadlineExceeded: // 408 Request Timeout
+		return TimeoutStatus
+	case connect.CodeNotFound: // 404 Not Found
+		return NotFoundStatus
+	case connect.CodeAlreadyExists: // 409 Conflict
+		return PermanentErrorStatus
+	case connect.CodePermissionDenied: // 403 Forbidden
+		return PermissionDeniedStatus
+	case connect.CodeResourceExhausted: // 429 Too Many Requests
+		return ThrottledStatus
+	case connect.CodeFailedPrecondition: // 412 Precondition Failed
+		return PermanentErrorStatus
+	case connect.CodeAborted: // 409 Conflict
+		return PermanentErrorStatus
+	case connect.CodeOutOfRange: // 400 Bad Request
+		return InvalidArgumentStatus
+	case connect.CodeUnimplemented: // 404 Not Found
+		return NotFoundStatus
+	case connect.CodeInternal: // 500 Internal Server Error
+		return TemporaryErrorStatus
+	case connect.CodeUnavailable: // 503 Service Unavailable
+		return TemporaryErrorStatus
+	case connect.CodeDataLoss: // 500 Internal Server Error
+		return PermanentErrorStatus
+	case connect.CodeUnauthenticated: // 401 Unauthorized
+		return UnauthenticatedStatus
 	default:
 		return PermanentErrorStatus
 	}

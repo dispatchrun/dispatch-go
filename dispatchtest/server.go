@@ -2,79 +2,29 @@ package dispatchtest
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strconv"
-	"strings"
 	"testing"
 	_ "unsafe"
 
-	"buf.build/gen/go/stealthrocket/dispatch-proto/connectrpc/go/dispatch/sdk/v1/sdkv1connect"
-	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
-	"connectrpc.com/connect"
 	"github.com/dispatchrun/dispatch-go"
+	"github.com/dispatchrun/dispatch-go/dispatchserver"
 )
 
-// DispatchServerHandler is a handler for a test Dispatch API server.
-type DispatchServerHandler interface {
-	Handle(ctx context.Context, apiKey string, calls []dispatch.Call) ([]dispatch.ID, error)
-}
-
-// DispatchServerHandlerFunc creates a DispatchServerHandler from a function.
-func DispatchServerHandlerFunc(fn func(ctx context.Context, apiKey string, calls []dispatch.Call) ([]dispatch.ID, error)) DispatchServerHandler {
-	return dispatchServerHandlerFunc(fn)
-}
-
-type dispatchServerHandlerFunc func(context.Context, string, []dispatch.Call) ([]dispatch.ID, error)
-
-func (h dispatchServerHandlerFunc) Handle(ctx context.Context, apiKey string, calls []dispatch.Call) ([]dispatch.ID, error) {
-	return h(ctx, apiKey, calls)
-}
-
-// NewDispatchServer creates a new test Dispatch API server.
-func NewDispatchServer(handler DispatchServerHandler) *httptest.Server {
+// NewServer creates a new test Dispatch API server.
+func NewServer(handler dispatchserver.Handler) *httptest.Server {
+	s, err := dispatchserver.New(handler)
+	if err != nil {
+		panic(err)
+	}
 	mux := http.NewServeMux()
-	mux.Handle(sdkv1connect.NewDispatchServiceHandler(&dispatchServiceHandler{handler}))
+	mux.Handle(s.Handler())
 	return httptest.NewServer(mux)
 }
 
-type dispatchServiceHandler struct {
-	DispatchServerHandler
-}
-
-func (d *dispatchServiceHandler) Dispatch(ctx context.Context, req *connect.Request[sdkv1.DispatchRequest]) (*connect.Response[sdkv1.DispatchResponse], error) {
-	auth := req.Header().Get("Authorization")
-	apiKey, ok := strings.CutPrefix(auth, "Bearer ")
-	if !ok {
-		return nil, connect.NewError(connect.CodeUnauthenticated, fmt.Errorf("missing or invalid Authorization header: %q", auth))
-	}
-
-	calls := make([]dispatch.Call, len(req.Msg.Calls))
-	for i, c := range req.Msg.Calls {
-		calls[i] = newProtoCall(c)
-	}
-
-	ids, err := d.Handle(ctx, apiKey, calls)
-	if err != nil {
-		return nil, err
-	}
-	if len(ids) != len(calls) {
-		panic("invalid handler response")
-	}
-	dispatchIDs := make([]string, len(ids))
-	for i, id := range ids {
-		dispatchIDs[i] = string(id)
-	}
-	return connect.NewResponse(&sdkv1.DispatchResponse{
-		DispatchIds: dispatchIDs,
-	}), nil
-}
-
-//go:linkname newProtoCall github.com/dispatchrun/dispatch-go.newProtoCall
-func newProtoCall(c *sdkv1.Call) dispatch.Call
-
-// CallRecorder is a DispatchServerHandler that captures requests to the Dispatch API.
+// CallRecorder is a dispatchserver.Handler that captures requests to the Dispatch API.
 type CallRecorder struct {
 	requests []DispatchRequest
 	calls    int
@@ -82,17 +32,17 @@ type CallRecorder struct {
 
 // DispatchRequest is a request to the Dispatch API captured by a CallRecorder.
 type DispatchRequest struct {
-	ApiKey string
+	Header http.Header
 	Calls  []dispatch.Call
 }
 
-func (r *CallRecorder) Handle(ctx context.Context, apiKey string, calls []dispatch.Call) ([]dispatch.ID, error) {
+func (r *CallRecorder) Handle(ctx context.Context, header http.Header, calls []dispatch.Call) ([]dispatch.ID, error) {
 	base := r.calls
 	r.calls += len(calls)
 
 	r.requests = append(r.requests, DispatchRequest{
-		ApiKey: apiKey,
-		Calls:  calls,
+		Header: header.Clone(),
+		Calls:  slices.Clone(calls),
 	})
 
 	ids := make([]dispatch.ID, len(calls))
@@ -102,17 +52,35 @@ func (r *CallRecorder) Handle(ctx context.Context, apiKey string, calls []dispat
 	return ids, nil
 }
 
+// Assert asserts that specific calls were made to the Dispatch API server,
+// and that specified headers are present.
+//
+// When validating request headers, Assert checks that the specified headers
+// were present, but allows extra headers on the request. That is, it's not
+// checking for an exact match with headers.
 func (r *CallRecorder) Assert(t *testing.T, want ...DispatchRequest) {
 	t.Helper()
 
 	got := r.requests
 	if len(got) != len(want) {
-		t.Fatalf("unexpected number of requests: got %v, want %v", len(got), len(want))
+		t.Errorf("unexpected number of requests: got %v, want %v", len(got), len(want))
 	}
 	for i, req := range got {
-		if req.ApiKey != want[i].ApiKey {
-			t.Errorf("unexpected API key on request %d: got %v, want %v", i, req.ApiKey, want[i].ApiKey)
+		if i >= len(want) {
+			break
 		}
+
+		// Check headers.
+		for name, want := range want[i].Header {
+			got, ok := req.Header[name]
+			if !ok {
+				t.Errorf("missing %s header in request %d", name, i)
+			} else if !slices.Equal(got, want) {
+				t.Errorf("unexpected %s header in request %d: got %v, want %v", name, i, got, want)
+			}
+		}
+
+		// Check calls.
 		if len(req.Calls) != len(want[i].Calls) {
 			t.Errorf("unexpected number of calls in request %d: got %v, want %v", i, len(req.Calls), len(want[i].Calls))
 		} else {

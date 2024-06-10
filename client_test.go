@@ -2,6 +2,7 @@ package dispatch_test
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
 	"github.com/dispatchrun/dispatch-go"
@@ -10,7 +11,7 @@ import (
 
 func TestClient(t *testing.T) {
 	recorder := &dispatchtest.CallRecorder{}
-	server := dispatchtest.NewDispatchServer(recorder)
+	server := dispatchtest.NewServer(recorder)
 
 	client, err := dispatch.NewClient(dispatch.APIKey("foobar"), dispatch.APIUrl(server.URL))
 	if err != nil {
@@ -25,14 +26,14 @@ func TestClient(t *testing.T) {
 	}
 
 	recorder.Assert(t, dispatchtest.DispatchRequest{
-		ApiKey: "foobar",
+		Header: http.Header{"Authorization": []string{"Bearer foobar"}},
 		Calls:  []dispatch.Call{call},
 	})
 }
 
 func TestClientEnvConfig(t *testing.T) {
 	recorder := &dispatchtest.CallRecorder{}
-	server := dispatchtest.NewDispatchServer(recorder)
+	server := dispatchtest.NewServer(recorder)
 
 	client, err := dispatch.NewClient(dispatch.Env(
 		"DISPATCH_API_KEY=foobar",
@@ -50,14 +51,14 @@ func TestClientEnvConfig(t *testing.T) {
 	}
 
 	recorder.Assert(t, dispatchtest.DispatchRequest{
-		ApiKey: "foobar",
+		Header: http.Header{"Authorization": []string{"Bearer foobar"}},
 		Calls:  []dispatch.Call{call},
 	})
 }
 
 func TestClientBatch(t *testing.T) {
 	recorder := &dispatchtest.CallRecorder{}
-	server := dispatchtest.NewDispatchServer(recorder)
+	server := dispatchtest.NewServer(recorder)
 
 	client, err := dispatch.NewClient(dispatch.APIKey("foobar"), dispatch.APIUrl(server.URL))
 	if err != nil {
@@ -86,11 +87,11 @@ func TestClientBatch(t *testing.T) {
 
 	recorder.Assert(t,
 		dispatchtest.DispatchRequest{
-			ApiKey: "foobar",
+			Header: http.Header{"Authorization": []string{"Bearer foobar"}},
 			Calls:  []dispatch.Call{call1, call2},
 		},
 		dispatchtest.DispatchRequest{
-			ApiKey: "foobar",
+			Header: http.Header{"Authorization": []string{"Bearer foobar"}},
 			Calls:  []dispatch.Call{call3, call4},
 		})
 }
