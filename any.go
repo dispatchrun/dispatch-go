@@ -55,6 +55,9 @@ func NewAny(v any) (Any, error) {
 	case string:
 		m = wrapperspb.String(vv)
 
+	case []byte:
+		m = wrapperspb.Bytes(vv)
+
 	default:
 		// TODO: support more types
 		return Any{}, fmt.Errorf("unsupported type: %T", v)
@@ -90,6 +93,11 @@ func Float(v float64) Any {
 // String creates an Any that contains a string value.
 func String(v string) Any {
 	return mustNewAny(wrapperspb.String(v))
+}
+
+// Bytes creates an Any that contains a bytes value.
+func Bytes(v []byte) Any {
+	return mustNewAny(wrapperspb.Bytes(v))
 }
 
 func mustNewAny(v any) Any {
@@ -160,6 +168,16 @@ func (a Any) Unmarshal(v any) error {
 		elem.SetString(v.Value)
 
 	default:
+		// Special case for []byte. Other reflect.Slice values aren't supported at this time.
+		if elem.Kind() == reflect.Slice && elem.Type().Elem().Kind() == reflect.Uint8 {
+			v, ok := m.(*wrapperspb.BytesValue)
+			if !ok {
+				return fmt.Errorf("cannot unmarshal %T into []byte", m)
+			}
+			elem.SetBytes(v.Value)
+			return nil
+		}
+
 		// TODO: support more types
 		return fmt.Errorf("unsupported type: %v (%v kind)", elem.Type(), elem.Kind())
 	}

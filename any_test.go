@@ -1,6 +1,7 @@
 package dispatch_test
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"reflect"
@@ -70,6 +71,18 @@ func TestAnyString(t *testing.T) {
 	}
 }
 
+func TestAnyBytes(t *testing.T) {
+	for _, v := range [][]byte{nil, []byte{}, []byte("foobar"), bytes.Repeat([]byte("abc"), 100)} {
+		boxed := dispatch.Bytes(v)
+		var got []byte
+		if err := boxed.Unmarshal(&got); err != nil {
+			t.Fatal(err)
+		} else if !bytes.Equal(v, got) {
+			t.Errorf("unexpected bytes: got %v, want %v", got, v)
+		}
+	}
+}
+
 func TestAny(t *testing.T) {
 	for _, v := range []any{
 		true,
@@ -90,7 +103,10 @@ func TestAny(t *testing.T) {
 		float32(3.14),
 		float64(11.11),
 
+		"",
 		"foo",
+
+		[]byte("bar"),
 	} {
 		t.Run(fmt.Sprintf("%v", v), func(t *testing.T) {
 			boxed, err := dispatch.NewAny(v)
