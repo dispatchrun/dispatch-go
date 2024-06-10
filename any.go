@@ -76,13 +76,13 @@ func Bool(v bool) Any {
 }
 
 // Int creates an Any that contains an integer value.
-func Int(v int) Any {
-	return mustNewAny(wrapperspb.Int64(int64(v)))
+func Int(v int64) Any {
+	return mustNewAny(wrapperspb.Int64(v))
 }
 
 // Uint creates an Any that contains an unsigned integer value.
-func Uint(v uint) Any {
-	return mustNewAny(wrapperspb.UInt64(uint64(v)))
+func Uint(v uint64) Any {
+	return mustNewAny(wrapperspb.UInt64(v))
 }
 
 // Float creates an Any that contains a floating point value.
@@ -142,21 +142,27 @@ func (a Any) Unmarshal(v any) error {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		v, ok := m.(*wrapperspb.Int64Value)
 		if !ok {
-			return fmt.Errorf("cannot unmarshal %T into int", m)
+			return fmt.Errorf("cannot unmarshal %T into %T", m, elem.Interface())
+		} else if elem.OverflowInt(v.Value) {
+			return fmt.Errorf("cannot unmarshal %T of %v into %T", m, v.Value, elem.Interface())
 		}
 		elem.SetInt(v.Value)
 
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		v, ok := m.(*wrapperspb.UInt64Value)
 		if !ok {
-			return fmt.Errorf("cannot unmarshal %T into uint", m)
+			return fmt.Errorf("cannot unmarshal %T into %T", m, elem.Interface())
+		} else if elem.OverflowUint(v.Value) {
+			return fmt.Errorf("cannot unmarshal %T of %v into %T", m, v.Value, elem.Interface())
 		}
 		elem.SetUint(v.Value)
 
 	case reflect.Float32, reflect.Float64:
 		v, ok := m.(*wrapperspb.DoubleValue)
 		if !ok {
-			return fmt.Errorf("cannot unmarshal %T into float", m)
+			return fmt.Errorf("cannot unmarshal %T into %T", m, elem.Interface())
+		} else if elem.OverflowFloat(v.Value) {
+			return fmt.Errorf("cannot unmarshal %T of %v into %T", m, v.Value, elem.Interface())
 		}
 		elem.SetFloat(v.Value)
 
