@@ -23,6 +23,7 @@ import (
 type EndpointClient struct {
 	httpClient connect.HTTPClient
 	signingKey ed25519.PrivateKey
+	header     http.Header
 	opts       []connect.ClientOption
 
 	client sdkv1connect.FunctionServiceClient
@@ -74,18 +75,23 @@ func HTTPClient(client connect.HTTPClient) EndpointClientOption {
 	return func(c *EndpointClient) { c.httpClient = client }
 }
 
-// ClientOptions sets options on the underlying connect (gRPC) client.
+// RequestHeaders sets headers on the request to the endpoint.
+func RequestHeaders(header http.Header) EndpointClientOption {
+	return func(c *EndpointClient) { c.header = header }
+}
+
+// ClientOptions adds options for the underlying connect (gRPC) client.
 func ClientOptions(opts ...connect.ClientOption) EndpointClientOption {
 	return func(c *EndpointClient) { c.opts = append(c.opts, opts...) }
 }
 
 // Run sends a RunRequest and returns a RunResponse.
-func (c *EndpointClient) Run(ctx context.Context, header http.Header, req dispatch.Request) (dispatch.Response, error) {
+func (c *EndpointClient) Run(ctx context.Context, req dispatch.Request) (dispatch.Response, error) {
 	connectReq := connect.NewRequest(requestProto(req))
 
-	connectReqHeader := connectReq.Header()
-	for name, values := range header {
-		connectReqHeader[name] = values
+	header := connectReq.Header()
+	for name, values := range c.header {
+		header[name] = values
 	}
 
 	res, err := c.client.Run(ctx, connectReq)

@@ -36,7 +36,7 @@ func TestDispatchEndpoint(t *testing.T) {
 	// Send a request for the identity function, and check that the
 	// input was echoed back.
 	req := dispatch.NewRequest("identity", dispatch.Input(dispatch.Int(11)))
-	res, err := client.Run(context.Background(), nil, req)
+	res, err := client.Run(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
 	} else if res.Status() != dispatch.OKStatus {
@@ -52,7 +52,7 @@ func TestDispatchEndpoint(t *testing.T) {
 	}
 
 	// Try running a function that has not been registered.
-	res, err = client.Run(context.Background(), nil, dispatch.NewRequest("not_found", dispatch.Input(dispatch.Int(22))))
+	res, err = client.Run(context.Background(), dispatch.NewRequest("not_found", dispatch.Input(dispatch.Int(22))))
 	if err != nil {
 		t.Fatal(err)
 	} else if res.Status() != dispatch.NotFoundStatus {
@@ -65,7 +65,7 @@ func TestDispatchEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = nonSigningClient.Run(context.Background(), nil, req)
+	_, err = nonSigningClient.Run(context.Background(), req)
 	if err == nil || connect.CodeOf(err) != connect.CodePermissionDenied {
 		t.Fatalf("expected a permission denied error, got %v", err)
 	}
