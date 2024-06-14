@@ -20,39 +20,46 @@ type Function interface {
 	bind(endpoint *Dispatch)
 }
 
-// NewFunction creates a Dispatch function.
+// NewFunction creates a Dispatch Function.
 func NewFunction[I, O any](name string, fn func(context.Context, I) (O, error)) *GenericFunction[I, O] {
-	return &GenericFunction[I, O]{name: name, fn: fn}
+	return &GenericFunction[I, O]{PrimitiveFunction{name: name}, fn}
 }
 
-// GenericFunction is a Dispatch function that accepts arbitrary input
-// and returns arbitrary output.
+// GenericFunction is a Function that accepts any input and returns any output.
 type GenericFunction[I, O any] struct {
-	name string
-	fn   func(ctx context.Context, input I) (O, error)
+	PrimitiveFunction
 
-	endpoint *Dispatch
+	fn func(ctx context.Context, input I) (O, error)
 }
 
-// Name is the name of the function.
-func (f *GenericFunction[I, O]) Name() string {
-	return f.name
-}
+var _ Function = (*GenericFunction[int, int])(nil)
 
 // Run runs the function.
 func (f *GenericFunction[I, O]) Run(ctx context.Context, req Request) Response {
-	boxedInput, ok := req.Input()
-	if !ok {
-		return NewResponseErrorf("%w: unsupported request: %v", ErrInvalidArgument, req)
-	}
-	var input I
-	if err := boxedInput.Unmarshal(&input); err != nil {
-		return NewResponseErrorf("%w: invalid input %v: %v", ErrInvalidArgument, boxedInput, err)
+	input, err := f.unpackInput(req)
+	if err != nil {
+		return NewResponseError(err)
 	}
 	output, err := f.fn(ctx, input)
 	if err != nil {
 		return NewResponseError(err)
 	}
+	return f.packOutput(output)
+}
+
+func (f *GenericFunction[I, O]) unpackInput(req Request) (I, error) {
+	var input I
+	boxedInput, ok := req.Input()
+	if !ok {
+		return input, fmt.Errorf("%w: unsupported request: %v", ErrInvalidArgument, req)
+	}
+	if err := boxedInput.Unmarshal(&input); err != nil {
+		return input, fmt.Errorf("%w: invalid input %v: %v", ErrInvalidArgument, boxedInput, err)
+	}
+	return input, nil
+}
+
+func (f *GenericFunction[I, O]) packOutput(output O) Response {
 	boxedOutput, err := NewAny(output)
 	if err != nil {
 		return NewResponseErrorf("%w: invalid output %v: %v", ErrInvalidResponse, output, err)
@@ -60,34 +67,22 @@ func (f *GenericFunction[I, O]) Run(ctx context.Context, req Request) Response {
 	return NewResponse(StatusOf(output), Output(boxedOutput))
 }
 
-func (f *GenericFunction[I, O]) bind(endpoint *Dispatch) {
-	f.endpoint = endpoint
-}
-
 // NewCall creates a Call for the function.
 func (f *GenericFunction[I, O]) NewCall(input I, opts ...CallOption) (Call, error) {
-	if f.endpoint == nil {
-		return Call{}, fmt.Errorf("cannot build function call: function has not been registered with a Dispatch endpoint")
-	}
 	boxedInput, err := NewAny(input)
 	if err != nil {
 		return Call{}, fmt.Errorf("cannot serialize input: %v", err)
 	}
-	opts = append(slices.Clip(opts), Input(boxedInput))
-	return NewCall(f.endpoint.URL(), f.name, opts...), nil
+	return f.PrimitiveFunction.NewCall(boxedInput, opts...)
 }
 
-// Dispatch dispatches a call to the function.
+// Dispatch dispatches a Call to the function.
 func (f *GenericFunction[I, O]) Dispatch(ctx context.Context, input I, opts ...CallOption) (ID, error) {
 	call, err := f.NewCall(input, opts...)
 	if err != nil {
 		return "", err
 	}
-	client, err := f.endpoint.Client()
-	if err != nil {
-		return "", fmt.Errorf("cannot dispatch function call: %w", err)
-	}
-	return client.Dispatch(ctx, call)
+	return f.dispatchCall(ctx, call)
 }
 
 // NewPrimitiveFunction creates a PrimitiveFunction.
@@ -95,11 +90,12 @@ func NewPrimitiveFunction(name string, fn func(context.Context, Request) Respons
 	return &PrimitiveFunction{name: name, fn: fn}
 }
 
-// PrimitiveFunction is a function that's close to the underlying
+// PrimitiveFunction is a Function that's close to the underlying
 // Dispatch protocol, accepting a Request and returning a Response.
 type PrimitiveFunction struct {
 	name string
-	fn   func(context.Context, Request) Response
+
+	fn func(context.Context, Request) Response
 
 	endpoint *Dispatch
 }
@@ -133,6 +129,10 @@ func (f *PrimitiveFunction) Dispatch(ctx context.Context, input Any, opts ...Cal
 	if err != nil {
 		return "", err
 	}
+	return f.dispatchCall(ctx, call)
+}
+
+func (f *PrimitiveFunction) dispatchCall(ctx context.Context, call Call) (ID, error) {
 	client, err := f.endpoint.Client()
 	if err != nil {
 		return "", fmt.Errorf("cannot dispatch function call: %w", err)
