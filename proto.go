@@ -397,17 +397,21 @@ type pollOptionFunc func(*Poll)
 func (fn pollOptionFunc) configurePoll(p *Poll) { fn(p) }
 
 // CoroutineState sets the coroutine state.
-func CoroutineState(state []byte) interface {
+func CoroutineState(state Any) interface {
 	PollOption
 	PollResultOption
 } {
 	return coroutineStateOption(state)
 }
 
-type coroutineStateOption []byte
+type coroutineStateOption Any
 
-func (b coroutineStateOption) configurePoll(p *Poll)             { p.proto.CoroutineState = b }
-func (b coroutineStateOption) configurePollResult(r *PollResult) { r.proto.CoroutineState = b }
+func (s coroutineStateOption) configurePoll(p *Poll) {
+	p.proto.State = &sdkv1.Poll_TypedCoroutineState{TypedCoroutineState: s.proto}
+}
+func (s coroutineStateOption) configurePollResult(r *PollResult) {
+	r.proto.State = &sdkv1.PollResult_TypedCoroutineState{TypedCoroutineState: s.proto}
+}
 
 // Calls adds calls to a Poll directive.
 func Calls(calls ...Call) PollOption {
@@ -442,8 +446,8 @@ func (p Poll) MaxWait() time.Duration {
 // CoroutineState is a snapshot of the function's state.
 //
 // It's passed back in the PollResult when the function is resumed.
-func (p Poll) CoroutineState() []byte {
-	return p.proto.GetCoroutineState()
+func (p Poll) CoroutineState() Any {
+	return Any{p.proto.GetTypedCoroutineState()}
 }
 
 // Calls are the function calls attached to the poll directive.
@@ -505,8 +509,8 @@ func CallResults(results ...CallResult) PollResultOption {
 
 // CoroutineState is the state recorded when the function was
 // suspended while polling.
-func (r PollResult) CoroutineState() []byte {
-	return r.proto.GetCoroutineState()
+func (r PollResult) CoroutineState() Any {
+	return Any{r.proto.GetTypedCoroutineState()}
 }
 
 // Results are the function call results attached to the poll result.
