@@ -6,6 +6,8 @@ import (
 	"github.com/dispatchrun/coroutine"
 )
 
+const stateTypeUrl = "buf.build/stealthrocket/coroutine/coroutine.v1.State"
+
 // NewCoroutine creates a Dispatch coroutine Function.
 func NewCoroutine[I, O any](name string, fn func(context.Context, I) (O, error)) *GenericCoroutine[I, O] {
 	return &GenericCoroutine[I, O]{*NewFunction(name, fn)}
@@ -16,41 +18,59 @@ type GenericCoroutine[I, O any] struct{ GenericFunction[I, O] }
 
 // Run runs the coroutine function.
 func (c *GenericCoroutine[I, O]) Run(ctx context.Context, req Request) Response {
-	var coro coroutine.Coroutine[CoroR[O], any]
+	var coro coroutine.Coroutine[CoroR[O], CoroS]
 
+	// Start a fresh coroutine if the request carries function input.
 	if _, ok := req.Input(); ok {
 		input, err := c.unpackInput(req)
 		if err != nil {
 			return NewResponseError(err)
 		}
-		coro = coroutine.NewWithReturn[CoroR[O], any](c.entrypoint(input))
+		coro = coroutine.NewWithReturn[CoroR[O], CoroS](c.entrypoint(input))
 
 	} else if pollResult, ok := req.PollResult(); ok {
+		// Otherwise, handle poll results bound for a suspended coroutine.
 		var zero I
-		coro = coroutine.NewWithReturn[CoroR[O], any](c.entrypoint(zero))
+		coro = coroutine.NewWithReturn[CoroR[O], CoroS](c.entrypoint(zero))
 
+		// Deserialize the coroutine.
 		state := pollResult.CoroutineState()
+		if state.TypeURL() != stateTypeUrl {
+			return NewResponseErrorf("%w: unexpected type URL: %q", ErrIncompatibleState, state.TypeURL())
+		} else if err := coro.Context().Unmarshal(state.Value()); err != nil {
+			return NewResponseErrorf("%w: unmarshal state: %v", ErrIncompatibleState, err)
+		}
 
-		// TODO: deserialize state
-		_ = state
-		panic("not implemented")
+		// Send poll results back to the yield point.
+		coro.Send(CoroS{directive: pollResult})
 	}
 
+	// Run the coroutine until it yields or returns.
 	if coro.Next() {
+		// The coroutine yielded and is now paused.
+
+		// Serialize the coroutine.
 		if !coroutine.Durable {
 			return NewResponseErrorf("%w: cannot serialize volatile coroutine", ErrPermanent)
 		}
-		// TODO: serialize state
-		// TODO: inspect coro.Recv() yield
-		// TODO: build Poll Response
-		panic("not implemented")
+		rawState, err := coro.Context().Marshal()
+		if err != nil {
+			return NewResponseErrorf("%w: marshal state: %v", ErrPermanent, err)
+		}
+		state := newAnyTypeValue(stateTypeUrl, rawState)
+
+		// Yield to Dispatch with the directive from the coroutine.
+		result := coro.Recv()
+		return NewResponse(result.status, result.directive, CoroutineState(state))
 	}
 
-	r := coro.Result()
-	if r.err != nil {
-		return NewResponseError(r.err)
+	// The coroutine returned. Serialize the output / error.
+	result := coro.Result()
+	if result.err != nil {
+		// TODO: serialize the output too if present
+		return NewResponseError(result.err)
 	}
-	return c.packOutput(r.output)
+	return c.packOutput(result.output)
 }
 
 //go:noinline
@@ -67,7 +87,29 @@ func (c *GenericCoroutine[I, O]) entrypoint(input I) func() CoroR[O] {
 	}
 }
 
+type CoroS struct {
+	directive RequestDirective
+}
+
 type CoroR[O any] struct {
+	status    Status
+	directive ResponseDirective
+
 	output O
 	err    error
+}
+
+// Yield yields control to Dispatch.
+//
+// The coroutine is paused, serialized and sent to Dispatch. The
+// directive instructs Dispatch to perform an operation while
+// the coroutine is suspended. Once the operation is complete,
+// Dispatch yields control back to the coroutine, which is resumed
+// from the point execution was suspended.
+func Yield[O any](status Status, directive ResponseDirective) RequestDirective {
+	result := coroutine.Yield[CoroR[O], CoroS](CoroR[O]{
+		status:    status,
+		directive: directive,
+	})
+	return result.directive
 }

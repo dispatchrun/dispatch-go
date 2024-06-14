@@ -400,6 +400,7 @@ func (fn pollOptionFunc) configurePoll(p *Poll) { fn(p) }
 func CoroutineState(state Any) interface {
 	PollOption
 	PollResultOption
+	ResponseOption
 } {
 	return coroutineStateOption(state)
 }
@@ -409,8 +410,16 @@ type coroutineStateOption Any
 func (s coroutineStateOption) configurePoll(p *Poll) {
 	p.proto.State = &sdkv1.Poll_TypedCoroutineState{TypedCoroutineState: s.proto}
 }
+
 func (s coroutineStateOption) configurePollResult(r *PollResult) {
 	r.proto.State = &sdkv1.PollResult_TypedCoroutineState{TypedCoroutineState: s.proto}
+}
+
+func (s coroutineStateOption) configureResponse(r *Response) {
+	switch d := r.proto.GetDirective().(type) {
+	case *sdkv1.RunResponse_Poll:
+		d.Poll.State = &sdkv1.Poll_TypedCoroutineState{TypedCoroutineState: s.proto}
+	} // noop otherwise
 }
 
 // Calls adds calls to a Poll directive.
@@ -543,6 +552,10 @@ func (r PollResult) String() string {
 // Equal is true if the poll result is equal to another.
 func (r PollResult) Equal(other PollResult) bool {
 	return proto.Equal(r.proto, other.proto)
+}
+
+func (r PollResult) configureRequest(req *Request) {
+	req.proto.Directive = &sdkv1.RunRequest_PollResult{PollResult: r.proto}
 }
 
 // Request is a request from Dispatch to run a function.
@@ -767,6 +780,27 @@ func ensureResponseExitResult(r *Response) *sdkv1.CallResult {
 	}
 	return d.Exit.Result
 }
+
+// RequestDirective is a Dispatch request directive, used by Dispatch
+// as it yields control to a coroutine.
+type RequestDirective interface {
+	RequestOption
+
+	requestDirective()
+}
+
+func (PollResult) requestDirective() {}
+
+// ResponseDirective is a Dispatch response directive, used by coroutines
+// as they yield control to Dispatch.
+type ResponseDirective interface {
+	ResponseOption
+
+	responseDirective()
+}
+
+func (Exit) responseDirective() {}
+func (Poll) responseDirective() {}
 
 // These are hooks used by the dispatchlambda and dispatchtest
 // package that let us avoid exposing proto messages. Exposing
