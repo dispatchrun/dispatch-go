@@ -10,7 +10,12 @@ const stateTypeUrl = "buf.build/stealthrocket/coroutine/coroutine.v1.State"
 
 // NewCoroutine creates a Dispatch coroutine Function.
 func NewCoroutine[I, O any](name string, fn func(context.Context, I) (O, error)) *GenericCoroutine[I, O] {
-	return &GenericCoroutine[I, O]{*NewFunction(name, fn)}
+	return &GenericCoroutine[I, O]{
+		GenericFunction[I, O]{
+			PrimitiveFunction{name: name},
+			fn,
+		},
+	}
 }
 
 // GenericCoroutine is a Function that accepts any input and returns any output.
