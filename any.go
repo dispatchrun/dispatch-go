@@ -102,6 +102,15 @@ func (a Any) TypeURL() string {
 	return a.proto.GetTypeUrl()
 }
 
+// Value is the raw serialized value.
+func (a Any) Value() []byte {
+	return a.proto.GetValue()
+}
+
+func newAnyTypeValue(typeUrl string, value []byte) Any {
+	return Any{&anypb.Any{TypeUrl: typeUrl, Value: value}}
+}
+
 func (a Any) Format(f fmt.State, verb rune) {
 	// Implement fmt.Formatter rather than fmt.Stringer
 	// so that we can use String() to extract the string value.

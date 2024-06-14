@@ -8,6 +8,7 @@ require (
 	connectrpc.com/connect v1.16.2
 	connectrpc.com/validate v0.1.0
 	github.com/aws/aws-lambda-go v1.47.0
+	github.com/dispatchrun/coroutine v0.8.0
 	github.com/offblocks/httpsig v0.8.1
 	golang.org/x/sys v0.6.0
 	google.golang.org/protobuf v1.34.2
