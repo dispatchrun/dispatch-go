@@ -56,7 +56,7 @@ type serializedDispatch struct {
 }
 
 func dispatchSerializer(s *types.Serializer, d *Dispatch) error {
-	types.SerializeT(s, &serializedDispatch{d.opts, d.functions})
+	types.SerializeT(s, serializedDispatch{d.opts, d.functions})
 	return nil
 }
 
