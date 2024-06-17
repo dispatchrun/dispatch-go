@@ -24,6 +24,7 @@ type Dispatch struct {
 	verificationKey string
 	serveAddr       string
 	env             []string
+	opts            []DispatchOption
 
 	client    *Client
 	clientErr error
@@ -40,6 +41,7 @@ func New(opts ...DispatchOption) (*Dispatch, error) {
 	d := &Dispatch{
 		env:       os.Environ(),
 		functions: map[string]Function{},
+		opts:      opts,
 	}
 	for _, opt := range opts {
 		opt.configureDispatch(d)

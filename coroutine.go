@@ -2,11 +2,8 @@ package dispatch
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/dispatchrun/coroutine"
-	"github.com/dispatchrun/coroutine/types"
-	"google.golang.org/protobuf/proto"
 )
 
 const stateTypeUrl = "buf.build/stealthrocket/coroutine/coroutine.v1.State"
@@ -119,43 +116,4 @@ func Yield[O any](status Status, directive ResponseDirective) RequestDirective {
 		directive: directive,
 	})
 	return result.directive
-}
-
-func init() {
-	types.Register(protoSerializer, protoDeserializer)
-}
-
-func protoSerializer(s *types.Serializer, mp *proto.Message) error {
-	m := *mp
-	if m == nil {
-		types.SerializeT(s, false)
-		return nil
-	}
-	b, err := proto.Marshal(m)
-	if err != nil {
-		return fmt.Errorf("proto.Marshal: %w", err)
-	}
-	types.SerializeT(s, true)
-	types.SerializeT(s, b)
-	return nil
-}
-
-func protoDeserializer(d *types.Deserializer, mp *proto.Message) error {
-	var ok bool
-	types.DeserializeTo(d, &ok)
-	if !ok {
-		*mp = nil
-		return nil
-	}
-
-	var b []byte
-	types.DeserializeTo(d, &b)
-
-	var m proto.Message
-	if err := proto.Unmarshal(b, m); err != nil {
-		return fmt.Errorf("proto.Unmarshal: %w", err)
-	}
-	*mp = m
-
-	return nil
 }

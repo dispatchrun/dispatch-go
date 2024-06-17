@@ -21,6 +21,7 @@ type Client struct {
 	apiUrl        string
 	env           []string
 	httpClient    *http.Client
+	opts          []ClientOption
 
 	client sdkv1connect.DispatchServiceClient
 }
@@ -28,7 +29,8 @@ type Client struct {
 // NewClient creates a Client.
 func NewClient(opts ...ClientOption) (*Client, error) {
 	c := &Client{
-		env: os.Environ(),
+		env:  os.Environ(),
+		opts: opts,
 	}
 	for _, opt := range opts {
 		opt.configureClient(c)
