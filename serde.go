@@ -71,7 +71,7 @@ func dispatchDeserializer(d *types.Deserializer, c *Dispatch) error {
 	for _, fn := range sd.functions {
 		dispatch.Register(fn)
 	}
-	*c = *dispatch
+	*c = *dispatch //nolint
 	return nil
 }
 
