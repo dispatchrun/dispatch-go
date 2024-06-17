@@ -50,6 +50,14 @@ func (c *GenericCoroutine[I, O]) Run(ctx context.Context, req Request) Response 
 		coro.Send(CoroS{directive: pollResult})
 	}
 
+	// Tidy up the coroutine when returning.
+	defer func() {
+		if !coro.Done() {
+			coro.Stop()
+			coro.Next()
+		}
+	}()
+
 	// Run the coroutine until it yields or returns.
 	if coro.Next() {
 		// The coroutine yielded and is now paused.
