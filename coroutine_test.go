@@ -104,7 +104,7 @@ func TestCoroutinePoll(t *testing.T) {
 
 	coro := dispatch.NewCoroutine("repeat", func(ctx context.Context, n int) (string, error) {
 		var repeated string
-		for i := range n {
+		for i := 0; i < n; i++ {
 			// Call a mock identity function that returns its input.
 			call := dispatch.NewCall("http://example.com", "identity", dispatch.String("x"), dispatch.CorrelationID(uint64(i)))
 			poll := dispatch.NewResponse(dispatch.NewPoll(1, 2, time.Minute, dispatch.Calls(call)))
