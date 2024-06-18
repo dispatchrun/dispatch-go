@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/dispatchrun/coroutine"
 	"github.com/dispatchrun/dispatch-go"
@@ -57,7 +58,7 @@ func TestCoroutineReturn(t *testing.T) {
 	}
 }
 
-func TestCoroutineYieldExitResponse(t *testing.T) {
+func TestCoroutineExit(t *testing.T) {
 	logMode(t)
 
 	coro := dispatch.NewCoroutine("stringify", func(ctx context.Context, in int) (string, error) {
@@ -95,5 +96,114 @@ func TestCoroutineYieldExitResponse(t *testing.T) {
 		t.Errorf("expected error, got: %s", res)
 	} else if got := err.Message(); got != "InvalidArgument: -23" {
 		t.Errorf("unexpected error: %s", got)
+	}
+}
+
+func TestCoroutinePoll(t *testing.T) {
+	logMode(t)
+
+	coro := dispatch.NewCoroutine("repeat", func(ctx context.Context, n int) (string, error) {
+		var repeated string
+		for i := range n {
+			// Call a mock identity function that returns its input.
+			call := dispatch.NewCall("http://example.com", "identity", dispatch.String("x"), dispatch.CorrelationID(uint64(i)))
+			poll := dispatch.NewResponse(dispatch.NewPoll(1, 2, time.Minute, dispatch.Calls(call)))
+
+			res := dispatch.Yield(poll)
+
+			pollResult, ok := res.PollResult()
+			if !ok {
+				return "", fmt.Errorf("expected poll result, got %s", res)
+			}
+			callResults := pollResult.Results()
+			if len(callResults) != 1 {
+				return "", fmt.Errorf("expected one poll call result, got %s", pollResult)
+			}
+			callResult := callResults[0]
+			if got := callResult.CorrelationID(); got != uint64(i) {
+				return "", fmt.Errorf("unexpected correlation ID: got %v, want %v", got, uint64(i))
+			}
+			output, ok := callResult.Output()
+			if !ok {
+				return "", fmt.Errorf("expected call result output, got %s", callResults[0])
+			}
+
+			var s string
+			if err := output.Unmarshal(&s); err != nil {
+				return "", fmt.Errorf("unmarshal string: %w", err)
+			}
+			repeated += s
+		}
+		return repeated, nil
+	})
+	defer coro.Close()
+
+	// Continously run the coroutine until it returns/exits.
+	var req dispatch.Request = dispatch.NewRequest("repeat", dispatch.Int(3))
+	var res dispatch.Response
+	for {
+		res = coro.Run(context.Background(), req)
+		if res.Status() != dispatch.OKStatus {
+			t.Errorf("unexpected status: %s", res.Status())
+		}
+		if _, done := res.Exit(); done {
+			break
+		}
+
+		// Check the poll directive.
+		poll, ok := res.Poll()
+		if !ok {
+			t.Fatalf("expected poll response, got %s", res)
+		}
+		if got := poll.MinResults(); got != 1 {
+			t.Errorf("unexpected poll min results: %v", got)
+		}
+		if got := poll.MaxResults(); got != 2 {
+			t.Errorf("unexpected poll max results: %v", got)
+		}
+		if got := poll.MaxWait(); got != time.Minute {
+			t.Errorf("unexpected poll max wait: %v", got)
+		}
+
+		// Check the call.
+		calls := poll.Calls()
+		if len(calls) != 1 {
+			t.Fatalf("expected one poll call, got %s", poll)
+		}
+		call := calls[0]
+		if got := call.Endpoint(); got != "http://example.com" {
+			t.Errorf("unexpected call endpoint: %v", got)
+		}
+		if got := call.Function(); got != "identity" {
+			t.Errorf("unexpected call endpoint: %v", got)
+		}
+
+		// Prepare the next request that carries the call result.
+		callResult := dispatch.NewCallResult(
+			call.Input(), // send call input back as the output
+			dispatch.CorrelationID(call.CorrelationID())) // correlation ID needs to match
+
+		pollResult := dispatch.NewPollResult(
+			dispatch.CoroutineState(poll.CoroutineState()), // send coroutine state back
+			dispatch.CallResults(callResult))
+
+		req = dispatch.NewRequest("repeat", pollResult)
+	}
+
+	exit, _ := res.Exit()
+	if err, ok := exit.Error(); ok {
+		t.Fatalf("unexpected error: %s", err)
+	}
+
+	var repeated string
+	output, ok := exit.Output()
+	if !ok {
+		t.Errorf("unexpected result, got %s", exit)
+	} else if err := output.Unmarshal(&repeated); err != nil {
+		t.Fatalf("unmarshal string: %v", err)
+	}
+
+	if repeated != "xxx" {
+		t.Errorf("unexpected function result: %q", repeated)
 	}
 }
