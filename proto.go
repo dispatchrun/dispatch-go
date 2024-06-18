@@ -117,6 +117,23 @@ func (c Call) Equal(other Call) bool {
 	return proto.Equal(c.proto, other.proto)
 }
 
+// Clone creates a copy of the call.
+func (c Call) Clone() Call {
+	if c.proto == nil {
+		return Call{}
+	}
+	return Call{proto.Clone(c.proto).(*sdkv1.Call)}
+}
+
+// With creates a copy of the Call with additional options applied.
+func (c Call) With(opts ...CallOption) Call {
+	call := c.Clone()
+	for _, opt := range opts {
+		opt.configureCall(&call)
+	}
+	return call
+}
+
 // CallResult is a function call result.
 type CallResult struct {
 	proto *sdkv1.CallResult
@@ -269,6 +286,11 @@ func (e Error) Value() []byte {
 	return e.proto.GetValue()
 }
 
+// Error implements the error interface.
+func (e Error) Error() string {
+	return fmt.Sprintf("%s: %s", e.Type(), e.Value())
+}
+
 // Traceback is the encoded stack trace for the error.
 //
 // The format is language-specific, encoded in the standard format used by
@@ -389,7 +411,7 @@ type Poll struct {
 }
 
 // NewPoll creates a Poll directive.
-func NewPoll(minResults, maxResults int32, maxWait time.Duration, opts ...PollOption) Poll {
+func NewPoll(minResults, maxResults int, maxWait time.Duration, opts ...PollOption) Poll {
 	poll := Poll{&sdkv1.Poll{
 		MinResults: int32(minResults),
 		MaxResults: int32(maxResults),
@@ -786,13 +808,17 @@ func (r Response) Marshal() ([]byte, error) {
 	return proto.Marshal(r.proto)
 }
 
-// With creates a copy of the Response with
-// additional fields set.
-func (r Response) With(opts ...ResponseOption) Response {
+// Clone creates a copy of the response.
+func (r Response) Clone() Response {
 	if r.proto == nil {
-		panic("empty response")
+		return Response{}
 	}
-	response := Response{proto.Clone(r.proto).(*sdkv1.RunResponse)}
+	return Response{proto.Clone(r.proto).(*sdkv1.RunResponse)}
+}
+
+// With creates a copy of the Response with additional options applied.
+func (r Response) With(opts ...ResponseOption) Response {
+	response := r.Clone()
 	for _, opt := range opts {
 		opt.configureResponse(&response)
 	}
