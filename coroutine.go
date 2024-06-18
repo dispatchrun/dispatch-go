@@ -2,16 +2,18 @@ package dispatch
 
 import (
 	"context"
+	"fmt"
+	"sync"
 
 	"github.com/dispatchrun/coroutine"
 )
 
-const stateTypeUrl = "buf.build/stealthrocket/coroutine/coroutine.v1.State"
+const durableCoroutineStateTypeUrl = "buf.build/stealthrocket/coroutine/coroutine.v1.State"
 
 // NewCoroutine creates a Dispatch coroutine Function.
 func NewCoroutine[I, O any](name string, fn func(context.Context, I) (O, error)) *GenericCoroutine[I, O] {
 	return &GenericCoroutine[I, O]{
-		GenericFunction[I, O]{
+		GenericFunction: GenericFunction[I, O]{
 			PrimitiveFunction{name: name},
 			fn,
 		},
@@ -19,7 +21,15 @@ func NewCoroutine[I, O any](name string, fn func(context.Context, I) (O, error))
 }
 
 // GenericCoroutine is a Function that accepts any input and returns any output.
-type GenericCoroutine[I, O any] struct{ GenericFunction[I, O] }
+type GenericCoroutine[I, O any] struct {
+	GenericFunction[I, O]
+
+	instances map[instanceID]coroutine.Coroutine[CoroR[O], CoroS]
+	nextID    instanceID
+	mu        sync.Mutex
+}
+
+type instanceID = int
 
 // Run runs the coroutine function.
 func (c *GenericCoroutine[I, O]) Run(ctx context.Context, req Request) Response {
@@ -27,55 +37,40 @@ func (c *GenericCoroutine[I, O]) Run(ctx context.Context, req Request) Response 
 		return NewResponseErrorf("%w: function %q received call for function %q", ErrInvalidArgument, c.name, name)
 	}
 
+	var id instanceID
 	var coro coroutine.Coroutine[CoroR[O], CoroS]
 
-	// Start a fresh coroutine if the request carries function input.
 	if _, ok := req.Input(); ok {
+		// Start a new coroutine if the request carries function input.
 		input, err := c.unpackInput(req)
 		if err != nil {
 			return NewResponseError(err)
 		}
-		coro = coroutine.NewWithReturn[CoroR[O], CoroS](c.entrypoint(input))
+		id, coro = c.setup(input)
 
 	} else if pollResult, ok := req.PollResult(); ok {
-		// Otherwise, handle poll results bound for a suspended coroutine.
-		var zero I
-		coro = coroutine.NewWithReturn[CoroR[O], CoroS](c.entrypoint(zero))
-
-		// Deserialize the coroutine.
-		state := pollResult.CoroutineState()
-		if state.TypeURL() != stateTypeUrl {
-			return NewResponseErrorf("%w: unexpected type URL: %q", ErrIncompatibleState, state.TypeURL())
-		} else if err := coro.Context().Unmarshal(state.Value()); err != nil {
-			return NewResponseErrorf("%w: unmarshal state: %v", ErrIncompatibleState, err)
+		// Otherwise, resume a coroutine that is suspended.
+		var err error
+		id, coro, err = c.deserialize(pollResult.CoroutineState())
+		if err != nil {
+			return NewResponseError(err)
 		}
 
-		// Send poll results back to the yield point.
+		// Send poll results to the coroutine.
 		coro.Send(CoroS{directive: pollResult})
 	}
 
 	// Tidy up the coroutine when returning.
-	defer func() {
-		if !coro.Done() {
-			coro.Stop()
-			coro.Next()
-		}
-	}()
+	defer c.tearDown(id, coro)
 
 	// Run the coroutine until it yields or returns.
 	if coro.Next() {
 		// The coroutine yielded and is now paused.
-
 		// Serialize the coroutine.
-		if !coroutine.Durable {
-			return NewResponseErrorf("%w: cannot serialize volatile coroutine", ErrPermanent)
-		}
-		rawState, err := coro.Context().Marshal()
+		state, err := c.serialize(id, coro)
 		if err != nil {
-			return NewResponseErrorf("%w: marshal state: %v", ErrPermanent, err)
+			return NewResponseError(err)
 		}
-		state := newAnyTypeValue(stateTypeUrl, rawState)
-
 		// Yield to Dispatch with the directive from the coroutine.
 		result := coro.Recv()
 		return NewResponse(result.status, result.directive, CoroutineState(state))
@@ -90,8 +85,111 @@ func (c *GenericCoroutine[I, O]) Run(ctx context.Context, req Request) Response 
 	return c.packOutput(result.output)
 }
 
+func (c *GenericCoroutine[I, O]) setup(input I) (instanceID, coroutine.Coroutine[CoroR[O], CoroS]) {
+	var id instanceID
+	coro := coroutine.NewWithReturn[CoroR[O], CoroS](c.entrypoint(input))
+
+	// In volatile mode, we need to create an "instance" of the coroutine that
+	// resides in memory.
+	if !coroutine.Durable {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+
+		// Give the instance a unique ID so that we can later find it
+		// when resuming execution.
+		c.nextID++
+		id = c.nextID
+		if c.instances == nil {
+			c.instances = map[instanceID]coroutine.Coroutine[CoroR[O], CoroS]{}
+		}
+		c.instances[id] = coro
+	}
+
+	return id, coro
+}
+
+func (c *GenericCoroutine[I, O]) tearDown(id instanceID, coro coroutine.Coroutine[CoroR[O], CoroS]) {
+	// Always tear down durable coroutines. They'll be rebuilt
+	// on the next call (if applicable) from their serialized state,
+	// possibly in a new location.
+	if coroutine.Durable && !coro.Done() {
+		coro.Stop()
+		coro.Next()
+	}
+
+	// Remove volatile coroutine instances only once they're done.
+	if !coroutine.Durable && coro.Done() {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+
+		delete(c.instances, id)
+	}
+}
+
+func (c *GenericCoroutine[I, O]) serialize(id instanceID, coro coroutine.Coroutine[CoroR[O], CoroS]) (Any, error) {
+	// In volatile mode, serialize a reference to the coroutine instance.
+	if !coroutine.Durable {
+		return Int(id), nil
+	}
+
+	// In durable mode, we serialize the entire state of the coroutine.
+	rawState, err := coro.Context().Marshal()
+	if err != nil {
+		return Any{}, fmt.Errorf("%w: marshal state: %v", ErrPermanent, err)
+	}
+	state := newAnyTypeValue(durableCoroutineStateTypeUrl, rawState)
+	return state, nil
+}
+
+func (c *GenericCoroutine[I, O]) deserialize(state Any) (instanceID, coroutine.Coroutine[CoroR[O], CoroS], error) {
+	var id instanceID
+	var coro coroutine.Coroutine[CoroR[O], CoroS]
+
+	// Deserialize durable coroutine state.
+	if coroutine.Durable {
+		var zero I
+		coro = coroutine.NewWithReturn[CoroR[O], CoroS](c.entrypoint(zero))
+		if state.TypeURL() != durableCoroutineStateTypeUrl {
+			return 0, coro, fmt.Errorf("%w: unexpected type URL: %q", ErrIncompatibleState, state.TypeURL())
+		} else if err := coro.Context().Unmarshal(state.Value()); err != nil {
+			return 0, coro, fmt.Errorf("%w: unmarshal state: %v", ErrIncompatibleState, err)
+		}
+		return id, coro, nil
+	}
+
+	// In volatile mode, find the suspended coroutine instance.
+	if err := state.Unmarshal(&id); err != nil {
+		return 0, coro, fmt.Errorf("%w: invalid volatile coroutine reference: %s", ErrIncompatibleState, state)
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	var ok bool
+	coro, ok = c.instances[id]
+	if !ok {
+		return 0, coro, fmt.Errorf("%w: volatile coroutine %d", ErrNotFound, id)
+	}
+	return id, coro, nil
+}
+
 func (c *GenericCoroutine[I, O]) Coroutine() bool {
 	return true
+}
+
+// Close closes the coroutine.
+//
+// In volatile mode, Close destroys all running instances of the coroutine.
+// In durable mode, Close is a noop.
+func (c *GenericCoroutine[I, O]) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for _, fn := range c.instances {
+		fn.Stop()
+		fn.Next()
+	}
+	clear(c.instances)
+	return nil
 }
 
 func (c *GenericCoroutine[I, O]) entrypoint(input I) func() CoroR[O] {
