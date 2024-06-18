@@ -12,6 +12,9 @@ import (
 	"connectrpc.com/validate"
 )
 
+// ID is an identifier for a dispatched function call.
+type ID string
+
 // Client is a client for the Dispatch API.
 //
 // The Client can be used to dispatch function calls.
