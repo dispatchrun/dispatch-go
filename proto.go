@@ -708,12 +708,17 @@ func NewResponse(opts ...ResponseOption) Response {
 	for _, opt := range opts {
 		opt.configureResponse(&response)
 	}
+	// Ensure the response has a valid directive.
 	if response.proto.Directive == nil {
 		ensureResponseExitResult(&response)
 	}
+	// Ensure the response has a valid status.
 	if response.proto.Status == sdkv1.Status(UnspecifiedStatus) {
 		response.proto.Status = sdkv1.Status(OKStatus)
+
 		if response.proto.GetExit().GetResult().GetError() != nil {
+			// Error categorization should have come earlier.
+			// If the error wasn't categorized, assume permanent error.
 			response.proto.Status = sdkv1.Status(PermanentErrorStatus)
 		}
 	}
@@ -784,12 +789,12 @@ func (r Response) Marshal() ([]byte, error) {
 // With creates a copy of the Response with
 // additional fields set.
 func (r Response) With(opts ...ResponseOption) Response {
+	if r.proto == nil {
+		panic("empty response")
+	}
 	response := Response{proto.Clone(r.proto).(*sdkv1.RunResponse)}
 	for _, opt := range opts {
 		opt.configureResponse(&response)
-	}
-	if response.proto.Directive == nil {
-		ensureResponseExitResult(&response)
 	}
 	return response
 }
