@@ -66,7 +66,7 @@ func TestCoroutineYieldExitResponse(t *testing.T) {
 			res = dispatch.NewResponseErrorf("%w: %d", dispatch.ErrInvalidArgument, in)
 		} else {
 			output := dispatch.String(strconv.Itoa(in))
-			res = dispatch.NewResponse(dispatch.OKStatus, dispatch.Output(output))
+			res = dispatch.NewResponse(dispatch.Output(output))
 		}
 		dispatch.Yield(res)
 		panic("unreachable")

@@ -703,15 +703,19 @@ type Response struct {
 type ResponseOption interface{ configureResponse(*Response) }
 
 // NewResponse creates a Response.
-func NewResponse(status Status, opts ...ResponseOption) Response {
-	response := Response{&sdkv1.RunResponse{
-		Status: sdkv1.Status(status),
-	}}
+func NewResponse(opts ...ResponseOption) Response {
+	response := Response{&sdkv1.RunResponse{}}
 	for _, opt := range opts {
 		opt.configureResponse(&response)
 	}
 	if response.proto.Directive == nil {
 		ensureResponseExitResult(&response)
+	}
+	if response.proto.Status == sdkv1.Status(UnspecifiedStatus) {
+		response.proto.Status = sdkv1.Status(OKStatus)
+		if response.proto.GetExit().GetResult().GetError() != nil {
+			response.proto.Status = sdkv1.Status(PermanentErrorStatus)
+		}
 	}
 	return response
 }
