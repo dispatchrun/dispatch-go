@@ -66,14 +66,23 @@ func (c *GenericCoroutine[I, O]) Run(ctx context.Context, req Request) Response 
 	// Run the coroutine until it yields or returns.
 	if coro.Next() {
 		// The coroutine yielded and is now paused.
-		// Serialize the coroutine.
-		state, err := c.serialize(id, coro)
-		if err != nil {
-			return NewResponseError(err)
+		yield := coro.Recv()
+
+		// Serialize the coroutine, unless it's a terminal Exit directive.
+		var state Any
+		if _, terminal := yield.directive.(Exit); !terminal {
+			var err error
+			state, err = c.serialize(id, coro)
+			if err != nil {
+				return NewResponseError(err)
+			}
+		} else {
+			coro.Stop()
+			coro.Next()
 		}
-		// Yield to Dispatch with the directive from the coroutine.
-		result := coro.Recv()
-		return NewResponse(result.status, result.directive, CoroutineState(state))
+
+		// Yield to Dispatch with the directive.
+		return NewResponse(yield.status, yield.directive, CoroutineState(state))
 	}
 
 	// The coroutine returned. Serialize the output / error.
