@@ -777,6 +777,13 @@ func (r Response) Marshal() ([]byte, error) {
 	return proto.Marshal(r.proto)
 }
 
+func (r Response) configureResponse(other *Response) {
+	if other.proto != nil {
+		r.proto = proto.Clone(other.proto).(*sdkv1.RunResponse)
+		fmt.Println("CLONING", other, r)
+	}
+}
+
 func ensureResponseExitResult(r *Response) *sdkv1.CallResult {
 	var d *sdkv1.RunResponse_Exit
 	d, ok := r.proto.Directive.(*sdkv1.RunResponse_Exit)

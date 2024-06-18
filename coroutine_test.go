@@ -20,7 +20,7 @@ func logMode(t *testing.T) {
 	}
 }
 
-func TestCoroutineReturnOnly(t *testing.T) {
+func TestCoroutineReturn(t *testing.T) {
 	logMode(t)
 
 	coro := dispatch.NewCoroutine("stringify", func(ctx context.Context, in int) (string, error) {
@@ -57,17 +57,18 @@ func TestCoroutineReturnOnly(t *testing.T) {
 	}
 }
 
-func TestCoroutineExit(t *testing.T) {
+func TestCoroutineYieldExitResponse(t *testing.T) {
 	logMode(t)
 
 	coro := dispatch.NewCoroutine("stringify", func(ctx context.Context, in int) (string, error) {
+		var res dispatch.Response
 		if in < 0 {
-			err := fmt.Errorf("%w: %d", dispatch.ErrInvalidArgument, in)
-			dispatch.Yield[string](dispatch.InvalidArgumentStatus, dispatch.NewExit(dispatch.NewError(err)))
+			res = dispatch.NewResponseErrorf("%w: %d", dispatch.ErrInvalidArgument, in)
 		} else {
 			output := dispatch.String(strconv.Itoa(in))
-			dispatch.Yield[string](dispatch.OKStatus, dispatch.NewExit(dispatch.Output(output)))
+			res = dispatch.NewResponse(dispatch.OKStatus, dispatch.Output(output))
 		}
+		dispatch.Yield(res)
 		panic("unreachable")
 	})
 	defer coro.Close()
@@ -76,6 +77,7 @@ func TestCoroutineExit(t *testing.T) {
 	if res.Status() != dispatch.OKStatus {
 		t.Errorf("unexpected status: %s", res.Status())
 	}
+	fmt.Println(res)
 	output, ok := res.Output()
 	if !ok {
 		t.Errorf("expected output, got: %s", res)
