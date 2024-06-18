@@ -90,6 +90,10 @@ func (c *GenericCoroutine[I, O]) Run(ctx context.Context, req Request) Response 
 	return c.packOutput(result.output)
 }
 
+func (c *GenericCoroutine[I, O]) Coroutine() bool {
+	return true
+}
+
 func (c *GenericCoroutine[I, O]) entrypoint(input I) func() CoroR[O] {
 	return func() CoroR[O] {
 		// The context that gets passed as argument here should be recreated
