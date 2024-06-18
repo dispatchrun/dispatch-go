@@ -2,8 +2,12 @@ package dispatch
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
+	"math/rand/v2"
 	"sync"
+	"time"
 
 	"github.com/dispatchrun/coroutine"
 )
@@ -218,4 +222,176 @@ func (c *GenericCoroutine[I, O]) entrypoint(input I) func() Response {
 // point.
 func Yield(res Response) Request {
 	return coroutine.Yield[Response, Request](res)
+}
+
+// Await awaits the results of calls.
+func Await(strategy AwaitStrategy, calls ...Call) ([]CallResult, error) {
+	if len(calls) == 0 {
+		return nil, nil
+	}
+
+	// Assign a correlation ID to each call, and map to the index
+	// in the provided set of []Call.
+	//
+	// The reason we use a random starting correlation ID, rather than
+	// the index of each Call, is that Dispatch has at-least once execution
+	// guarantees and may rarely deliver a call result from a previous Await
+	// operation. Using random correlation ID helps guard against this.
+	nextCorrelationID := rand.Uint64()
+	pending := map[uint64]int{}
+	for i, call := range calls {
+		correlationID := nextCorrelationID
+		nextCorrelationID++
+		pending[correlationID] = i
+		calls[i] = call.With(CorrelationID(correlationID))
+	}
+
+	// Set polling configuration. There's no value in waking up the
+	// coroutine sooner than when all results are available (by reducing
+	// minResults and/or maxWait), since there's no internal concurrency
+	// in the Go SDK.
+	minResults := len(calls)
+	maxResults := len(calls)
+	maxWait := 5 * time.Minute
+
+	callResults := make([]CallResult, len(calls))
+
+	// Poll until results available.
+	for len(pending) > 0 {
+		poll := NewResponse(NewPoll(minResults, maxResults, maxWait, Calls(calls...)))
+		res := Yield(poll)
+
+		calls = nil // only submit calls once
+
+		// Unpack poll results.
+		pollResult, ok := res.PollResult()
+		if !ok {
+			return nil, fmt.Errorf("unexpected response when polling: %s", res)
+		} else if err, ok := pollResult.Error(); ok {
+			return nil, fmt.Errorf("poll error: %w", err)
+		}
+
+		// Map call results back to calls.
+		var hasSuccess bool
+		var hasFailure bool
+		for _, result := range pollResult.Results() {
+			correlationID := result.CorrelationID()
+			i, ok := pending[correlationID]
+			if !ok {
+				// This can occur due to the at-least once execution
+				// guarantees of Dispatch.
+				slog.Debug("skipping call result with unknown correlation ID", "call_result", result, "correlation_id", correlationID)
+				continue
+			}
+			callResults[i] = result
+			delete(pending, correlationID)
+
+			if _, failed := result.Error(); failed {
+				hasFailure = true
+			} else {
+				hasSuccess = true
+			}
+		}
+
+		switch {
+		case hasFailure && strategy == AwaitAll:
+			return callResults, joinErrors(callResults)
+		case hasSuccess && strategy == AwaitAny:
+			return callResults, nil
+		}
+	}
+
+	if strategy == AwaitAny && allFailed(callResults) {
+		return callResults, joinErrors(callResults)
+	}
+	return callResults, nil
+}
+
+func allFailed(results []CallResult) bool {
+	for _, result := range results {
+		if _, ok := result.Error(); !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func joinErrors(results []CallResult) error {
+	var errs []error
+	for _, result := range results {
+		if err, ok := result.Error(); ok {
+			errs = append(errs, err)
+		}
+	}
+	switch len(errs) {
+	case 0:
+		return nil
+	case 1:
+		return errs[0]
+	default:
+		return errors.Join(errs...)
+	}
+}
+
+// AwaitStrategy controls an Await operation.
+type AwaitStrategy int
+
+const (
+	// AwaitAll instructs Await to wait until all results are available,
+	// or any call fails.
+	AwaitAll AwaitStrategy = iota
+
+	// AwaitAny instructs Await to wait until any result is available,
+	// or all calls fail.
+	AwaitAny
+)
+
+// Await calls the function and awaits its result.
+//
+// Await should only be called within a Dispatch coroutine.
+func (f *PrimitiveFunction) Await(input Any, opts ...CallOption) (Any, error) {
+	call, err := f.NewCall(input, opts...)
+	if err != nil {
+		return Any{}, err
+	}
+
+	callResults, err := Await(AwaitAll, call)
+	if err != nil {
+		return Any{}, err
+	}
+	callResult := callResults[0]
+
+	output, _ := callResult.Output()
+	if err, ok := callResult.Error(); ok {
+		return output, err
+	}
+	return output, nil
+}
+
+// Await calls the function and awaits its result.
+//
+// Await should only be called within a Dispatch coroutine.
+func (f *GenericFunction[I, O]) Await(input I, opts ...CallOption) (O, error) {
+	var output O
+
+	call, err := f.NewCall(input, opts...)
+	if err != nil {
+		return output, err
+	}
+
+	callResults, err := Await(AwaitAll, call)
+	if err != nil {
+		return output, err
+	}
+	callResult := callResults[0]
+
+	if boxedOutput, ok := callResult.Output(); ok {
+		if err := boxedOutput.Unmarshal(&output); err != nil {
+			return output, fmt.Errorf("failed to unmarshal call output: %w", err)
+		}
+	}
+	if err, ok := callResult.Error(); ok {
+		return output, err
+	}
+	return output, nil
 }
