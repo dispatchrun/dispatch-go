@@ -137,6 +137,7 @@ type CallResultOption interface{ configureCallResult(*CallResult) }
 // Output sets the output from a function call or Response.
 func Output(output Any) interface {
 	CallResultOption
+	ExitOption
 	ResponseOption
 } {
 	return outputOption(output)
@@ -145,7 +146,15 @@ func Output(output Any) interface {
 type outputOption Any
 
 func (o outputOption) configureCallResult(r *CallResult) { r.proto.Output = o.proto }
-func (o outputOption) configureResponse(r *Response)     { ensureResponseExitResult(r).Output = o.proto }
+
+func (o outputOption) configureExit(x *Exit) {
+	if x.proto.Result == nil {
+		x.proto.Result = &sdkv1.CallResult{}
+	}
+	x.proto.Result.Output = o.proto
+}
+
+func (o outputOption) configureResponse(r *Response) { ensureResponseExitResult(r).Output = o.proto }
 
 // DispatchID sets the opaque identifier for the function call.
 func DispatchID(id ID) interface {
@@ -288,7 +297,10 @@ func (e Error) configurePollResult(p *PollResult) {
 }
 
 func (e Error) configureExit(x *Exit) {
-	x.proto.Result = &sdkv1.CallResult{Error: e.proto}
+	if x.proto.Result == nil {
+		x.proto.Result = &sdkv1.CallResult{}
+	}
+	x.proto.Result.Error = e.proto
 }
 
 func (e Error) configureResponse(r *Response) {
