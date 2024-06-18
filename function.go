@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"sync"
 )
 
 // Function is a Dispatch function.
@@ -18,6 +19,42 @@ type Function interface {
 	// a Dispatch endpoint, allowing the NewCall and Dispatch
 	// methods to be called on the function.
 	bind(endpoint *Dispatch)
+}
+
+// Registry is a collection of Dispatch functions.
+type Registry struct {
+	functions map[string]Function
+
+	mu sync.Mutex
+}
+
+// Register registers a function.
+func (r *Registry) Register(fn Function) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.functions == nil {
+		r.functions = map[string]Function{}
+	}
+
+	r.functions[fn.Name()] = fn
+}
+
+// Lookup retrieves a function by name.
+func (r *Registry) Lookup(name string) Function {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	return r.functions[name]
+}
+
+// Run runs a function.
+func (r *Registry) Run(ctx context.Context, req Request) Response {
+	fn := r.Lookup(req.Function())
+	if fn == nil {
+		return NewResponseErrorf("%w: function %q not found", ErrNotFound, req.Function())
+	}
+	return fn.Run(ctx, req)
 }
 
 // NewFunction creates a Dispatch Function.

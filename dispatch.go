@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"strings"
-	"sync"
 
 	"buf.build/gen/go/stealthrocket/dispatch-proto/connectrpc/go/dispatch/sdk/v1/sdkv1connect"
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
@@ -32,16 +31,14 @@ type Dispatch struct {
 	path    string
 	handler http.Handler
 
-	functions map[string]Function
-	mu        sync.Mutex
+	registry Registry
 }
 
 // New creates a Dispatch endpoint.
 func New(opts ...DispatchOption) (*Dispatch, error) {
 	d := &Dispatch{
-		env:       os.Environ(),
-		functions: map[string]Function{},
-		opts:      opts,
+		env:  os.Environ(),
+		opts: opts,
 	}
 	for _, opt := range opts {
 		opt.configureDispatch(d)
@@ -165,22 +162,12 @@ func ServeAddress(addr string) DispatchOption {
 
 // Register registers a function.
 func (d *Dispatch) Register(fn Function) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	d.functions[fn.Name()] = fn
+	d.registry.Register(fn)
 
 	// Bind the function to this endpoint, so that the function's
 	// NewCall and Dispatch methods can be used to build and
 	// dispatch calls.
 	fn.bind(d)
-}
-
-func (d *Dispatch) lookupFunction(name string) Function {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	return d.functions[name]
 }
 
 // URL is the URL of the Dispatch endpoint.
@@ -199,23 +186,6 @@ func (d *Dispatch) Client() (*Client, error) {
 	return d.client, d.clientErr
 }
 
-// The gRPC handler is unexported so that the http.Handler can
-// be wrapped in order to validate request signatures.
-type dispatchFunctionServiceHandler struct {
-	dispatch *Dispatch
-}
-
-func (d *dispatchFunctionServiceHandler) Run(ctx context.Context, req *connect.Request[sdkv1.RunRequest]) (*connect.Response[sdkv1.RunResponse], error) {
-	var res Response
-	fn := d.dispatch.lookupFunction(req.Msg.Function)
-	if fn == nil {
-		res = NewResponseErrorf("%w: function %q not found", ErrNotFound, req.Msg.Function)
-	} else {
-		res = fn.Run(ctx, Request{req.Msg})
-	}
-	return connect.NewResponse(res.proto), nil
-}
-
 // Serve serves the Dispatch endpoint.
 func (d *Dispatch) Serve() error {
 	mux := http.NewServeMux()
@@ -225,4 +195,13 @@ func (d *Dispatch) Serve() error {
 
 	server := &http.Server{Addr: d.serveAddr, Handler: mux}
 	return server.ListenAndServe()
+}
+
+// The gRPC handler is unexported so that the http.Handler can
+// be wrapped in order to validate request signatures.
+type dispatchFunctionServiceHandler struct{ dispatch *Dispatch }
+
+func (d *dispatchFunctionServiceHandler) Run(ctx context.Context, req *connect.Request[sdkv1.RunRequest]) (*connect.Response[sdkv1.RunResponse], error) {
+	res := d.dispatch.registry.Run(ctx, Request{req.Msg})
+	return connect.NewResponse(res.proto), nil
 }
