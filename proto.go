@@ -799,27 +799,6 @@ func ensureResponseExitResult(r *Response) *sdkv1.CallResult {
 	return d.Exit.Result
 }
 
-// RequestDirective is a Dispatch request directive, used by Dispatch
-// as it yields control to a coroutine.
-type RequestDirective interface {
-	RequestOption
-
-	requestDirective()
-}
-
-func (PollResult) requestDirective() {}
-
-// ResponseDirective is a Dispatch response directive, used by coroutines
-// as they yield control to Dispatch.
-type ResponseDirective interface {
-	ResponseOption
-
-	responseDirective()
-}
-
-func (Exit) responseDirective() {}
-func (Poll) responseDirective() {}
-
 // These are hooks used by the dispatchlambda and dispatchtest
 // package that let us avoid exposing proto messages. Exposing
 // the underlying proto messages complicates the API and opens
