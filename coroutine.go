@@ -49,22 +49,22 @@ func (c *GenericCoroutine[I, O]) Run(ctx context.Context, req Request) Response 
 	coro.Send(req)
 
 	// Run the coroutine until it yields or returns.
-	if !coro.Next() {
-		// The coroutine returned; return the result to Dispatch.
+	if returned := !coro.Next(); returned {
 		return coro.Result()
 	}
-
-	// The coroutine yielded and is now paused.
 	yield := coro.Recv()
 
-	// If the coroutine explicitly exited, stop it before yielding to Dispatch.
+	// If the coroutine explicitly exited, stop it before returning to Dispatch.
+	// There's no need to serialize the coroutine state in this case; it's done.
 	if _, exit := yield.Exit(); exit {
 		coro.Stop()
 		coro.Next()
 		return yield
 	}
 
-	// Serialize the coroutine state and yield to Dispatch with the directive.
+	// For all other response directives, serialize the coroutine state before
+	// yielding to Dispatch so that the coroutine can be resumed from the yield
+	// point.
 	state, err := c.serialize(id, coro)
 	if err != nil {
 		return NewResponseError(err)
@@ -212,11 +212,10 @@ func (c *GenericCoroutine[I, O]) entrypoint(input I) func() Response {
 
 // Yield yields control to Dispatch.
 //
-// The coroutine is paused, serialized and sent to Dispatch. The
-// directive instructs Dispatch to perform an operation while
-// the coroutine is suspended. Once the operation is complete,
-// Dispatch yields control back to the coroutine, which is resumed
-// from the point execution was suspended.
+// The coroutine is suspended while the Response is sent to Dispatch.
+// If the Response carries a directive to perform work, Dispatch will
+// send the results back in a Request and resume execution from this
+// point.
 func Yield(res Response) Request {
 	return coroutine.Yield[Response, Request](res)
 }

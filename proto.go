@@ -780,7 +780,6 @@ func (r Response) Marshal() ([]byte, error) {
 func (r Response) configureResponse(other *Response) {
 	if other.proto != nil {
 		r.proto = proto.Clone(other.proto).(*sdkv1.RunResponse)
-		fmt.Println("CLONING", other, r)
 	}
 }
 

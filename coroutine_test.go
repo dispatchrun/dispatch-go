@@ -77,7 +77,6 @@ func TestCoroutineYieldExitResponse(t *testing.T) {
 	if res.Status() != dispatch.OKStatus {
 		t.Errorf("unexpected status: %s", res.Status())
 	}
-	fmt.Println(res)
 	output, ok := res.Output()
 	if !ok {
 		t.Errorf("expected output, got: %s", res)
