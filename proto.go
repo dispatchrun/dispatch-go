@@ -777,10 +777,21 @@ func (r Response) Marshal() ([]byte, error) {
 	return proto.Marshal(r.proto)
 }
 
-func (r Response) configureResponse(other *Response) {
-	if other.proto != nil {
-		r.proto = proto.Clone(other.proto).(*sdkv1.RunResponse)
+// With creates a copy of the Response with
+// additional fields set.
+func (r Response) With(opts ...ResponseOption) Response {
+	response := Response{proto.Clone(r.proto).(*sdkv1.RunResponse)}
+	for _, opt := range opts {
+		opt.configureResponse(&response)
 	}
+	if response.proto.Directive == nil {
+		ensureResponseExitResult(&response)
+	}
+	return response
+}
+
+func (s Status) configureResponse(r *Response) {
+	r.proto.Status = sdkv1.Status(s)
 }
 
 func ensureResponseExitResult(r *Response) *sdkv1.CallResult {

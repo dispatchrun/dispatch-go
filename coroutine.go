@@ -69,7 +69,7 @@ func (c *GenericCoroutine[I, O]) Run(ctx context.Context, req Request) Response 
 	if err != nil {
 		return NewResponseError(err)
 	}
-	return NewResponse(yield.Status(), yield, CoroutineState(state))
+	return yield.With(CoroutineState(state))
 }
 
 func (c *GenericCoroutine[I, O]) setUp(req Request) (id coroutineID, coro dispatchCoroutine, err error) {
