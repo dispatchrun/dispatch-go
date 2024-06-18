@@ -70,6 +70,7 @@ func TestHandlerInvokeError(t *testing.T) {
 	}
 
 	req := &sdkv1.RunRequest{
+		Function: "handler",
 		Directive: &sdkv1.RunRequest_Input{
 			Input: input,
 		},
@@ -135,6 +136,7 @@ func TestHandlerInvokeFunction(t *testing.T) {
 	}
 
 	req := &sdkv1.RunRequest{
+		Function: "handler",
 		Directive: &sdkv1.RunRequest_Input{
 			Input: input,
 		},
@@ -172,8 +174,8 @@ func TestHandlerInvokeFunction(t *testing.T) {
 	switch coro := res.Directive.(type) {
 	case *sdkv1.RunResponse_Exit:
 		out := coro.Exit.GetResult().GetOutput()
-		if out.TypeUrl != "type.googleapis.com/google.protobuf.StringValue" {
-			t.Errorf("expected coroutine to return an output of type %q, got %q", "type.googleapis.com/google.protobuf.StringValue", out.TypeUrl)
+		if out.GetTypeUrl() != "type.googleapis.com/google.protobuf.StringValue" {
+			t.Errorf("expected coroutine to return an output of type %q, got %q", "type.googleapis.com/google.protobuf.StringValue", out.GetTypeUrl())
 		}
 		var output wrapperspb.StringValue
 		if err := out.UnmarshalTo(&output); err != nil {

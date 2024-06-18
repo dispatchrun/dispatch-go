@@ -23,6 +23,10 @@ type GenericCoroutine[I, O any] struct{ GenericFunction[I, O] }
 
 // Run runs the coroutine function.
 func (c *GenericCoroutine[I, O]) Run(ctx context.Context, req Request) Response {
+	if name := req.Function(); name != c.name {
+		return NewResponseErrorf("%w: function %q received call for function %q", ErrInvalidArgument, c.name, name)
+	}
+
 	var coro coroutine.Coroutine[CoroR[O], CoroS]
 
 	// Start a fresh coroutine if the request carries function input.

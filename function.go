@@ -7,13 +7,20 @@ import (
 	"sync"
 )
 
+// Runnable is something that can be Run.
+type Runnable interface {
+	Run(context.Context, Request) Response
+}
+
 // Function is a Dispatch function.
 type Function interface {
+	Runnable
+
 	// Name is the name of the function.
 	Name() string
 
-	// Run runs the function.
-	Run(context.Context, Request) Response
+	// Close closes the function.
+	Close() error
 
 	// bind is an internal hook for binding a function to
 	// a Dispatch endpoint, allowing the NewCall and Dispatch
@@ -27,6 +34,8 @@ type Registry struct {
 
 	mu sync.Mutex
 }
+
+var _ Runnable = (*Registry)(nil)
 
 // Register registers a function.
 func (r *Registry) Register(fn Function) {
@@ -57,6 +66,21 @@ func (r *Registry) Run(ctx context.Context, req Request) Response {
 	return fn.Run(ctx, req)
 }
 
+// Close closes the registry and all functions within it.
+func (r *Registry) Close() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	var err error
+	for _, fn := range r.functions {
+		if closeErr := fn.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}
+	clear(r.functions)
+	return err
+}
+
 // NewFunction creates a Dispatch Function.
 func NewFunction[I, O any](name string, fn func(context.Context, I) (O, error)) *GenericFunction[I, O] {
 	return &GenericFunction[I, O]{PrimitiveFunction{name: name}, fn}
@@ -69,10 +93,11 @@ type GenericFunction[I, O any] struct {
 	fn func(ctx context.Context, input I) (O, error)
 }
 
-var _ Function = (*GenericFunction[int, int])(nil)
-
 // Run runs the function.
 func (f *GenericFunction[I, O]) Run(ctx context.Context, req Request) Response {
+	if name := req.Function(); name != f.name {
+		return NewResponseErrorf("%w: function %q received call for function %q", ErrInvalidArgument, f.name, name)
+	}
 	input, err := f.unpackInput(req)
 	if err != nil {
 		return NewResponseError(err)
@@ -144,7 +169,14 @@ func (f *PrimitiveFunction) Name() string {
 
 // Run runs the function.
 func (f *PrimitiveFunction) Run(ctx context.Context, req Request) Response {
+	if name := req.Function(); name != f.name {
+		return NewResponseErrorf("%w: function %q received call for function %q", ErrInvalidArgument, f.name, name)
+	}
 	return f.fn(ctx, req)
+}
+
+func (f *PrimitiveFunction) Close() error {
+	return nil
 }
 
 func (f *PrimitiveFunction) bind(endpoint *Dispatch) {
@@ -153,11 +185,12 @@ func (f *PrimitiveFunction) bind(endpoint *Dispatch) {
 
 // NewCall creates a Call for the function.
 func (f *PrimitiveFunction) NewCall(input Any, opts ...CallOption) (Call, error) {
-	if f.endpoint == nil {
-		return Call{}, fmt.Errorf("cannot build function call: function has not been registered with a Dispatch endpoint")
+	var url string
+	if f.endpoint != nil {
+		url = f.endpoint.URL()
 	}
 	opts = append(slices.Clip(opts), Input(input))
-	return NewCall(f.endpoint.URL(), f.name, opts...), nil
+	return NewCall(url, f.name, opts...), nil
 }
 
 // Dispatch dispatches a call to the function.
@@ -170,6 +203,9 @@ func (f *PrimitiveFunction) Dispatch(ctx context.Context, input Any, opts ...Cal
 }
 
 func (f *PrimitiveFunction) dispatchCall(ctx context.Context, call Call) (ID, error) {
+	if f.endpoint == nil {
+		return "", fmt.Errorf("cannot dispatch function call: function has not been registered with a Dispatch endpoint")
+	}
 	client, err := f.endpoint.Client()
 	if err != nil {
 		return "", fmt.Errorf("cannot dispatch function call: %w", err)

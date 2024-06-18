@@ -52,14 +52,12 @@ func TestPrimitiveFunctionNewCallAndDispatchWithoutEndpoint(t *testing.T) {
 		panic("not implemented")
 	})
 
-	wantErr := "cannot build function call: function has not been registered with a Dispatch endpoint"
-
-	_, err := fn.NewCall(dispatch.String("bar"))
-	if err == nil || err.Error() != wantErr {
-		t.Fatalf("unexpected error: %v", err)
+	_, err := fn.NewCall(dispatch.String("bar")) // allowed
+	if err != nil {
+		t.Fatal(err)
 	}
 	_, err = fn.Dispatch(context.Background(), dispatch.String("bar"))
-	if err == nil || err.Error() != wantErr {
+	if err == nil || err.Error() != "cannot dispatch function call: function has not been registered with a Dispatch endpoint" {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -69,14 +67,12 @@ func TestFunctionNewCallAndDispatchWithoutEndpoint(t *testing.T) {
 		panic("not implemented")
 	})
 
-	wantErr := "cannot build function call: function has not been registered with a Dispatch endpoint"
-
-	_, err := fn.NewCall("bar")
-	if err == nil || err.Error() != wantErr {
-		t.Fatalf("unexpected error: %v", err)
+	_, err := fn.NewCall("bar") // allowed
+	if err != nil {
+		t.Fatal(err)
 	}
 	_, err = fn.Dispatch(context.Background(), "bar")
-	if err == nil || err.Error() != wantErr {
+	if err == nil || err.Error() != "cannot dispatch function call: function has not been registered with a Dispatch endpoint" {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
