@@ -45,7 +45,7 @@ func Input(input Any) interface {
 
 type inputOption Any
 
-func (i inputOption) configureCall(r *Call) { r.proto.Input = i.proto }
+func (i inputOption) configureCall(c *Call) { c.proto.Input = i.proto }
 
 func (i inputOption) configureRequest(r *Request) {
 	r.proto.Directive = &sdkv1.RunRequest_Input{Input: i.proto}
@@ -794,10 +794,6 @@ func (r Response) With(opts ...ResponseOption) Response {
 	return response
 }
 
-func (s Status) configureResponse(r *Response) {
-	r.proto.Status = sdkv1.Status(s)
-}
-
 func ensureResponseExitResult(r *Response) *sdkv1.CallResult {
 	var d *sdkv1.RunResponse_Exit
 	d, ok := r.proto.Directive.(*sdkv1.RunResponse_Exit)
@@ -813,6 +809,15 @@ func ensureResponseExitResult(r *Response) *sdkv1.CallResult {
 	}
 	return d.Exit.Result
 }
+
+func (s Status) configureResponse(r *Response) { r.proto.Status = sdkv1.Status(s) }
+
+func (a Any) configureCall(c *Call)       { inputOption(a).configureCall(c) }
+func (a Any) configureRequest(r *Request) { inputOption(a).configureRequest(r) }
+
+func (a Any) configureCallResult(r *CallResult) { outputOption(a).configureCallResult(r) }
+func (a Any) configureExit(x *Exit)             { outputOption(a).configureExit(x) }
+func (a Any) configureResponse(r *Response)     { outputOption(a).configureResponse(r) }
 
 // These are hooks used by the dispatchlambda and dispatchtest
 // package that let us avoid exposing proto messages. Exposing

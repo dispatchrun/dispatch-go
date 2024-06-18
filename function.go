@@ -130,7 +130,7 @@ func (f *GenericFunction[I, O]) packOutput(output O) Response {
 	if err != nil {
 		return NewResponseErrorf("%w: invalid output %v: %v", ErrInvalidResponse, output, err)
 	}
-	return NewResponse(StatusOf(output), Output(boxedOutput))
+	return NewResponse(StatusOf(output), boxedOutput)
 }
 
 // NewCall creates a Call for the function.
@@ -197,7 +197,7 @@ func (f *PrimitiveFunction) NewCall(input Any, opts ...CallOption) (Call, error)
 	if f.endpoint != nil {
 		url = f.endpoint.URL()
 	}
-	opts = append(slices.Clip(opts), Input(input))
+	opts = append(slices.Clip(opts), input)
 	return NewCall(url, f.name, opts...), nil
 }
 

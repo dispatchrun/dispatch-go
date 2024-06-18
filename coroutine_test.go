@@ -31,7 +31,7 @@ func TestCoroutineReturn(t *testing.T) {
 	})
 	defer coro.Close()
 
-	res := coro.Run(context.Background(), dispatch.NewRequest("stringify", dispatch.Input(dispatch.Int(11))))
+	res := coro.Run(context.Background(), dispatch.NewRequest("stringify", dispatch.Int(11)))
 	if res.Status() != dispatch.OKStatus {
 		t.Errorf("unexpected status: %s", res.Status())
 	}
@@ -46,7 +46,7 @@ func TestCoroutineReturn(t *testing.T) {
 		t.Errorf("unexpected output: %s", got)
 	}
 
-	res = coro.Run(context.Background(), dispatch.NewRequest("stringify", dispatch.Input(dispatch.Int(-23))))
+	res = coro.Run(context.Background(), dispatch.NewRequest("stringify", dispatch.Int(-23)))
 	if res.Status() != dispatch.InvalidArgumentStatus {
 		t.Errorf("unexpected status: %s", res.Status())
 	}
@@ -65,15 +65,14 @@ func TestCoroutineYieldExitResponse(t *testing.T) {
 		if in < 0 {
 			res = dispatch.NewResponseErrorf("%w: %d", dispatch.ErrInvalidArgument, in)
 		} else {
-			output := dispatch.String(strconv.Itoa(in))
-			res = dispatch.NewResponse(dispatch.Output(output))
+			res = dispatch.NewResponse(dispatch.String(strconv.Itoa(in)))
 		}
 		dispatch.Yield(res)
 		panic("unreachable")
 	})
 	defer coro.Close()
 
-	res := coro.Run(context.Background(), dispatch.NewRequest("stringify", dispatch.Input(dispatch.Int(11))))
+	res := coro.Run(context.Background(), dispatch.NewRequest("stringify", dispatch.Int(11)))
 	if res.Status() != dispatch.OKStatus {
 		t.Errorf("unexpected status: %s", res.Status())
 	}
@@ -88,7 +87,7 @@ func TestCoroutineYieldExitResponse(t *testing.T) {
 		t.Errorf("unexpected output: %s", got)
 	}
 
-	res = coro.Run(context.Background(), dispatch.NewRequest("stringify", dispatch.Input(dispatch.Int(-23))))
+	res = coro.Run(context.Background(), dispatch.NewRequest("stringify", dispatch.Int(-23)))
 	if res.Status() != dispatch.InvalidArgumentStatus {
 		t.Errorf("unexpected status: %s", res.Status())
 	}

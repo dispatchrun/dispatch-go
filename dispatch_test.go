@@ -30,12 +30,12 @@ func TestDispatchEndpoint(t *testing.T) {
 		if !ok {
 			return dispatch.NewResponseErrorf("%w: unexpected request: %v", dispatch.ErrInvalidArgument, req)
 		}
-		return dispatch.NewResponse(dispatch.Output(input))
+		return dispatch.NewResponse(input)
 	}))
 
 	// Send a request for the identity function, and check that the
 	// input was echoed back.
-	req := dispatch.NewRequest("identity", dispatch.Input(dispatch.Int(11)))
+	req := dispatch.NewRequest("identity", dispatch.Int(11))
 	res, err := client.Run(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
@@ -52,7 +52,7 @@ func TestDispatchEndpoint(t *testing.T) {
 	}
 
 	// Try running a function that has not been registered.
-	res, err = client.Run(context.Background(), dispatch.NewRequest("not_found", dispatch.Input(dispatch.Int(22))))
+	res, err = client.Run(context.Background(), dispatch.NewRequest("not_found", dispatch.Int(22)))
 	if err != nil {
 		t.Fatal(err)
 	} else if res.Status() != dispatch.NotFoundStatus {
@@ -99,7 +99,7 @@ func TestDispatchCall(t *testing.T) {
 		Header: http.Header{"Authorization": []string{"Bearer foobar"}},
 		Calls: []dispatch.Call{
 			dispatch.NewCall("http://example.com", "function1",
-				dispatch.Input(dispatch.Int(11)),
+				dispatch.Int(11),
 				dispatch.Expiration(10*time.Second)),
 		},
 	})
@@ -132,7 +132,7 @@ func TestDispatchCallEnvConfig(t *testing.T) {
 		Header: http.Header{"Authorization": []string{"Bearer foobar"}},
 		Calls: []dispatch.Call{
 			dispatch.NewCall("http://example.com", "function2",
-				dispatch.Input(dispatch.String("foo")),
+				dispatch.String("foo"),
 				dispatch.Version("xyzzy")),
 		},
 	})

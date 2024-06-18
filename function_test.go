@@ -13,7 +13,7 @@ func TestFunctionRunError(t *testing.T) {
 		return "", errors.New("oops")
 	})
 
-	req := dispatch.NewRequest("foo", dispatch.Input(dispatch.String("hello")))
+	req := dispatch.NewRequest("foo", dispatch.String("hello"))
 	res := fn.Run(context.Background(), req)
 	error, ok := res.Error()
 	if !ok {
@@ -32,7 +32,7 @@ func TestFunctionRunResult(t *testing.T) {
 		return "world", nil
 	})
 
-	req := dispatch.NewRequest("foo", dispatch.Input(dispatch.String("hello")))
+	req := dispatch.NewRequest("foo", dispatch.String("hello"))
 	res := fn.Run(context.Background(), req)
 	if error, ok := res.Error(); ok {
 		t.Fatalf("unexpected response error: %v", error)
