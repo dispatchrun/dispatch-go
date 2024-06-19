@@ -93,8 +93,7 @@ func New(opts ...DispatchOption) (*Dispatch, error) {
 	if err != nil {
 		return nil, err
 	}
-	grpcHandler := &dispatchFunctionServiceHandler{d}
-	d.path, d.handler = sdkv1connect.NewFunctionServiceHandler(grpcHandler, connect.WithInterceptors(validator))
+	d.path, d.handler = sdkv1connect.NewFunctionServiceHandler(dispatchHandler{d}, connect.WithInterceptors(validator))
 
 	// Setup request signature validation.
 	if verificationKey == nil {
@@ -202,11 +201,12 @@ func (d *Dispatch) Serve() error {
 	return server.ListenAndServe()
 }
 
-// The gRPC handler is unexported so that the http.Handler can
-// be wrapped in order to validate request signatures.
-type dispatchFunctionServiceHandler struct{ dispatch *Dispatch }
+// The gRPC handler is deliberately unexported. This forces
+// the user to access it through Dispatch.Handler, and get
+// a handler that has signature verification middleware attached.
+type dispatchHandler struct{ dispatch *Dispatch }
 
-func (d *dispatchFunctionServiceHandler) Run(ctx context.Context, req *connect.Request[sdkv1.RunRequest]) (*connect.Response[sdkv1.RunResponse], error) {
+func (d dispatchHandler) Run(ctx context.Context, req *connect.Request[sdkv1.RunRequest]) (*connect.Response[sdkv1.RunResponse], error) {
 	res := d.dispatch.registry.Run(ctx, Request{req.Msg})
 	return connect.NewResponse(res.proto), nil
 }
