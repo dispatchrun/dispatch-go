@@ -17,6 +17,9 @@ const durableCoroutineStateTypeUrl = "buf.build/stealthrocket/coroutine/coroutin
 // NewCoroutine creates a Dispatch coroutine Function.
 func NewCoroutine[I, O any](name string, fn func(context.Context, I) (O, error)) *GenericCoroutine[I, O] {
 	return &GenericCoroutine[I, O]{
+		// GenericCoroutine wraps a GenericFunction to override the
+		// Run method (to support polling and the ability to suspend/resume).
+		// GenericFunction provides the remainder of the Function methods.
 		GenericFunction: GenericFunction[I, O]{
 			PrimitiveFunction{name: name},
 			fn,
@@ -33,7 +36,16 @@ type GenericCoroutine[I, O any] struct {
 	mu        sync.Mutex
 }
 
+// coroutineID is an identifier for a coroutine instance.
+// "Instances" are only applicable when coroutines are running
+// in volatile mode, since we must be keep suspended coroutines in
+// memory while they're polling. In durable mode, there's no need
+// to keep "instances" around, since we can serialize the state of
+// each coroutine and send it back and forth to Dispatch. In durable
+// mode the GenericCoroutine is stateless.
 type coroutineID = int
+
+// dispatchCoroutine is the flavour of coroutine we support here.
 type dispatchCoroutine = coroutine.Coroutine[Response, Request]
 
 // Run runs the coroutine function.
@@ -346,7 +358,7 @@ const (
 	AwaitAny
 )
 
-// Await calls the function and awaits its result.
+// Await calls the function and awaits a result.
 //
 // Await should only be called within a Dispatch coroutine.
 func (f *PrimitiveFunction) Await(input Any, opts ...CallOption) (Any, error) {
@@ -368,7 +380,7 @@ func (f *PrimitiveFunction) Await(input Any, opts ...CallOption) (Any, error) {
 	return output, nil
 }
 
-// Await calls the function and awaits its result.
+// Await calls the function and awaits a result.
 //
 // Await should only be called within a Dispatch coroutine.
 func (f *GenericFunction[I, O]) Await(input I, opts ...CallOption) (O, error) {
