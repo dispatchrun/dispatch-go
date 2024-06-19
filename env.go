@@ -1,3 +1,5 @@
+//go:build !durable
+
 package dispatch
 
 import (
