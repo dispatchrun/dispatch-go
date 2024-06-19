@@ -1,4 +1,4 @@
-.PHONY: fmt lint test integrationtest clean coroc
+.PHONY: clean coroc fmt lint test integration-test clean coroc
 
 fmt:
 	go fmt ./...
@@ -9,7 +9,7 @@ lint:
 test:
 	go test ./...
 
-integrationtest: clean coroc
+integration-test: clean coroc
 	coroc ./dispatchtest/integration
 	go run -tags durable ./dispatchtest/integration
 
