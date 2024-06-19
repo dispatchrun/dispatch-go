@@ -20,20 +20,20 @@ func main() {
 }
 
 func run() error {
-	stringify := dispatch.NewFunction("stringify", func(ctx context.Context, in int) (string, error) {
-		return strconv.Itoa(in), nil
+	stringify := dispatch.NewFunction("stringify", func(ctx context.Context, n int) (string, error) {
+		return strconv.Itoa(n), nil
 	})
 
-	double := dispatch.NewFunction("double", func(ctx context.Context, in int) (int, error) {
-		return in * 2, nil
+	double := dispatch.NewFunction("double", func(ctx context.Context, n int) (int, error) {
+		return n * 2, nil
 	})
 
-	doubleAndRepeat := dispatch.NewCoroutine("double-repeat", func(ctx context.Context, in int) (string, error) {
-		doubled, err := double.Await(in)
+	doubleAndRepeat := dispatch.NewCoroutine("double-repeat", func(ctx context.Context, n int) (string, error) {
+		doubled, err := double.Await(n)
 		if err != nil {
 			return "", err
 		}
-		stringified, err := stringify.Await(in)
+		stringified, err := stringify.Await(doubled)
 		if err != nil {
 			return "", err
 		}
@@ -42,6 +42,7 @@ func run() error {
 
 	var functions dispatch.Registry
 	functions.Register(stringify, double, doubleAndRepeat)
+	defer functions.Close()
 
 	req := dispatch.NewRequest("double-repeat", dispatch.Int(4))
 	res := dispatchtest.Run(&functions, req)

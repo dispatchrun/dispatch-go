@@ -10,8 +10,9 @@ test:
 	go test ./...
 
 integration-test: clean coroc
+	go run ./dispatchtest/integration # volatile mode
 	coroc ./dispatchtest/integration
-	go run -tags durable ./dispatchtest/integration
+	go run -tags durable ./dispatchtest/integration # durable mode
 
 clean:
 	find . -name '*_durable.go' -delete
