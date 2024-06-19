@@ -101,6 +101,11 @@ func (c Call) Version() string {
 	return c.proto.GetVersion()
 }
 
+// Request converts the call to a request.
+func (c Call) Request() Request {
+	return NewRequest(c.Function(), c.Input())
+}
+
 // CorrelationID is an opaque value that gets repeated in CallResult to
 // correlate asynchronous calls with their results.
 func (c Call) CorrelationID() uint64 {
@@ -226,6 +231,23 @@ func (r CallResult) Equal(other CallResult) bool {
 
 func (r CallResult) configureExit(e *Exit) {
 	e.proto.Result = r.proto
+}
+
+// Clone creates a copy of the call.
+func (r CallResult) Clone() CallResult {
+	if r.proto == nil {
+		return CallResult{}
+	}
+	return CallResult{proto.Clone(r.proto).(*sdkv1.CallResult)}
+}
+
+// With creates a copy of the CallResult with additional options applied.
+func (r CallResult) With(opts ...CallResultOption) CallResult {
+	result := r.Clone()
+	for _, opt := range opts {
+		opt.configureCallResult(&result)
+	}
+	return result
 }
 
 // Error is an error that occurred during execution of a function.
@@ -763,10 +785,21 @@ func (r Response) Status() Status {
 	return Status(r.proto.GetStatus())
 }
 
+// OK is true if the response carries an OKStatus status.
+func (r Response) OK() bool {
+	return r.Status() == OKStatus
+}
+
 // Exit is the exit directive on the response.
 func (r Response) Exit() (Exit, bool) {
 	proto := r.proto.GetExit()
 	return Exit{proto}, proto != nil
+}
+
+// Result is the result from the exit directive on the response.
+func (r Response) Result() (CallResult, bool) {
+	proto := r.proto.GetExit().GetResult()
+	return CallResult{proto}, proto != nil
 }
 
 // Error is the error from the exit directive attached to the response.

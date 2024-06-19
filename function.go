@@ -41,8 +41,8 @@ type Registry struct {
 
 var _ Runnable = (*Registry)(nil)
 
-// Register registers a function.
-func (r *Registry) Register(fn Function) {
+// Register registers functions.
+func (r *Registry) Register(fns ...Function) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -50,7 +50,9 @@ func (r *Registry) Register(fn Function) {
 		r.functions = map[string]Function{}
 	}
 
-	r.functions[fn.Name()] = fn
+	for _, fn := range fns {
+		r.functions[fn.Name()] = fn
+	}
 }
 
 // Lookup retrieves a function by name.
