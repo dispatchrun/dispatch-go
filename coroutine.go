@@ -358,6 +358,30 @@ const (
 	AwaitAny
 )
 
+// Gather awaits the results of calls. It waits until all results
+// are available, or any call fails. It unpacks the output value
+// from the call result when all calls succeed.
+func Gather[O any](calls ...Call) ([]O, error) {
+	if len(calls) == 0 {
+		return nil, nil
+	}
+
+	results, err := Await(AwaitAll, calls...)
+	if err != nil {
+		return nil, err
+	}
+
+	outputs := make([]O, len(calls))
+	for i, result := range results {
+		if boxedOutput, ok := result.Output(); ok {
+			if err := boxedOutput.Unmarshal(&outputs[i]); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal call %d output: %w", i, err)
+			}
+		}
+	}
+	return outputs, nil
+}
+
 // Await calls the function and awaits a result.
 //
 // Await should only be called within a Dispatch coroutine.
@@ -416,22 +440,11 @@ func (f *GenericFunction[I, O]) Await(input I, opts ...CallOption) (O, error) {
 	if err != nil {
 		return output, err
 	}
-
-	callResults, err := Await(AwaitAll, call)
+	results, err := Gather[O](call)
 	if err != nil {
 		return output, err
 	}
-	callResult := callResults[0]
-
-	if boxedOutput, ok := callResult.Output(); ok {
-		if err := boxedOutput.Unmarshal(&output); err != nil {
-			return output, fmt.Errorf("failed to unmarshal call output: %w", err)
-		}
-	}
-	if err, ok := callResult.Error(); ok {
-		return output, err
-	}
-	return output, nil
+	return results[0], nil
 }
 
 // Gather makes many concurrent calls to the function and awaits the results.
@@ -446,19 +459,5 @@ func (f *GenericFunction[I, O]) Gather(inputs []I, opts ...CallOption) ([]O, err
 		}
 		calls[i] = call
 	}
-
-	callResults, err := Await(AwaitAll, calls...)
-	if err != nil {
-		return nil, err
-	}
-
-	outputs := make([]O, len(inputs))
-	for i, result := range callResults {
-		if boxedOutput, ok := result.Output(); ok {
-			if err := boxedOutput.Unmarshal(&outputs[i]); err != nil {
-				return nil, fmt.Errorf("failed to unmarshal call %d output: %w", i, err)
-			}
-		}
-	}
-	return outputs, nil
+	return Gather[O](calls...)
 }
