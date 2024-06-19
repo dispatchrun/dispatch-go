@@ -3,6 +3,7 @@ package dispatch_test
 import (
 	"context"
 	"fmt"
+	"math/rand/v2"
 	"strconv"
 	"strings"
 	"testing"
@@ -212,12 +213,11 @@ func TestCoroutinePoll(t *testing.T) {
 func TestCoroutineAwait(t *testing.T) {
 	logMode(t)
 
-	// This is a mock coroutine only!
-	//
 	// This test is essentially the same as the test above, just
 	// using the higher level helpers for awaiting a call.
+
 	identity := dispatch.NewCoroutine("identity", func(ctx context.Context, x string) (string, error) {
-		panic("not implemented")
+		panic("not implemented") // this is a mock only
 	})
 
 	coro := dispatch.NewCoroutine("repeat", func(ctx context.Context, n int) (string, error) {
@@ -233,14 +233,19 @@ func TestCoroutineAwait(t *testing.T) {
 	})
 	defer coro.Close()
 
-	var req dispatch.Request = dispatch.NewRequest("repeat", dispatch.Int(3))
+	const repeatCount = 3
+
+	req := dispatch.NewRequest("repeat", dispatch.Int(repeatCount))
 	var res dispatch.Response
+
+	requestCount := 0
 	for {
 		res = coro.Run(context.Background(), req)
 		if res.Status() != dispatch.OKStatus {
 			t.Errorf("unexpected status: %s", res.Status())
 		}
 		if _, done := res.Exit(); done {
+			requestCount++
 			break
 		}
 		poll, ok := res.Poll()
@@ -262,6 +267,12 @@ func TestCoroutineAwait(t *testing.T) {
 			dispatch.CallResults(callResult))
 
 		req = dispatch.NewRequest("repeat", pollResult)
+
+		requestCount++
+	}
+
+	if requestCount != repeatCount+1 { // one input request + `repeatCount` polls
+		t.Errorf("unexpected number of requests: got %d, want %d", requestCount, repeatCount+1)
 	}
 
 	exit, _ := res.Exit()
@@ -277,21 +288,20 @@ func TestCoroutineAwait(t *testing.T) {
 		t.Fatalf("unmarshal string: %v", err)
 	}
 
-	if repeated != "xxx" {
-		t.Errorf("unexpected function result: %q", repeated)
+	if want := strings.Repeat("x", repeatCount); repeated != want {
+		t.Errorf("unexpected function result: got %q, want %q", repeated, want)
 	}
 }
 
 func TestCoroutineGather(t *testing.T) {
 	logMode(t)
 
-	// This is a mock coroutine only!
-	//
 	// This test is essentially the same as the test above, just
 	// using the higher level helpers for gathering the results
 	// of many calls.
+
 	identity := dispatch.NewCoroutine("identity", func(ctx context.Context, x string) (string, error) {
-		panic("not implemented")
+		panic("not implemented") // this is a mock only
 	})
 
 	coro := dispatch.NewCoroutine("repeat", func(ctx context.Context, n int) (string, error) {
@@ -307,7 +317,9 @@ func TestCoroutineGather(t *testing.T) {
 	})
 	defer coro.Close()
 
-	req := dispatch.NewRequest("repeat", dispatch.Int(3))
+	const repeatCount = 3
+
+	req := dispatch.NewRequest("repeat", dispatch.Int(repeatCount))
 	res := coro.Run(context.Background(), req)
 	if res.Status() != dispatch.OKStatus {
 		t.Errorf("unexpected status: %s", res.Status())
@@ -318,17 +330,18 @@ func TestCoroutineGather(t *testing.T) {
 		t.Fatalf("expected poll response, got %s", res)
 	}
 	calls := poll.Calls()
-	if len(calls) != 3 {
-		t.Fatalf("expected 3 poll calls, got %s", poll)
+	if len(calls) != repeatCount {
+		t.Fatalf("expected %d poll calls, got %s", repeatCount, poll)
 	}
 
-	callResults := make([]dispatch.CallResult, 3)
+	callResults := make([]dispatch.CallResult, len(calls))
 	for i, call := range calls {
 		callResults[i] = dispatch.NewCallResult(
 			call.Input(),
 			dispatch.CorrelationID(call.CorrelationID()))
 	}
 
+	// Send all results back at once.
 	pollResult := dispatch.NewPollResult(
 		dispatch.CoroutineState(poll.CoroutineState()),
 		dispatch.CallResults(callResults...))
@@ -355,7 +368,112 @@ func TestCoroutineGather(t *testing.T) {
 		t.Fatalf("unmarshal string: %v", err)
 	}
 
-	if repeated != "xxx" {
-		t.Errorf("unexpected function result: %q", repeated)
+	if want := strings.Repeat("x", repeatCount); repeated != want {
+		t.Errorf("unexpected function result: got %q, want %q", repeated, want)
+	}
+}
+
+func TestCoroutineGatherSlow(t *testing.T) {
+	logMode(t)
+
+	// This test is essentially the same as the test above, just
+	// sending back call results one at a time, and in random order.
+
+	identity := dispatch.NewCoroutine("identity", func(ctx context.Context, x string) (string, error) {
+		panic("not implemented") // this is a mock only
+	})
+
+	coro := dispatch.NewCoroutine("repeat", func(ctx context.Context, n int) (string, error) {
+		inputs := make([]string, n)
+		for i := range inputs {
+			inputs[i] = "x"
+		}
+		results, err := identity.Gather(inputs)
+		if err != nil {
+			return "", err
+		}
+		return strings.Join(results, ""), nil
+	})
+	defer coro.Close()
+
+	const repeatCount = 3
+
+	req := dispatch.NewRequest("repeat", dispatch.Int(repeatCount))
+	res := coro.Run(context.Background(), req)
+	if res.Status() != dispatch.OKStatus {
+		t.Errorf("unexpected status: %s", res.Status())
+	}
+
+	poll, ok := res.Poll()
+	if !ok {
+		t.Fatalf("expected poll response, got %s", res)
+	}
+	calls := poll.Calls()
+	if len(calls) != repeatCount {
+		t.Fatalf("expected %d poll calls, got %s", repeatCount, poll)
+	}
+
+	callResults := make([]dispatch.CallResult, len(calls))
+	for i, call := range calls {
+		callResults[i] = dispatch.NewCallResult(
+			call.Input(),
+			dispatch.CorrelationID(call.CorrelationID()))
+	}
+
+	// Randomize call result order.
+	rand.Shuffle(len(callResults), func(i, j int) {
+		callResults[i], callResults[j] = callResults[j], callResults[i]
+	})
+
+	// Deliver an empty poll result, to assert it's a noop.
+	pollResult := dispatch.NewPollResult(dispatch.CoroutineState(poll.CoroutineState()))
+	req = dispatch.NewRequest("repeat", pollResult)
+	res = coro.Run(context.Background(), req)
+	if res.Status() != dispatch.OKStatus {
+		t.Errorf("unexpected status: %s", res.Status())
+	}
+
+	// Deliver one call result at a time.
+	for i := range callResults {
+		if _, ok := res.Poll(); !ok {
+			t.Fatalf("expected previous response to be a poll before delivering call result %d, but got %s", i, res)
+		}
+
+		pollResult := dispatch.NewPollResult(
+			dispatch.CoroutineState(poll.CoroutineState()),
+			dispatch.CallResults(callResults[i]))
+
+		req = dispatch.NewRequest("repeat", pollResult)
+		res = coro.Run(context.Background(), req)
+		if res.Status() != dispatch.OKStatus {
+			t.Errorf("unexpected status: %s", res.Status())
+		}
+
+		// Only the final response should be an exit.
+		if _, ok := res.Exit(); ok {
+			if i != len(callResults)-1 {
+				t.Errorf("unexpected exit after delivering call result %d: %s", i, res)
+			}
+		}
+	}
+
+	exit, ok := res.Exit()
+	if !ok {
+		t.Fatalf("unexpected response, got %s", res)
+	}
+	if err, ok := exit.Error(); ok {
+		t.Fatalf("unexpected error: %s", err)
+	}
+
+	var repeated string
+	output, ok := exit.Output()
+	if !ok {
+		t.Errorf("unexpected result, got %s", exit)
+	} else if err := output.Unmarshal(&repeated); err != nil {
+		t.Fatalf("unmarshal string: %v", err)
+	}
+
+	if want := strings.Repeat("x", repeatCount); repeated != want {
+		t.Errorf("unexpected function result: got %q, want %q", repeated, want)
 	}
 }
