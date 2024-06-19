@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -264,6 +265,84 @@ func TestCoroutineAwait(t *testing.T) {
 	}
 
 	exit, _ := res.Exit()
+	if err, ok := exit.Error(); ok {
+		t.Fatalf("unexpected error: %s", err)
+	}
+
+	var repeated string
+	output, ok := exit.Output()
+	if !ok {
+		t.Errorf("unexpected result, got %s", exit)
+	} else if err := output.Unmarshal(&repeated); err != nil {
+		t.Fatalf("unmarshal string: %v", err)
+	}
+
+	if repeated != "xxx" {
+		t.Errorf("unexpected function result: %q", repeated)
+	}
+}
+
+func TestCoroutineGather(t *testing.T) {
+	logMode(t)
+
+	// This is a mock coroutine only!
+	//
+	// This test is essentially the same as the test above, just
+	// using the higher level helpers for gathering the results
+	// of many calls.
+	identity := dispatch.NewCoroutine("identity", func(ctx context.Context, x string) (string, error) {
+		panic("not implemented")
+	})
+
+	coro := dispatch.NewCoroutine("repeat", func(ctx context.Context, n int) (string, error) {
+		inputs := make([]string, n)
+		for i := range inputs {
+			inputs[i] = "x"
+		}
+		results, err := identity.Gather(inputs)
+		if err != nil {
+			return "", err
+		}
+		return strings.Join(results, ""), nil
+	})
+	defer coro.Close()
+
+	req := dispatch.NewRequest("repeat", dispatch.Int(3))
+	res := coro.Run(context.Background(), req)
+	if res.Status() != dispatch.OKStatus {
+		t.Errorf("unexpected status: %s", res.Status())
+	}
+
+	poll, ok := res.Poll()
+	if !ok {
+		t.Fatalf("expected poll response, got %s", res)
+	}
+	calls := poll.Calls()
+	if len(calls) != 3 {
+		t.Fatalf("expected 3 poll calls, got %s", poll)
+	}
+
+	callResults := make([]dispatch.CallResult, 3)
+	for i, call := range calls {
+		callResults[i] = dispatch.NewCallResult(
+			call.Input(),
+			dispatch.CorrelationID(call.CorrelationID()))
+	}
+
+	pollResult := dispatch.NewPollResult(
+		dispatch.CoroutineState(poll.CoroutineState()),
+		dispatch.CallResults(callResults...))
+
+	req = dispatch.NewRequest("repeat", pollResult)
+	res = coro.Run(context.Background(), req)
+	if res.Status() != dispatch.OKStatus {
+		t.Errorf("unexpected status: %s", res.Status())
+	}
+
+	exit, ok := res.Exit()
+	if !ok {
+		t.Fatalf("unexpected response, got %s", res)
+	}
 	if err, ok := exit.Error(); ok {
 		t.Fatalf("unexpected error: %s", err)
 	}

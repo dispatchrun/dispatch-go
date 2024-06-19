@@ -380,6 +380,32 @@ func (f *PrimitiveFunction) Await(input Any, opts ...CallOption) (Any, error) {
 	return output, nil
 }
 
+// Gather makes many concurrent calls to the function and awaits the results.
+//
+// Gather should only be called within a Dispatch coroutine.
+func (f *PrimitiveFunction) Gather(inputs []Any, opts ...CallOption) ([]Any, error) {
+	calls := make([]Call, len(inputs))
+	for i, input := range inputs {
+		call, err := f.NewCall(input, opts...)
+		if err != nil {
+			return nil, err
+		}
+		calls[i] = call
+	}
+
+	callResults, err := Await(AwaitAll, calls...)
+	if err != nil {
+		return nil, err
+	}
+
+	outputs := make([]Any, len(inputs))
+	for i, result := range callResults {
+		output, _ := result.Output()
+		outputs[i] = output
+	}
+	return outputs, nil
+}
+
 // Await calls the function and awaits a result.
 //
 // Await should only be called within a Dispatch coroutine.
@@ -406,4 +432,33 @@ func (f *GenericFunction[I, O]) Await(input I, opts ...CallOption) (O, error) {
 		return output, err
 	}
 	return output, nil
+}
+
+// Gather makes many concurrent calls to the function and awaits the results.
+//
+// Gather should only be called within a Dispatch coroutine.
+func (f *GenericFunction[I, O]) Gather(inputs []I, opts ...CallOption) ([]O, error) {
+	calls := make([]Call, len(inputs))
+	for i, input := range inputs {
+		call, err := f.NewCall(input, opts...)
+		if err != nil {
+			return nil, err
+		}
+		calls[i] = call
+	}
+
+	callResults, err := Await(AwaitAll, calls...)
+	if err != nil {
+		return nil, err
+	}
+
+	outputs := make([]O, len(inputs))
+	for i, result := range callResults {
+		if boxedOutput, ok := result.Output(); ok {
+			if err := boxedOutput.Unmarshal(&outputs[i]); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal call %d output: %w", i, err)
+			}
+		}
+	}
+	return outputs, nil
 }
