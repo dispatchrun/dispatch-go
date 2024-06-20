@@ -45,7 +45,7 @@ type GenericCoroutine[I, O any] struct {
 // to keep "instances" around, since we can serialize the state of
 // each coroutine and send it back and forth to Dispatch. In durable
 // mode the GenericCoroutine is stateless.
-type coroutineID = int
+type coroutineID = int64
 
 // dispatchCoroutine is the flavour of coroutine we support here.
 type dispatchCoroutine = coroutine.Coroutine[Response, Request]
