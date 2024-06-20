@@ -17,7 +17,6 @@ import (
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
 	"connectrpc.com/connect"
 	"connectrpc.com/validate"
-	"github.com/dispatchrun/coroutine"
 	"github.com/dispatchrun/dispatch-go/dispatchproto"
 	"github.com/dispatchrun/dispatch-go/internal/auth"
 )
@@ -166,10 +165,6 @@ func ServeAddress(addr string) DispatchOption {
 
 // Register registers a function.
 func (d *Dispatch) Register(fn Function) {
-	if fn.Coroutine() && !coroutine.Durable {
-		slog.Warn("volatile coroutine registered with Dispatch endpoint", "name", fn.Name())
-	}
-
 	d.registry.Register(fn)
 
 	// Bind the function to this endpoint, so that the function's

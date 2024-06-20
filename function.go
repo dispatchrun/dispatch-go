@@ -19,10 +19,6 @@ type Function interface {
 	// Run runs the function.
 	Run(context.Context, dispatchproto.Request) dispatchproto.Response
 
-	// Coroutine is true if the function is a coroutine that can be
-	// suspended and resumed.
-	Coroutine() bool
-
 	// Close closes the function.
 	Close() error
 
@@ -114,10 +110,6 @@ func (f *PrimitiveFunction) Run(ctx context.Context, req dispatchproto.Request) 
 		return dispatchproto.NewResponseErrorf("%w: function %q received call for function %q", ErrInvalidArgument, f.name, name)
 	}
 	return f.fn(ctx, req)
-}
-
-func (f *PrimitiveFunction) Coroutine() bool {
-	return false
 }
 
 func (f *PrimitiveFunction) Close() error {

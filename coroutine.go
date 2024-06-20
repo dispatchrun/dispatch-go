@@ -199,10 +199,6 @@ func (c *Coroutine[I, O]) deserialize(state dispatchproto.Any) (coroutineID, dis
 	return id, coro, nil
 }
 
-func (c *Coroutine[I, O]) Coroutine() bool {
-	return true
-}
-
 // Close closes the coroutine.
 //
 // In volatile mode, Close destroys all running instances of the coroutine.
