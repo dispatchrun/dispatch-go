@@ -16,6 +16,8 @@ import (
 	"github.com/dispatchrun/dispatch-go/dispatchproto"
 )
 
+const defaultApiUrl = "https://api.dispatch.run"
+
 // Call is a function call.
 type Call = dispatchproto.Call
 
@@ -58,7 +60,7 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 		c.apiUrl = getenv(c.env, "DISPATCH_API_URL")
 	}
 	if c.apiUrl == "" {
-		c.apiUrl = DefaultApiUrl
+		c.apiUrl = defaultApiUrl
 	}
 
 	if c.httpClient == nil {
@@ -106,13 +108,11 @@ func APIKey(apiKey string) ClientOption {
 // APIUrl sets the URL of the Dispatch API.
 //
 // It defaults to the value of the DISPATCH_API_URL environment variable,
-// or DefaultApiUrl if DISPATCH_API_URL is unset.
+// or the default API URL (https://api.dispatch.run) if DISPATCH_API_URL
+// is unset.
 func APIUrl(apiUrl string) ClientOption {
 	return clientOptionFunc(func(c *Client) { c.apiUrl = apiUrl })
 }
-
-// DefaultApiUrl is the default Dispatch API URL.
-const DefaultApiUrl = "https://api.dispatch.run"
 
 // Dispatch dispatches a function call.
 func (c *Client) Dispatch(ctx context.Context, call Call) (ID, error) {
