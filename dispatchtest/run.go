@@ -25,7 +25,7 @@ func poll(functions dispatch.Runnable, req dispatch.Request, res dispatch.Respon
 		panic(fmt.Errorf("not implemented: %s", res))
 	}
 
-	pollResult := []dispatch.PollResultOption{dispatch.CoroutineState(poll.CoroutineState())}
+	result := poll.Result()
 
 	// Make any nested calls.
 	if calls := poll.Calls(); len(calls) > 0 {
@@ -37,11 +37,10 @@ func poll(functions dispatch.Runnable, req dispatch.Request, res dispatch.Respon
 			}
 			return callResult.With(dispatch.CorrelationID(call.CorrelationID()))
 		})
-		pollResult = append(pollResult, dispatch.CallResults(callResults...))
+		result = result.With(dispatch.CallResults(callResults...))
 	}
 
-	return dispatch.NewRequest(req.Function(), dispatch.NewPollResult(pollResult...))
-
+	return req.With(result)
 }
 
 // Concurrently convert []I to []O using the func(I) O mapper.

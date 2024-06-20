@@ -540,6 +540,12 @@ func (p Poll) Equal(other Poll) bool {
 	return proto.Equal(p.proto, other.proto)
 }
 
+// Result creates a result for the Poll directive, that carries
+// the same coroutine state.
+func (p Poll) Result() PollResult {
+	return NewPollResult(CoroutineState(p.CoroutineState()))
+}
+
 func (p Poll) configureResponse(r *Response) {
 	r.proto.Directive = &sdkv1.RunResponse_Poll{Poll: p.proto}
 }
@@ -610,6 +616,23 @@ func (r PollResult) String() string {
 // Equal is true if the poll result is equal to another.
 func (r PollResult) Equal(other PollResult) bool {
 	return proto.Equal(r.proto, other.proto)
+}
+
+// Clone creates a copy of the result.
+func (r PollResult) Clone() PollResult {
+	if r.proto == nil {
+		return PollResult{}
+	}
+	return PollResult{proto.Clone(r.proto).(*sdkv1.PollResult)}
+}
+
+// With creates a copy of the PollResult with additional options applied.
+func (r PollResult) With(opts ...PollResultOption) PollResult {
+	result := r.Clone()
+	for _, opt := range opts {
+		opt.configurePollResult(&result)
+	}
+	return result
 }
 
 func (r PollResult) configureRequest(req *Request) {
@@ -734,6 +757,23 @@ func (r Request) String() string {
 // Equal is true if the request is equal to another.
 func (r Request) Equal(other Request) bool {
 	return proto.Equal(r.proto, other.proto)
+}
+
+// Clone creates a copy of the request.
+func (r Request) Clone() Request {
+	if r.proto == nil {
+		return Request{}
+	}
+	return Request{proto.Clone(r.proto).(*sdkv1.RunRequest)}
+}
+
+// With creates a copy of the Request with additional options applied.
+func (r Request) With(opts ...RequestOption) Request {
+	request := r.Clone()
+	for _, opt := range opts {
+		opt.configureRequest(&request)
+	}
+	return request
 }
 
 // Response is a response to Dispatch after a function has run.

@@ -426,8 +426,7 @@ func TestCoroutineGatherSlow(t *testing.T) {
 	})
 
 	// Deliver an empty poll result, to assert it's a noop.
-	pollResult := dispatch.NewPollResult(dispatch.CoroutineState(poll.CoroutineState()))
-	req = dispatch.NewRequest("repeat", pollResult)
+	req = dispatch.NewRequest("repeat", poll.Result())
 	res = coro.Run(context.Background(), req)
 	if res.Status() != dispatch.OKStatus {
 		t.Errorf("unexpected status: %s", res.Status())
@@ -439,9 +438,7 @@ func TestCoroutineGatherSlow(t *testing.T) {
 			t.Fatalf("expected previous response to be a poll before delivering call result %d, but got %s", i, res)
 		}
 
-		pollResult := dispatch.NewPollResult(
-			dispatch.CoroutineState(poll.CoroutineState()),
-			dispatch.CallResults(callResults[i]))
+		pollResult := poll.Result().With(dispatch.CallResults(callResults[i]))
 
 		req = dispatch.NewRequest("repeat", pollResult)
 		res = coro.Run(context.Background(), req)
