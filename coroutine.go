@@ -21,6 +21,7 @@ func NewFunction[I, O any](name string, fn func(context.Context, I) (O, error)) 
 	return &Coroutine[I, O]{
 		PrimitiveFunction: PrimitiveFunction{name: name},
 		fn:                fn,
+		nextID:            rand.Uint64(),
 	}
 }
 
@@ -37,13 +38,14 @@ type Coroutine[I, O any] struct {
 }
 
 // coroutineID is an identifier for a coroutine instance.
+//
 // "Instances" are only applicable when coroutines are running
 // in volatile mode, since we must be keep suspended coroutines in
 // memory while they're polling. In durable mode, there's no need
 // to keep "instances" around, since we can serialize the state of
 // each coroutine and send it back and forth to Dispatch. In durable
 // mode the GenericCoroutine is stateless.
-type coroutineID = int64
+type coroutineID = uint64
 
 // dispatchCoroutine is the flavour of coroutine we support here.
 type dispatchCoroutine = coroutine.Coroutine[Response, Request]
@@ -171,7 +173,7 @@ func (c *Coroutine[I, O]) tearDown(id coroutineID, coro dispatchCoroutine) {
 func (c *Coroutine[I, O]) serialize(id coroutineID, coro dispatchCoroutine) (Any, error) {
 	// In volatile mode, serialize a reference to the coroutine instance.
 	if !coroutine.Durable {
-		return Int(id), nil
+		return NewAny(id)
 	}
 
 	// In durable mode, we serialize the entire state of the coroutine.
@@ -209,7 +211,7 @@ func (c *Coroutine[I, O]) deserialize(state Any) (coroutineID, dispatchCoroutine
 	var ok bool
 	coro, ok = c.instances[id]
 	if !ok {
-		return 0, coro, fmt.Errorf("%w: volatile coroutine %d", ErrNotFound, id)
+		return 0, coro, fmt.Errorf("%w: volatile coroutine %d not found", ErrIncompatibleState, id)
 	}
 	return id, coro, nil
 }
