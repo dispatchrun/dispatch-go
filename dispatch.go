@@ -165,7 +165,7 @@ func ServeAddress(addr string) DispatchOption {
 // Register registers a function.
 func (d *Dispatch) Register(fn Function) {
 	if fn.Coroutine() && !coroutine.Durable {
-		panic("cannot serve volatile coroutine")
+		slog.Warn("volatile coroutine registered with Dispatch endpoint", "name", fn.Name())
 	}
 
 	d.registry.Register(fn)
