@@ -9,17 +9,13 @@ import (
 	"sync"
 )
 
-// Runnable is something that can be Run.
-type Runnable interface {
-	Run(context.Context, Request) Response
-}
-
 // Function is a Dispatch function.
 type Function interface {
-	Runnable
-
 	// Name is the name of the function.
 	Name() string
+
+	// Run runs the function.
+	Run(context.Context, Request) Response
 
 	// Coroutine is true if the function is a coroutine that can be
 	// suspended and resumed.
@@ -40,8 +36,6 @@ type Registry struct {
 
 	mu sync.Mutex
 }
-
-var _ Runnable = (*Registry)(nil)
 
 // Register registers functions.
 func (r *Registry) Register(fns ...Function) {

@@ -8,8 +8,16 @@ import (
 	"github.com/dispatchrun/dispatch-go"
 )
 
+// Runnable is something that can be Run.
+type Runnable interface {
+	Run(context.Context, dispatch.Request) dispatch.Response
+}
+
+var _ Runnable = (dispatch.Function)(nil)
+var _ Runnable = (*dispatch.Registry)(nil)
+
 // Run runs a function or coroutine to completion.
-func Run(functions dispatch.Runnable, req dispatch.Request) dispatch.Response {
+func Run(functions Runnable, req dispatch.Request) dispatch.Response {
 	for {
 		res := functions.Run(context.Background(), req)
 		if _, ok := res.Exit(); ok {
@@ -19,7 +27,7 @@ func Run(functions dispatch.Runnable, req dispatch.Request) dispatch.Response {
 	}
 }
 
-func poll(functions dispatch.Runnable, req dispatch.Request, res dispatch.Response) dispatch.Request {
+func poll(functions Runnable, req dispatch.Request, res dispatch.Response) dispatch.Request {
 	poll, ok := res.Poll()
 	if !ok {
 		panic(fmt.Errorf("not implemented: %s", res))
@@ -27,7 +35,7 @@ func poll(functions dispatch.Runnable, req dispatch.Request, res dispatch.Respon
 
 	result := poll.Result()
 
-	// Make any nested calls.
+	// Make nested calls.
 	if calls := poll.Calls(); len(calls) > 0 {
 		callResults := gomap(calls, func(call dispatch.Call) dispatch.CallResult {
 			res := Run(functions, call.Request())
