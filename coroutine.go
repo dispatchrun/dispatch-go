@@ -269,7 +269,7 @@ func (c *Coroutine[I, O]) Gather(inputs []I, opts ...dispatchproto.CallOption) (
 
 // Await calls the function and awaits a result.
 //
-// Await should only be called within a Dispatch coroutine (created via NewFunction).
+// Await should only be called within a Dispatch coroutine (created via Func).
 func (f *PrimitiveFunction) Await(input dispatchproto.Any, opts ...dispatchproto.CallOption) (dispatchproto.Any, error) {
 	call, err := f.NewCall(input, opts...)
 	if err != nil {
