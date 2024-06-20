@@ -20,15 +20,15 @@ func main() {
 }
 
 func run() error {
-	stringify := dispatch.NewFunction("stringify", func(ctx context.Context, n int) (string, error) {
+	stringify := dispatch.Func("stringify", func(ctx context.Context, n int) (string, error) {
 		return strconv.Itoa(n), nil
 	})
 
-	double := dispatch.NewFunction("double", func(ctx context.Context, n int) (int, error) {
+	double := dispatch.Func("double", func(ctx context.Context, n int) (int, error) {
 		return n * 2, nil
 	})
 
-	doubleAndRepeat := dispatch.NewFunction("double-repeat", func(ctx context.Context, n int) (string, error) {
+	doubleAndRepeat := dispatch.Func("double-repeat", func(ctx context.Context, n int) (string, error) {
 		doubled, err := double.Await(n)
 		if err != nil {
 			return "", err

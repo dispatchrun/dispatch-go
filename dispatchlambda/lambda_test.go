@@ -17,7 +17,7 @@ import (
 )
 
 func TestHandlerEmptyPayload(t *testing.T) {
-	fn := dispatch.NewFunction("handler", func(ctx context.Context, input string) (string, error) {
+	fn := dispatch.Func("handler", func(ctx context.Context, input string) (string, error) {
 		return "", nil
 	})
 	h := dispatchlambda.Handler(fn)
@@ -26,7 +26,7 @@ func TestHandlerEmptyPayload(t *testing.T) {
 }
 
 func TestHandlerShortPayload(t *testing.T) {
-	fn := dispatch.NewFunction("handler", func(ctx context.Context, input string) (string, error) {
+	fn := dispatch.Func("handler", func(ctx context.Context, input string) (string, error) {
 		return "", nil
 	})
 	h := dispatchlambda.Handler(fn)
@@ -35,7 +35,7 @@ func TestHandlerShortPayload(t *testing.T) {
 }
 
 func TestHandlerNonBase64Payload(t *testing.T) {
-	fn := dispatch.NewFunction("handler", func(ctx context.Context, input string) (string, error) {
+	fn := dispatch.Func("handler", func(ctx context.Context, input string) (string, error) {
 		return "", nil
 	})
 	h := dispatchlambda.Handler(fn)
@@ -44,7 +44,7 @@ func TestHandlerNonBase64Payload(t *testing.T) {
 }
 
 func TestHandlerInvokePayloadNotProtobufMessage(t *testing.T) {
-	fn := dispatch.NewFunction("handler", func(ctx context.Context, input string) (string, error) {
+	fn := dispatch.Func("handler", func(ctx context.Context, input string) (string, error) {
 		return "", nil
 	})
 	h := dispatchlambda.Handler(fn)
@@ -56,7 +56,7 @@ func TestHandlerInvokePayloadNotProtobufMessage(t *testing.T) {
 }
 
 func TestHandlerInvokeError(t *testing.T) {
-	fn := dispatch.NewFunction("handler", func(ctx context.Context, input string) (string, error) {
+	fn := dispatch.Func("handler", func(ctx context.Context, input string) (string, error) {
 		return "", errors.New("invoke error")
 	})
 	h := dispatchlambda.Handler(fn)
@@ -115,7 +115,7 @@ func TestHandlerInvokeError(t *testing.T) {
 }
 
 func TestHandlerInvokeFunction(t *testing.T) {
-	fn := dispatch.NewFunction("handler", func(ctx context.Context, input string) (string, error) {
+	fn := dispatch.Func("handler", func(ctx context.Context, input string) (string, error) {
 		return input + "output", nil
 	})
 	h := dispatchlambda.Handler(fn)

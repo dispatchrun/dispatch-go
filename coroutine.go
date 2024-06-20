@@ -16,8 +16,8 @@ import (
 
 const durableCoroutineStateTypeUrl = "buf.build/stealthrocket/coroutine/coroutine.v1.State"
 
-// NewFunction creates a Dispatch Function.
-func NewFunction[I, O any](name string, fn func(context.Context, I) (O, error)) *Coroutine[I, O] {
+// Func creates a Dispatch Function.
+func Func[I, O any](name string, fn func(context.Context, I) (O, error)) *Coroutine[I, O] {
 	return &Coroutine[I, O]{
 		PrimitiveFunction: PrimitiveFunction{name: name},
 		fn:                fn,

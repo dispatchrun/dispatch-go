@@ -9,7 +9,7 @@ import (
 )
 
 func TestFunctionRunError(t *testing.T) {
-	fn := dispatch.NewFunction("foo", func(ctx context.Context, input string) (string, error) {
+	fn := dispatch.Func("foo", func(ctx context.Context, input string) (string, error) {
 		return "", errors.New("oops")
 	})
 
@@ -28,7 +28,7 @@ func TestFunctionRunError(t *testing.T) {
 }
 
 func TestFunctionRunResult(t *testing.T) {
-	fn := dispatch.NewFunction("foo", func(ctx context.Context, input string) (string, error) {
+	fn := dispatch.Func("foo", func(ctx context.Context, input string) (string, error) {
 		return "world", nil
 	})
 
@@ -48,7 +48,7 @@ func TestFunctionRunResult(t *testing.T) {
 }
 
 func TestPrimitiveFunctionNewCallAndDispatchWithoutEndpoint(t *testing.T) {
-	fn := dispatch.NewPrimitiveFunction("foo", func(ctx context.Context, req dispatch.Request) dispatch.Response {
+	fn := dispatch.PrimitiveFunc("foo", func(ctx context.Context, req dispatch.Request) dispatch.Response {
 		panic("not implemented")
 	})
 
@@ -63,7 +63,7 @@ func TestPrimitiveFunctionNewCallAndDispatchWithoutEndpoint(t *testing.T) {
 }
 
 func TestFunctionNewCallAndDispatchWithoutEndpoint(t *testing.T) {
-	fn := dispatch.NewFunction("foo", func(ctx context.Context, input string) (string, error) {
+	fn := dispatch.Func("foo", func(ctx context.Context, input string) (string, error) {
 		panic("not implemented")
 	})
 
@@ -86,7 +86,7 @@ func TestPrimitiveFunctionDispatchWithoutClient(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fn := dispatch.NewPrimitiveFunction("foo", func(ctx context.Context, req dispatch.Request) dispatch.Response {
+	fn := dispatch.PrimitiveFunc("foo", func(ctx context.Context, req dispatch.Request) dispatch.Response {
 		panic("not implemented")
 	})
 	endpoint.Register(fn)
@@ -114,7 +114,7 @@ func TestFunctionDispatchWithoutClient(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fn := dispatch.NewFunction("foo", func(ctx context.Context, input string) (string, error) {
+	fn := dispatch.Func("foo", func(ctx context.Context, input string) (string, error) {
 		panic("not implemented")
 	})
 	endpoint.Register(fn)

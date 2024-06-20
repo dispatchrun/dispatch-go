@@ -83,8 +83,10 @@ func (r *Registry) Close() error {
 	return err
 }
 
-// NewPrimitiveFunction creates a PrimitiveFunction.
-func NewPrimitiveFunction(name string, fn func(context.Context, Request) Response) *PrimitiveFunction {
+// PrimitiveFunc creates a PrimitiveFunction.
+//
+// Most users should instead use Func to create a Dispatch Function.
+func PrimitiveFunc(name string, fn func(context.Context, Request) Response) *PrimitiveFunction {
 	return &PrimitiveFunction{name: name, fn: fn}
 }
 
