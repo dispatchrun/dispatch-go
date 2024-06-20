@@ -11,6 +11,7 @@ import (
 
 	"github.com/dispatchrun/coroutine"
 	"github.com/dispatchrun/dispatch-go"
+	"github.com/dispatchrun/dispatch-go/dispatchcoro"
 	"github.com/dispatchrun/dispatch-go/dispatchproto"
 )
 
@@ -71,7 +72,7 @@ func TestCoroutineExit(t *testing.T) {
 		} else {
 			res = dispatchproto.NewResponse(dispatchproto.String(strconv.Itoa(in)))
 		}
-		dispatch.Yield(res)
+		dispatchcoro.Yield(res)
 		panic("unreachable")
 	})
 	defer coro.Close()
@@ -112,7 +113,7 @@ func TestCoroutinePoll(t *testing.T) {
 			call := dispatchproto.NewCall("http://example.com", "identity", dispatchproto.String("x"), dispatchproto.CorrelationID(uint64(i)))
 			poll := dispatchproto.NewResponse(dispatchproto.NewPoll(1, 2, time.Minute, dispatchproto.Calls(call)))
 
-			res := dispatch.Yield(poll)
+			res := dispatchcoro.Yield(poll)
 
 			pollResult, ok := res.PollResult()
 			if !ok {
