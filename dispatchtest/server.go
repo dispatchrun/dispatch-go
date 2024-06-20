@@ -9,7 +9,6 @@ import (
 	"testing"
 	_ "unsafe"
 
-	"github.com/dispatchrun/dispatch-go"
 	"github.com/dispatchrun/dispatch-go/dispatchproto"
 	"github.com/dispatchrun/dispatch-go/dispatchserver"
 )
@@ -37,7 +36,7 @@ type DispatchRequest struct {
 	Calls  []dispatchproto.Call
 }
 
-func (r *CallRecorder) Handle(ctx context.Context, header http.Header, calls []dispatchproto.Call) ([]dispatch.ID, error) {
+func (r *CallRecorder) Handle(ctx context.Context, header http.Header, calls []dispatchproto.Call) ([]dispatchproto.ID, error) {
 	base := r.calls
 	r.calls += len(calls)
 
@@ -46,9 +45,9 @@ func (r *CallRecorder) Handle(ctx context.Context, header http.Header, calls []d
 		Calls:  slices.Clone(calls),
 	})
 
-	ids := make([]dispatch.ID, len(calls))
+	ids := make([]dispatchproto.ID, len(calls))
 	for i := range calls {
-		ids[i] = dispatch.ID(strconv.Itoa(base + i))
+		ids[i] = dispatchproto.ID(strconv.Itoa(base + i))
 	}
 	return ids, nil
 }

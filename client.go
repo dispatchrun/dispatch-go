@@ -18,12 +18,6 @@ import (
 
 const defaultApiUrl = "https://api.dispatch.run"
 
-// Call is a function call.
-type Call = dispatchproto.Call
-
-// ID is an identifier for a dispatched function call.
-type ID = dispatchproto.ID
-
 // Client is a client for the Dispatch API.
 //
 // The Client can be used to dispatch function calls.
@@ -115,7 +109,7 @@ func APIUrl(apiUrl string) ClientOption {
 }
 
 // Dispatch dispatches a function call.
-func (c *Client) Dispatch(ctx context.Context, call Call) (ID, error) {
+func (c *Client) Dispatch(ctx context.Context, call dispatchproto.Call) (dispatchproto.ID, error) {
 	batch := c.Batch()
 	batch.Add(call)
 	ids, err := batch.Dispatch(ctx)
@@ -148,7 +142,7 @@ func (b *Batch) Reset() {
 }
 
 // Add adds calls to the batch.
-func (b *Batch) Add(calls ...Call) {
+func (b *Batch) Add(calls ...dispatchproto.Call) {
 	for i := range calls {
 		b.calls = append(b.calls, callProto(calls[i]))
 	}
@@ -158,7 +152,7 @@ func (b *Batch) Add(calls ...Call) {
 func callProto(r dispatchproto.Call) *sdkv1.Call
 
 // Dispatch dispatches the batch of function calls.
-func (b *Batch) Dispatch(ctx context.Context) ([]ID, error) {
+func (b *Batch) Dispatch(ctx context.Context) ([]dispatchproto.ID, error) {
 	req := connect.NewRequest(&sdkv1.DispatchRequest{Calls: b.calls})
 	res, err := b.client.client.Dispatch(ctx, req)
 	if err != nil {
@@ -170,9 +164,9 @@ func (b *Batch) Dispatch(ctx context.Context) ([]ID, error) {
 		}
 		return nil, err
 	}
-	ids := make([]ID, len(res.Msg.DispatchIds))
+	ids := make([]dispatchproto.ID, len(res.Msg.DispatchIds))
 	for i, id := range res.Msg.DispatchIds {
-		ids[i] = ID(id)
+		ids[i] = dispatchproto.ID(id)
 	}
 	return ids, nil
 }

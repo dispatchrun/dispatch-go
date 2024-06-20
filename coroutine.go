@@ -94,7 +94,7 @@ func (f *Coroutine[I, O]) NewCall(input I, opts ...dispatchproto.CallOption) (di
 }
 
 // Dispatch dispatches a Call to the function.
-func (f *Coroutine[I, O]) Dispatch(ctx context.Context, input I, opts ...dispatchproto.CallOption) (ID, error) {
+func (f *Coroutine[I, O]) Dispatch(ctx context.Context, input I, opts ...dispatchproto.CallOption) (dispatchproto.ID, error) {
 	call, err := f.NewCall(input, opts...)
 	if err != nil {
 		return "", err
