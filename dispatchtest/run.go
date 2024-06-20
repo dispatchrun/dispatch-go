@@ -23,6 +23,10 @@ func Call[O any](functions Runnable, call dispatch.Call) (O, error) {
 	res := Run(functions, call.Request())
 
 	var output O
+	if !res.OK() {
+		return output, dispatchproto.StatusError(res.Status())
+	}
+
 	boxedOutput, ok := res.Output()
 	if !ok || !res.OK() {
 		return output, fmt.Errorf("unexpected response: %s", res)
