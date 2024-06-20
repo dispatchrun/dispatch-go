@@ -28,7 +28,7 @@ func run() error {
 		return n * 2, nil
 	})
 
-	doubleAndRepeat := dispatch.NewCoroutine("double-repeat", func(ctx context.Context, n int) (string, error) {
+	doubleAndRepeat := dispatch.NewFunction("double-repeat", func(ctx context.Context, n int) (string, error) {
 		doubled, err := double.Await(n)
 		if err != nil {
 			return "", err

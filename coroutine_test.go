@@ -26,7 +26,7 @@ func logMode(t *testing.T) {
 func TestCoroutineReturn(t *testing.T) {
 	logMode(t)
 
-	coro := dispatch.NewCoroutine("stringify", func(ctx context.Context, in int) (string, error) {
+	coro := dispatch.NewFunction("stringify", func(ctx context.Context, in int) (string, error) {
 		if in < 0 {
 			return "", fmt.Errorf("%w: %d", dispatch.ErrInvalidArgument, in)
 		}
@@ -63,7 +63,7 @@ func TestCoroutineReturn(t *testing.T) {
 func TestCoroutineExit(t *testing.T) {
 	logMode(t)
 
-	coro := dispatch.NewCoroutine("stringify", func(ctx context.Context, in int) (string, error) {
+	coro := dispatch.NewFunction("stringify", func(ctx context.Context, in int) (string, error) {
 		var res dispatch.Response
 		if in < 0 {
 			res = dispatch.NewResponseErrorf("%w: %d", dispatch.ErrInvalidArgument, in)
@@ -104,7 +104,7 @@ func TestCoroutineExit(t *testing.T) {
 func TestCoroutinePoll(t *testing.T) {
 	logMode(t)
 
-	coro := dispatch.NewCoroutine("repeat", func(ctx context.Context, n int) (string, error) {
+	coro := dispatch.NewFunction("repeat", func(ctx context.Context, n int) (string, error) {
 		var repeated string
 		for i := 0; i < n; i++ {
 			// Call a mock identity function that returns its input.
@@ -216,11 +216,11 @@ func TestCoroutineAwait(t *testing.T) {
 	// This test is essentially the same as the test above, just
 	// using the higher level helpers for awaiting a call.
 
-	identity := dispatch.NewCoroutine("identity", func(ctx context.Context, x string) (string, error) {
+	identity := dispatch.NewFunction("identity", func(ctx context.Context, x string) (string, error) {
 		panic("not implemented") // this is a mock only
 	})
 
-	coro := dispatch.NewCoroutine("repeat", func(ctx context.Context, n int) (string, error) {
+	coro := dispatch.NewFunction("repeat", func(ctx context.Context, n int) (string, error) {
 		var repeated string
 		for i := 0; i < n; i++ {
 			res, err := identity.Await("x")
@@ -300,11 +300,11 @@ func TestCoroutineGather(t *testing.T) {
 	// using the higher level helpers for gathering the results
 	// of many calls.
 
-	identity := dispatch.NewCoroutine("identity", func(ctx context.Context, x string) (string, error) {
+	identity := dispatch.NewFunction("identity", func(ctx context.Context, x string) (string, error) {
 		panic("not implemented") // this is a mock only
 	})
 
-	coro := dispatch.NewCoroutine("repeat", func(ctx context.Context, n int) (string, error) {
+	coro := dispatch.NewFunction("repeat", func(ctx context.Context, n int) (string, error) {
 		inputs := make([]string, n)
 		for i := range inputs {
 			inputs[i] = "x"
@@ -379,11 +379,11 @@ func TestCoroutineGatherSlow(t *testing.T) {
 	// This test is essentially the same as the test above, just
 	// sending back call results one at a time, and in random order.
 
-	identity := dispatch.NewCoroutine("identity", func(ctx context.Context, x string) (string, error) {
+	identity := dispatch.NewFunction("identity", func(ctx context.Context, x string) (string, error) {
 		panic("not implemented") // this is a mock only
 	})
 
-	coro := dispatch.NewCoroutine("repeat", func(ctx context.Context, n int) (string, error) {
+	coro := dispatch.NewFunction("repeat", func(ctx context.Context, n int) (string, error) {
 		inputs := make([]string, n)
 		for i := range inputs {
 			inputs[i] = "x"

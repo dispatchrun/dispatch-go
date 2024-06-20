@@ -16,22 +16,20 @@ import (
 
 const durableCoroutineStateTypeUrl = "buf.build/stealthrocket/coroutine/coroutine.v1.State"
 
-// NewCoroutine creates a Dispatch coroutine Function.
-func NewCoroutine[I, O any](name string, fn func(context.Context, I) (O, error)) *GenericCoroutine[I, O] {
-	return &GenericCoroutine[I, O]{
-		// GenericCoroutine wraps a GenericFunction to override the
-		// Run method (to support polling and the ability to suspend/resume).
-		// GenericFunction provides the remainder of the Function methods.
-		GenericFunction: GenericFunction[I, O]{
-			PrimitiveFunction{name: name},
-			fn,
-		},
+// NewFunction creates a Dispatch Function.
+func NewFunction[I, O any](name string, fn func(context.Context, I) (O, error)) *Coroutine[I, O] {
+	return &Coroutine[I, O]{
+		PrimitiveFunction: PrimitiveFunction{name: name},
+		fn:                fn,
 	}
 }
 
-// GenericCoroutine is a Function that accepts any input and returns any output.
-type GenericCoroutine[I, O any] struct {
-	GenericFunction[I, O]
+// Coroutine is a Dispatch Function that accepts any input and returns any output,
+// and that can be suspended during execution.
+type Coroutine[I, O any] struct {
+	PrimitiveFunction
+
+	fn func(ctx context.Context, input I) (O, error)
 
 	instances map[coroutineID]dispatchCoroutine
 	nextID    coroutineID
@@ -50,8 +48,8 @@ type coroutineID = int64
 // dispatchCoroutine is the flavour of coroutine we support here.
 type dispatchCoroutine = coroutine.Coroutine[Response, Request]
 
-// Run runs the coroutine function.
-func (c *GenericCoroutine[I, O]) Run(ctx context.Context, req Request) Response {
+// Run runs the function.
+func (c *Coroutine[I, O]) Run(ctx context.Context, req Request) Response {
 	if name := req.Function(); name != c.name {
 		return NewResponseErrorf("%w: function %q received call for function %q", ErrInvalidArgument, c.name, name)
 	}
@@ -90,22 +88,46 @@ func (c *GenericCoroutine[I, O]) Run(ctx context.Context, req Request) Response 
 	return yield.With(CoroutineState(state))
 }
 
-func (c *GenericCoroutine[I, O]) setUp(req Request) (id coroutineID, coro dispatchCoroutine, err error) {
-	// Start a new coroutine if the request carries function input.
-	// Otherwise, resume a coroutine that is suspended.
-	if _, ok := req.Input(); ok {
-		var input I
-		input, err = c.unpackInput(req)
-		if err == nil {
-			id, coro = c.create(input)
-		}
-	} else if pollResult, ok := req.PollResult(); ok {
-		id, coro, err = c.deserialize(pollResult.CoroutineState())
+// NewCall creates a Call for the function.
+func (f *Coroutine[I, O]) NewCall(input I, opts ...CallOption) (Call, error) {
+	boxedInput, err := NewAny(input)
+	if err != nil {
+		return Call{}, fmt.Errorf("cannot serialize input: %v", err)
 	}
-	return
+	return f.PrimitiveFunction.NewCall(boxedInput, opts...)
 }
 
-func (c *GenericCoroutine[I, O]) create(input I) (coroutineID, dispatchCoroutine) {
+// Dispatch dispatches a Call to the function.
+func (f *Coroutine[I, O]) Dispatch(ctx context.Context, input I, opts ...CallOption) (ID, error) {
+	call, err := f.NewCall(input, opts...)
+	if err != nil {
+		return "", err
+	}
+	return f.dispatchCall(ctx, call)
+}
+
+func (c *Coroutine[I, O]) setUp(req Request) (coroutineID, dispatchCoroutine, error) {
+	// If the request carries a poll result, find (in a volatile mode) or
+	// deserialize (in durable mode) the coroutine.
+	if pollResult, ok := req.PollResult(); ok {
+		return c.deserialize(pollResult.CoroutineState())
+	}
+
+	// If the request carries input, create a coroutine.
+	var coro dispatchCoroutine
+	var input I
+	boxedInput, ok := req.Input()
+	if !ok {
+		return 0, coro, fmt.Errorf("%w: unsupported request: %v", ErrInvalidArgument, req)
+	}
+	if err := boxedInput.Unmarshal(&input); err != nil {
+		return 0, coro, fmt.Errorf("%w: invalid input %v: %v", ErrInvalidArgument, boxedInput, err)
+	}
+	id, coro := c.create(input)
+	return id, coro, nil
+}
+
+func (c *Coroutine[I, O]) create(input I) (coroutineID, dispatchCoroutine) {
 	var id coroutineID
 	coro := coroutine.NewWithReturn[Response, Request](c.entrypoint(input))
 
@@ -128,7 +150,7 @@ func (c *GenericCoroutine[I, O]) create(input I) (coroutineID, dispatchCoroutine
 	return id, coro
 }
 
-func (c *GenericCoroutine[I, O]) tearDown(id coroutineID, coro dispatchCoroutine) {
+func (c *Coroutine[I, O]) tearDown(id coroutineID, coro dispatchCoroutine) {
 	// Always tear down durable coroutines. They'll be rebuilt
 	// on the next call (if applicable) from their serialized state,
 	// possibly in a new location.
@@ -146,7 +168,7 @@ func (c *GenericCoroutine[I, O]) tearDown(id coroutineID, coro dispatchCoroutine
 	}
 }
 
-func (c *GenericCoroutine[I, O]) serialize(id coroutineID, coro dispatchCoroutine) (Any, error) {
+func (c *Coroutine[I, O]) serialize(id coroutineID, coro dispatchCoroutine) (Any, error) {
 	// In volatile mode, serialize a reference to the coroutine instance.
 	if !coroutine.Durable {
 		return Int(id), nil
@@ -161,7 +183,7 @@ func (c *GenericCoroutine[I, O]) serialize(id coroutineID, coro dispatchCoroutin
 	return state, nil
 }
 
-func (c *GenericCoroutine[I, O]) deserialize(state Any) (coroutineID, dispatchCoroutine, error) {
+func (c *Coroutine[I, O]) deserialize(state Any) (coroutineID, dispatchCoroutine, error) {
 	var id coroutineID
 	var coro dispatchCoroutine
 
@@ -192,7 +214,7 @@ func (c *GenericCoroutine[I, O]) deserialize(state Any) (coroutineID, dispatchCo
 	return id, coro, nil
 }
 
-func (c *GenericCoroutine[I, O]) Coroutine() bool {
+func (c *Coroutine[I, O]) Coroutine() bool {
 	return true
 }
 
@@ -200,7 +222,7 @@ func (c *GenericCoroutine[I, O]) Coroutine() bool {
 //
 // In volatile mode, Close destroys all running instances of the coroutine.
 // In durable mode, Close is a noop.
-func (c *GenericCoroutine[I, O]) Close() error {
+func (c *Coroutine[I, O]) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -212,7 +234,7 @@ func (c *GenericCoroutine[I, O]) Close() error {
 	return nil
 }
 
-func (c *GenericCoroutine[I, O]) entrypoint(input I) func() Response {
+func (c *Coroutine[I, O]) entrypoint(input I) func() Response {
 	return func() Response {
 		// The context that gets passed as argument here should be recreated
 		// each time the coroutine is resumed, ideally inheriting from the
@@ -224,7 +246,11 @@ func (c *GenericCoroutine[I, O]) entrypoint(input I) func() Response {
 			// TODO: include output if not nil
 			return NewResponseError(err)
 		}
-		return c.packOutput(output)
+		boxedOutput, err := NewAny(output)
+		if err != nil {
+			return NewResponseErrorf("%w: invalid output %v: %v", ErrInvalidResponse, output, err)
+		}
+		return NewResponse(StatusOf(output), boxedOutput)
 	}
 }
 
@@ -386,7 +412,7 @@ func Gather[O any](calls ...Call) ([]O, error) {
 
 // Await calls the function and awaits a result.
 //
-// Await should only be called within a Dispatch coroutine.
+// Await should only be called within a Dispatch coroutine (created via NewFunction).
 func (f *PrimitiveFunction) Await(input Any, opts ...CallOption) (Any, error) {
 	call, err := f.NewCall(input, opts...)
 	if err != nil {
@@ -408,7 +434,7 @@ func (f *PrimitiveFunction) Await(input Any, opts ...CallOption) (Any, error) {
 
 // Gather makes many concurrent calls to the function and awaits the results.
 //
-// Gather should only be called within a Dispatch coroutine.
+// Gather should only be called within a Dispatch coroutine (created via NewFunction).
 func (f *PrimitiveFunction) Gather(inputs []Any, opts ...CallOption) ([]Any, error) {
 	calls := make([]Call, len(inputs))
 	for i, input := range inputs {
@@ -435,10 +461,10 @@ func (f *PrimitiveFunction) Gather(inputs []Any, opts ...CallOption) ([]Any, err
 // Await calls the function and awaits a result.
 //
 // Await should only be called within a Dispatch coroutine.
-func (f *GenericFunction[I, O]) Await(input I, opts ...CallOption) (O, error) {
+func (c *Coroutine[I, O]) Await(input I, opts ...CallOption) (O, error) {
 	var output O
 
-	call, err := f.NewCall(input, opts...)
+	call, err := c.NewCall(input, opts...)
 	if err != nil {
 		return output, err
 	}
@@ -452,10 +478,10 @@ func (f *GenericFunction[I, O]) Await(input I, opts ...CallOption) (O, error) {
 // Gather makes many concurrent calls to the function and awaits the results.
 //
 // Gather should only be called within a Dispatch coroutine.
-func (f *GenericFunction[I, O]) Gather(inputs []I, opts ...CallOption) ([]O, error) {
+func (c *Coroutine[I, O]) Gather(inputs []I, opts ...CallOption) ([]O, error) {
 	calls := make([]Call, len(inputs))
 	for i, input := range inputs {
-		call, err := f.NewCall(input, opts...)
+		call, err := c.NewCall(input, opts...)
 		if err != nil {
 			return nil, err
 		}
