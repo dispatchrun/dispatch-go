@@ -291,7 +291,7 @@ func (f *PrimitiveFunction) Await(input dispatchproto.Any, opts ...dispatchproto
 
 // Gather makes many concurrent calls to the function and awaits the results.
 //
-// Gather should only be called within a Dispatch coroutine (created via NewFunction).
+// Gather should only be called within a Dispatch coroutine (created via Func).
 func (f *PrimitiveFunction) Gather(inputs []dispatchproto.Any, opts ...dispatchproto.CallOption) ([]dispatchproto.Any, error) {
 	calls := make([]dispatchproto.Call, len(inputs))
 	for i, input := range inputs {
