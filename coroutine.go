@@ -103,38 +103,31 @@ func (f *Coroutine[I, O]) Dispatch(ctx context.Context, input I, opts ...dispatc
 }
 
 func (c *Coroutine[I, O]) setUp(req dispatchproto.Request) (coroutineID, dispatchcoro.Coroutine, error) {
-	// If the request carries a poll result, find (in a volatile mode) or
-	// deserialize (in durable mode) the coroutine.
+	// If the request carries a poll result, find or deserialize the
+	// suspended coroutine.
 	if pollResult, ok := req.PollResult(); ok {
 		return c.deserialize(pollResult.CoroutineState())
 	}
 
-	// If the request carries input, create a coroutine.
-	var coro dispatchcoro.Coroutine
+	// Otherwise, this is a new function call. Prepare input from the request.
 	var input I
 	boxedInput, ok := req.Input()
 	if !ok {
-		return 0, coro, fmt.Errorf("%w: unsupported request: %v", ErrInvalidArgument, req)
+		return 0, dispatchcoro.Coroutine{}, fmt.Errorf("%w: unsupported request: %v", ErrInvalidArgument, req)
 	}
 	if err := boxedInput.Unmarshal(&input); err != nil {
-		return 0, coro, fmt.Errorf("%w: invalid input %v: %v", ErrInvalidArgument, boxedInput, err)
+		return 0, dispatchcoro.Coroutine{}, fmt.Errorf("%w: invalid input %v: %v", ErrInvalidArgument, boxedInput, err)
 	}
-	id, coro := c.create(input)
-	return id, coro, nil
-}
 
-func (c *Coroutine[I, O]) create(input I) (coroutineID, dispatchcoro.Coroutine) {
-	var id coroutineID
+	// Create a new coroutine.
 	coro := coroutine.NewWithReturn[dispatchproto.Response, dispatchproto.Request](c.entrypoint(input))
 
-	// In volatile mode, we need to create an "instance" of the coroutine that
-	// resides in memory.
+	// In volatile mode, register the coroutine instance after
+	// assigning a unique identifier.
+	var id coroutineID
 	if !coroutine.Durable {
 		c.mu.Lock()
 		defer c.mu.Unlock()
-
-		// Give the instance a unique ID so that we can later find it
-		// when resuming execution.
 		c.nextID++
 		id = c.nextID
 		if c.instances == nil {
@@ -143,7 +136,7 @@ func (c *Coroutine[I, O]) create(input I) (coroutineID, dispatchcoro.Coroutine) 
 		c.instances[id] = coro
 	}
 
-	return id, coro
+	return id, coro, nil
 }
 
 func (c *Coroutine[I, O]) tearDown(id coroutineID, coro dispatchcoro.Coroutine) {
@@ -159,7 +152,6 @@ func (c *Coroutine[I, O]) tearDown(id coroutineID, coro dispatchcoro.Coroutine) 
 	if !coroutine.Durable && coro.Done() {
 		c.mu.Lock()
 		defer c.mu.Unlock()
-
 		delete(c.instances, id)
 	}
 }
@@ -170,7 +162,7 @@ func (c *Coroutine[I, O]) serialize(id coroutineID, coro dispatchcoro.Coroutine)
 		return dispatchproto.NewAny(id)
 	}
 
-	// In durable mode, we serialize the entire state of the coroutine.
+	// In durable mode, serialize the state of the coroutine.
 	state, err := dispatchcoro.Serialize(coro)
 	if err != nil {
 		return dispatchproto.Any{}, fmt.Errorf("%w: %v", ErrPermanent, err)
@@ -182,7 +174,7 @@ func (c *Coroutine[I, O]) deserialize(state dispatchproto.Any) (coroutineID, dis
 	var id coroutineID
 	var coro dispatchcoro.Coroutine
 
-	// Deserialize durable coroutine state.
+	// In durable mode, create the coroutine and then deserialize its prior state.
 	if coroutine.Durable {
 		var zero I
 		coro = coroutine.NewWithReturn[dispatchproto.Response, dispatchproto.Request](c.entrypoint(zero))
@@ -249,6 +241,38 @@ func (c *Coroutine[I, O]) entrypoint(input I) func() dispatchproto.Response {
 
 // Await calls the function and awaits a result.
 //
+// Await should only be called within a Dispatch coroutine.
+func (c *Coroutine[I, O]) Await(input I, opts ...dispatchproto.CallOption) (O, error) {
+	var output O
+
+	call, err := c.NewCall(input, opts...)
+	if err != nil {
+		return output, err
+	}
+	results, err := dispatchcoro.Gather[O](call)
+	if err != nil {
+		return output, err
+	}
+	return results[0], nil
+}
+
+// Gather makes many concurrent calls to the function and awaits the results.
+//
+// Gather should only be called within a Dispatch coroutine.
+func (c *Coroutine[I, O]) Gather(inputs []I, opts ...dispatchproto.CallOption) ([]O, error) {
+	calls := make([]dispatchproto.Call, len(inputs))
+	for i, input := range inputs {
+		call, err := c.NewCall(input, opts...)
+		if err != nil {
+			return nil, err
+		}
+		calls[i] = call
+	}
+	return dispatchcoro.Gather[O](calls...)
+}
+
+// Await calls the function and awaits a result.
+//
 // Await should only be called within a Dispatch coroutine (created via NewFunction).
 func (f *PrimitiveFunction) Await(input dispatchproto.Any, opts ...dispatchproto.CallOption) (dispatchproto.Any, error) {
 	call, err := f.NewCall(input, opts...)
@@ -293,36 +317,4 @@ func (f *PrimitiveFunction) Gather(inputs []dispatchproto.Any, opts ...dispatchp
 		outputs[i] = output
 	}
 	return outputs, nil
-}
-
-// Await calls the function and awaits a result.
-//
-// Await should only be called within a Dispatch coroutine.
-func (c *Coroutine[I, O]) Await(input I, opts ...dispatchproto.CallOption) (O, error) {
-	var output O
-
-	call, err := c.NewCall(input, opts...)
-	if err != nil {
-		return output, err
-	}
-	results, err := dispatchcoro.Gather[O](call)
-	if err != nil {
-		return output, err
-	}
-	return results[0], nil
-}
-
-// Gather makes many concurrent calls to the function and awaits the results.
-//
-// Gather should only be called within a Dispatch coroutine.
-func (c *Coroutine[I, O]) Gather(inputs []I, opts ...dispatchproto.CallOption) ([]O, error) {
-	calls := make([]dispatchproto.Call, len(inputs))
-	for i, input := range inputs {
-		call, err := c.NewCall(input, opts...)
-		if err != nil {
-			return nil, err
-		}
-		calls[i] = call
-	}
-	return dispatchcoro.Gather[O](calls...)
 }
