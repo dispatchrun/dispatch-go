@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-lambda-go/lambda/messages"
 	"github.com/dispatchrun/dispatch-go"
+	"github.com/dispatchrun/dispatch-go/dispatchproto"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -73,8 +74,8 @@ func badRequest(msg string) messages.InvokeResponse_Error {
 	}
 }
 
-//go:linkname newProtoRequest github.com/dispatchrun/dispatch-go.newProtoRequest
-func newProtoRequest(r *sdkv1.RunRequest) dispatch.Request
+//go:linkname newProtoRequest github.com/dispatchrun/dispatch-go/dispatchproto.newProtoRequest
+func newProtoRequest(r *sdkv1.RunRequest) dispatchproto.Request
 
-//go:linkname responseProto github.com/dispatchrun/dispatch-go.responseProto
-func responseProto(r dispatch.Response) *sdkv1.RunResponse
+//go:linkname responseProto github.com/dispatchrun/dispatch-go/dispatchproto.responseProto
+func responseProto(r dispatchproto.Response) *sdkv1.RunResponse

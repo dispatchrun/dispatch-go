@@ -10,21 +10,22 @@ import (
 	"connectrpc.com/connect"
 	"connectrpc.com/validate"
 	"github.com/dispatchrun/dispatch-go"
+	"github.com/dispatchrun/dispatch-go/dispatchproto"
 )
 
 // Handler handles requests to a Dispatch API server.
 type Handler interface {
-	Handle(ctx context.Context, header http.Header, calls []dispatch.Call) ([]dispatch.ID, error)
+	Handle(ctx context.Context, header http.Header, calls []dispatchproto.Call) ([]dispatch.ID, error)
 }
 
 // HandlerFunc creates a Handler from a function.
-func HandlerFunc(fn func(context.Context, http.Header, []dispatch.Call) ([]dispatch.ID, error)) Handler {
+func HandlerFunc(fn func(context.Context, http.Header, []dispatchproto.Call) ([]dispatch.ID, error)) Handler {
 	return handlerFunc(fn)
 }
 
-type handlerFunc func(context.Context, http.Header, []dispatch.Call) ([]dispatch.ID, error)
+type handlerFunc func(context.Context, http.Header, []dispatchproto.Call) ([]dispatch.ID, error)
 
-func (h handlerFunc) Handle(ctx context.Context, header http.Header, calls []dispatch.Call) ([]dispatch.ID, error) {
+func (h handlerFunc) Handle(ctx context.Context, header http.Header, calls []dispatchproto.Call) ([]dispatch.ID, error) {
 	return h(ctx, header, calls)
 }
 
@@ -66,7 +67,7 @@ func (s *Server) Serve(addr string) error {
 type dispatchServiceHandler struct{ Handler }
 
 func (d *dispatchServiceHandler) Dispatch(ctx context.Context, req *connect.Request[sdkv1.DispatchRequest]) (*connect.Response[sdkv1.DispatchResponse], error) {
-	calls := make([]dispatch.Call, len(req.Msg.Calls))
+	calls := make([]dispatchproto.Call, len(req.Msg.Calls))
 	for i, c := range req.Msg.Calls {
 		calls[i] = newProtoCall(c)
 	}
@@ -86,5 +87,5 @@ func (d *dispatchServiceHandler) Dispatch(ctx context.Context, req *connect.Requ
 	}), nil
 }
 
-//go:linkname newProtoCall github.com/dispatchrun/dispatch-go.newProtoCall
-func newProtoCall(c *sdkv1.Call) dispatch.Call
+//go:linkname newProtoCall github.com/dispatchrun/dispatch-go/dispatchproto.newProtoCall
+func newProtoCall(c *sdkv1.Call) dispatchproto.Call

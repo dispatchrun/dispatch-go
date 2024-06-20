@@ -1,6 +1,4 @@
-//go:build !durable
-
-package dispatch
+package dispatchproto
 
 import (
 	"errors"

@@ -10,7 +10,7 @@ import (
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
 	"connectrpc.com/connect"
 	"connectrpc.com/validate"
-	"github.com/dispatchrun/dispatch-go"
+	"github.com/dispatchrun/dispatch-go/dispatchproto"
 	"github.com/dispatchrun/dispatch-go/internal/auth"
 )
 
@@ -86,7 +86,7 @@ func ClientOptions(opts ...connect.ClientOption) EndpointClientOption {
 }
 
 // Run sends a RunRequest and returns a RunResponse.
-func (c *EndpointClient) Run(ctx context.Context, req dispatch.Request) (dispatch.Response, error) {
+func (c *EndpointClient) Run(ctx context.Context, req dispatchproto.Request) (dispatchproto.Response, error) {
 	connectReq := connect.NewRequest(requestProto(req))
 
 	header := connectReq.Header()
@@ -96,13 +96,13 @@ func (c *EndpointClient) Run(ctx context.Context, req dispatch.Request) (dispatc
 
 	res, err := c.client.Run(ctx, connectReq)
 	if err != nil {
-		return dispatch.Response{}, err
+		return dispatchproto.Response{}, err
 	}
 	return newProtoResponse(res.Msg), nil
 }
 
-//go:linkname newProtoResponse github.com/dispatchrun/dispatch-go.newProtoResponse
-func newProtoResponse(r *sdkv1.RunResponse) dispatch.Response
+//go:linkname newProtoResponse github.com/dispatchrun/dispatch-go/dispatchproto.newProtoResponse
+func newProtoResponse(r *sdkv1.RunResponse) dispatchproto.Response
 
-//go:linkname requestProto github.com/dispatchrun/dispatch-go.requestProto
-func requestProto(r dispatch.Request) *sdkv1.RunRequest
+//go:linkname requestProto github.com/dispatchrun/dispatch-go/dispatchproto.requestProto
+func requestProto(r dispatchproto.Request) *sdkv1.RunRequest

@@ -1,11 +1,8 @@
-//go:build !durable
-
-package dispatch
+package dispatchproto
 
 import (
 	"fmt"
 	"time"
-	_ "unsafe"
 
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
 	"google.golang.org/protobuf/proto"
@@ -261,6 +258,11 @@ type Error struct {
 func NewError(err error) Error {
 	// TODO: use ErrorValue / Traceback
 	return NewErrorMessage(errorTypeOf(err), err.Error())
+}
+
+// NewErrorf creates an Error from the specified message and args.
+func NewErrorf(msg string, args ...any) Error {
+	return NewError(fmt.Errorf(msg, args...))
 }
 
 // NewErrorMessage creates an Error.
@@ -924,33 +926,3 @@ func (a Any) configureRequest(r *Request) { inputOption(a).configureRequest(r) }
 func (a Any) configureCallResult(r *CallResult) { outputOption(a).configureCallResult(r) }
 func (a Any) configureExit(x *Exit)             { outputOption(a).configureExit(x) }
 func (a Any) configureResponse(r *Response)     { outputOption(a).configureResponse(r) }
-
-// These are hooks used by the dispatchlambda and dispatchtest
-// package that let us avoid exposing proto messages. Exposing
-// the underlying proto messages complicates the API and opens
-// up new failure modes.
-
-//go:linkname newProtoCall
-func newProtoCall(proto *sdkv1.Call) Call { //nolint
-	return Call{proto}
-}
-
-//go:linkname newProtoResponse
-func newProtoResponse(proto *sdkv1.RunResponse) Response { //nolint
-	return Response{proto}
-}
-
-//go:linkname newProtoRequest
-func newProtoRequest(proto *sdkv1.RunRequest) Request { //nolint
-	return Request{proto}
-}
-
-//go:linkname requestProto
-func requestProto(r Request) *sdkv1.RunRequest { //nolint
-	return r.proto
-}
-
-//go:linkname responseProto
-func responseProto(r Response) *sdkv1.RunResponse { //nolint
-	return r.proto
-}

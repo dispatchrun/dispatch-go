@@ -1,6 +1,4 @@
-//go:build !durable
-
-package dispatch
+package dispatchproto
 
 import (
 	"fmt"
@@ -269,15 +267,6 @@ func (a Any) Unmarshal(v any) error {
 // serialized value.
 func (a Any) TypeURL() string {
 	return a.proto.GetTypeUrl()
-}
-
-// Value is the raw serialized value.
-func (a Any) Value() []byte {
-	return a.proto.GetValue()
-}
-
-func newAnyTypeValue(typeUrl string, value []byte) Any {
-	return Any{&anypb.Any{TypeUrl: typeUrl, Value: value}}
 }
 
 func (a Any) Format(f fmt.State, verb rune) {

@@ -8,6 +8,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/dispatchrun/dispatch-go"
+	"github.com/dispatchrun/dispatch-go/dispatchproto"
 	"github.com/dispatchrun/dispatch-go/dispatchtest"
 )
 
@@ -25,21 +26,21 @@ func TestDispatchEndpoint(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	endpoint.Register(dispatch.PrimitiveFunc("identity", func(ctx context.Context, req dispatch.Request) dispatch.Response {
+	endpoint.Register(dispatch.PrimitiveFunc("identity", func(ctx context.Context, req dispatchproto.Request) dispatchproto.Response {
 		input, ok := req.Input()
 		if !ok {
-			return dispatch.NewResponseErrorf("%w: unexpected request: %v", dispatch.ErrInvalidArgument, req)
+			return dispatchproto.NewResponseErrorf("%w: unexpected request: %v", dispatch.ErrInvalidArgument, req)
 		}
-		return dispatch.NewResponse(input)
+		return dispatchproto.NewResponse(input)
 	}))
 
 	// Send a request for the identity function, and check that the
 	// input was echoed back.
-	req := dispatch.NewRequest("identity", dispatch.Int(11))
+	req := dispatchproto.NewRequest("identity", dispatchproto.Int(11))
 	res, err := client.Run(context.Background(), req)
 	if err != nil {
 		t.Fatal(err)
-	} else if res.Status() != dispatch.OKStatus {
+	} else if res.Status() != dispatchproto.OKStatus {
 		t.Fatalf("unexpected response status: %v", res.Status())
 	}
 	var output int
@@ -52,10 +53,10 @@ func TestDispatchEndpoint(t *testing.T) {
 	}
 
 	// Try running a function that has not been registered.
-	res, err = client.Run(context.Background(), dispatch.NewRequest("not_found", dispatch.Int(22)))
+	res, err = client.Run(context.Background(), dispatchproto.NewRequest("not_found", dispatchproto.Int(22)))
 	if err != nil {
 		t.Fatal(err)
-	} else if res.Status() != dispatch.NotFoundStatus {
+	} else if res.Status() != dispatchproto.NotFoundStatus {
 		t.Fatalf("unexpected response status: %v", res.Status())
 	}
 
@@ -85,22 +86,22 @@ func TestDispatchCall(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fn := dispatch.PrimitiveFunc("function1", func(ctx context.Context, req dispatch.Request) dispatch.Response {
+	fn := dispatch.PrimitiveFunc("function1", func(ctx context.Context, req dispatchproto.Request) dispatchproto.Response {
 		panic("not implemented")
 	})
 	endpoint.Register(fn)
 
-	_, err = fn.Dispatch(context.Background(), dispatch.Int(11), dispatch.Expiration(10*time.Second))
+	_, err = fn.Dispatch(context.Background(), dispatchproto.Int(11), dispatchproto.Expiration(10*time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	recorder.Assert(t, dispatchtest.DispatchRequest{
 		Header: http.Header{"Authorization": []string{"Bearer foobar"}},
-		Calls: []dispatch.Call{
-			dispatch.NewCall("http://example.com", "function1",
-				dispatch.Int(11),
-				dispatch.Expiration(10*time.Second)),
+		Calls: []dispatchproto.Call{
+			dispatchproto.NewCall("http://example.com", "function1",
+				dispatchproto.Int(11),
+				dispatchproto.Expiration(10*time.Second)),
 		},
 	})
 }
@@ -123,17 +124,17 @@ func TestDispatchCallEnvConfig(t *testing.T) {
 	})
 	endpoint.Register(fn)
 
-	_, err = fn.Dispatch(context.Background(), "foo", dispatch.Version("xyzzy"))
+	_, err = fn.Dispatch(context.Background(), "foo", dispatchproto.Version("xyzzy"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	recorder.Assert(t, dispatchtest.DispatchRequest{
 		Header: http.Header{"Authorization": []string{"Bearer foobar"}},
-		Calls: []dispatch.Call{
-			dispatch.NewCall("http://example.com", "function2",
-				dispatch.String("foo"),
-				dispatch.Version("xyzzy")),
+		Calls: []dispatchproto.Call{
+			dispatchproto.NewCall("http://example.com", "function2",
+				dispatchproto.String("foo"),
+				dispatchproto.Version("xyzzy")),
 		},
 	})
 }
@@ -154,7 +155,7 @@ func TestDispatchCallsBatch(t *testing.T) {
 	}
 	client = nil
 
-	fn1 := dispatch.PrimitiveFunc("function1", func(ctx context.Context, req dispatch.Request) dispatch.Response {
+	fn1 := dispatch.PrimitiveFunc("function1", func(ctx context.Context, req dispatchproto.Request) dispatchproto.Response {
 		panic("not implemented")
 	})
 	fn2 := dispatch.Func("function2", func(ctx context.Context, input string) (string, error) {
@@ -164,11 +165,11 @@ func TestDispatchCallsBatch(t *testing.T) {
 	endpoint.Register(fn1)
 	endpoint.Register(fn2)
 
-	call1, err := fn1.NewCall(dispatch.Int(11), dispatch.Expiration(10*time.Second))
+	call1, err := fn1.NewCall(dispatchproto.Int(11), dispatchproto.Expiration(10*time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
-	call2, err := fn2.NewCall("foo", dispatch.Version("xyzzy"))
+	call2, err := fn2.NewCall("foo", dispatchproto.Version("xyzzy"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +187,7 @@ func TestDispatchCallsBatch(t *testing.T) {
 
 	recorder.Assert(t, dispatchtest.DispatchRequest{
 		Header: http.Header{"Authorization": []string{"Bearer foobar"}},
-		Calls:  []dispatch.Call{call1, call2},
+		Calls:  []dispatchproto.Call{call1, call2},
 	})
 }
 

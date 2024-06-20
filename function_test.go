@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/dispatchrun/dispatch-go"
+	"github.com/dispatchrun/dispatch-go/dispatchproto"
 )
 
 func TestFunctionRunError(t *testing.T) {
@@ -13,8 +14,11 @@ func TestFunctionRunError(t *testing.T) {
 		return "", errors.New("oops")
 	})
 
-	req := dispatch.NewRequest("foo", dispatch.String("hello"))
-	res := fn.Run(context.Background(), req)
+	call, err := fn.NewCall("hello")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res := fn.Run(context.Background(), call.Request())
 	error, ok := res.Error()
 	if !ok {
 		t.Fatalf("invalid response: %v", res)
@@ -32,8 +36,11 @@ func TestFunctionRunResult(t *testing.T) {
 		return "world", nil
 	})
 
-	req := dispatch.NewRequest("foo", dispatch.String("hello"))
-	res := fn.Run(context.Background(), req)
+	call, err := fn.NewCall("hello")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res := fn.Run(context.Background(), call.Request())
 	if error, ok := res.Error(); ok {
 		t.Fatalf("unexpected response error: %v", error)
 	}
@@ -48,15 +55,15 @@ func TestFunctionRunResult(t *testing.T) {
 }
 
 func TestPrimitiveFunctionNewCallAndDispatchWithoutEndpoint(t *testing.T) {
-	fn := dispatch.PrimitiveFunc("foo", func(ctx context.Context, req dispatch.Request) dispatch.Response {
+	fn := dispatch.PrimitiveFunc("foo", func(ctx context.Context, req dispatchproto.Request) dispatchproto.Response {
 		panic("not implemented")
 	})
 
-	_, err := fn.NewCall(dispatch.String("bar")) // allowed
+	_, err := fn.NewCall(dispatchproto.String("bar")) // allowed
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = fn.Dispatch(context.Background(), dispatch.String("bar"))
+	_, err = fn.Dispatch(context.Background(), dispatchproto.String("bar"))
 	if err == nil || err.Error() != "cannot dispatch function call: function has not been registered with a Dispatch endpoint" {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -86,18 +93,18 @@ func TestPrimitiveFunctionDispatchWithoutClient(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fn := dispatch.PrimitiveFunc("foo", func(ctx context.Context, req dispatch.Request) dispatch.Response {
+	fn := dispatch.PrimitiveFunc("foo", func(ctx context.Context, req dispatchproto.Request) dispatchproto.Response {
 		panic("not implemented")
 	})
 	endpoint.Register(fn)
 
 	// It's possible to create a call since an endpoint URL is available.
-	if _, err := fn.NewCall(dispatch.String("bar")); err != nil {
+	if _, err := fn.NewCall(dispatchproto.String("bar")); err != nil {
 		t.Fatal(err)
 	}
 
 	// However, a client is not available.
-	_, err = fn.Dispatch(context.Background(), dispatch.String("bar"))
+	_, err = fn.Dispatch(context.Background(), dispatchproto.String("bar"))
 	if err == nil {
 		t.Fatal("expected an error")
 	} else if err.Error() != "cannot dispatch function call: Dispatch API key has not been set. Use APIKey(..), or set the DISPATCH_API_KEY environment variable" {

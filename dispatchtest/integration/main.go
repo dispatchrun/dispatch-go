@@ -44,18 +44,17 @@ func run() error {
 	functions.Register(stringify, double, doubleAndRepeat)
 	defer functions.Close()
 
-	req := dispatch.NewRequest("double-repeat", dispatch.Int(4))
-	res := dispatchtest.Run(&functions, req)
-
-	output, ok := res.Output()
-	if !ok || !res.OK() {
-		return fmt.Errorf("unexpected response: %s", res)
+	call, err := doubleAndRepeat.NewCall(4)
+	if err != nil {
+		return fmt.Errorf("new call failed: %v", err)
 	}
-	var str string
-	if err := output.Unmarshal(&str); err != nil {
+
+	output, err := dispatchtest.Call[string](&functions, call)
+	if err != nil {
 		return err
-	} else if str != "88888888" {
-		return fmt.Errorf("unexpected result: %q", str)
+	}
+	if output != "88888888" {
+		return fmt.Errorf("unexpected output: %q", output)
 	}
 	return nil
 }

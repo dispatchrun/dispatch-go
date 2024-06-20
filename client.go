@@ -7,15 +7,20 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	_ "unsafe"
 
 	"buf.build/gen/go/stealthrocket/dispatch-proto/connectrpc/go/dispatch/sdk/v1/sdkv1connect"
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
 	"connectrpc.com/connect"
 	"connectrpc.com/validate"
+	"github.com/dispatchrun/dispatch-go/dispatchproto"
 )
 
+// Call is a function call.
+type Call = dispatchproto.Call
+
 // ID is an identifier for a dispatched function call.
-type ID string
+type ID = dispatchproto.ID
 
 // Client is a client for the Dispatch API.
 //
@@ -145,9 +150,12 @@ func (b *Batch) Reset() {
 // Add adds calls to the batch.
 func (b *Batch) Add(calls ...Call) {
 	for i := range calls {
-		b.calls = append(b.calls, calls[i].proto)
+		b.calls = append(b.calls, callProto(calls[i]))
 	}
 }
+
+//go:linkname callProto github.com/dispatchrun/dispatch-go/dispatchproto.callProto
+func callProto(r dispatchproto.Call) *sdkv1.Call
 
 // Dispatch dispatches the batch of function calls.
 func (b *Batch) Dispatch(ctx context.Context) ([]ID, error) {

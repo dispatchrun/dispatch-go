@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"slices"
 	"sync"
+
+	"github.com/dispatchrun/dispatch-go/dispatchproto"
 )
 
 // Function is a Dispatch function.
@@ -15,7 +17,7 @@ type Function interface {
 	Name() string
 
 	// Run runs the function.
-	Run(context.Context, Request) Response
+	Run(context.Context, dispatchproto.Request) dispatchproto.Response
 
 	// Coroutine is true if the function is a coroutine that can be
 	// suspended and resumed.
@@ -60,10 +62,10 @@ func (r *Registry) Lookup(name string) Function {
 }
 
 // Run runs a function.
-func (r *Registry) Run(ctx context.Context, req Request) Response {
+func (r *Registry) Run(ctx context.Context, req dispatchproto.Request) dispatchproto.Response {
 	fn := r.Lookup(req.Function())
 	if fn == nil {
-		return NewResponseErrorf("%w: function %q not found", ErrNotFound, req.Function())
+		return dispatchproto.NewResponseErrorf("%w: function %q not found", ErrNotFound, req.Function())
 	}
 	return fn.Run(ctx, req)
 }
@@ -86,16 +88,17 @@ func (r *Registry) Close() error {
 // PrimitiveFunc creates a PrimitiveFunction.
 //
 // Most users should instead use Func to create a Dispatch Function.
-func PrimitiveFunc(name string, fn func(context.Context, Request) Response) *PrimitiveFunction {
+func PrimitiveFunc(name string, fn func(context.Context, dispatchproto.Request) dispatchproto.Response) *PrimitiveFunction {
 	return &PrimitiveFunction{name: name, fn: fn}
 }
 
 // PrimitiveFunction is a Function that's close to the underlying
-// Dispatch protocol, accepting a Request and returning a Response.
+// Dispatch protocol, accepting a dispatchproto.Request and returning
+// a dispatchproto.Response.
 type PrimitiveFunction struct {
 	name string
 
-	fn func(context.Context, Request) Response
+	fn func(context.Context, dispatchproto.Request) dispatchproto.Response
 
 	endpoint *Dispatch
 }
@@ -106,9 +109,9 @@ func (f *PrimitiveFunction) Name() string {
 }
 
 // Run runs the function.
-func (f *PrimitiveFunction) Run(ctx context.Context, req Request) Response {
+func (f *PrimitiveFunction) Run(ctx context.Context, req dispatchproto.Request) dispatchproto.Response {
 	if name := req.Function(); name != f.name {
-		return NewResponseErrorf("%w: function %q received call for function %q", ErrInvalidArgument, f.name, name)
+		return dispatchproto.NewResponseErrorf("%w: function %q received call for function %q", ErrInvalidArgument, f.name, name)
 	}
 	return f.fn(ctx, req)
 }
@@ -126,17 +129,17 @@ func (f *PrimitiveFunction) bind(endpoint *Dispatch) {
 }
 
 // NewCall creates a Call for the function.
-func (f *PrimitiveFunction) NewCall(input Any, opts ...CallOption) (Call, error) {
+func (f *PrimitiveFunction) NewCall(input dispatchproto.Any, opts ...dispatchproto.CallOption) (dispatchproto.Call, error) {
 	var url string
 	if f.endpoint != nil {
 		url = f.endpoint.URL()
 	}
 	opts = append(slices.Clip(opts), input)
-	return NewCall(url, f.name, opts...), nil
+	return dispatchproto.NewCall(url, f.name, opts...), nil
 }
 
 // Dispatch dispatches a call to the function.
-func (f *PrimitiveFunction) Dispatch(ctx context.Context, input Any, opts ...CallOption) (ID, error) {
+func (f *PrimitiveFunction) Dispatch(ctx context.Context, input dispatchproto.Any, opts ...dispatchproto.CallOption) (ID, error) {
 	call, err := f.NewCall(input, opts...)
 	if err != nil {
 		return "", err
@@ -144,7 +147,7 @@ func (f *PrimitiveFunction) Dispatch(ctx context.Context, input Any, opts ...Cal
 	return f.dispatchCall(ctx, call)
 }
 
-func (f *PrimitiveFunction) dispatchCall(ctx context.Context, call Call) (ID, error) {
+func (f *PrimitiveFunction) dispatchCall(ctx context.Context, call dispatchproto.Call) (ID, error) {
 	if f.endpoint == nil {
 		return "", fmt.Errorf("cannot dispatch function call: function has not been registered with a Dispatch endpoint")
 	}

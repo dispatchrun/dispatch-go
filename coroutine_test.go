@@ -11,6 +11,7 @@ import (
 
 	"github.com/dispatchrun/coroutine"
 	"github.com/dispatchrun/dispatch-go"
+	"github.com/dispatchrun/dispatch-go/dispatchproto"
 )
 
 func logMode(t *testing.T) {
@@ -34,8 +35,8 @@ func TestCoroutineReturn(t *testing.T) {
 	})
 	defer coro.Close()
 
-	res := coro.Run(context.Background(), dispatch.NewRequest("stringify", dispatch.Int(11)))
-	if res.Status() != dispatch.OKStatus {
+	res := coro.Run(context.Background(), dispatchproto.NewRequest("stringify", dispatchproto.Int(11)))
+	if res.Status() != dispatchproto.OKStatus {
 		t.Errorf("unexpected status: %s", res.Status())
 	}
 	output, ok := res.Output()
@@ -49,8 +50,8 @@ func TestCoroutineReturn(t *testing.T) {
 		t.Errorf("unexpected output: %s", got)
 	}
 
-	res = coro.Run(context.Background(), dispatch.NewRequest("stringify", dispatch.Int(-23)))
-	if res.Status() != dispatch.InvalidArgumentStatus {
+	res = coro.Run(context.Background(), dispatchproto.NewRequest("stringify", dispatchproto.Int(-23)))
+	if res.Status() != dispatchproto.InvalidArgumentStatus {
 		t.Errorf("unexpected status: %s", res.Status())
 	}
 	if err, ok := res.Error(); !ok {
@@ -64,19 +65,19 @@ func TestCoroutineExit(t *testing.T) {
 	logMode(t)
 
 	coro := dispatch.Func("stringify", func(ctx context.Context, in int) (string, error) {
-		var res dispatch.Response
+		var res dispatchproto.Response
 		if in < 0 {
-			res = dispatch.NewResponseErrorf("%w: %d", dispatch.ErrInvalidArgument, in)
+			res = dispatchproto.NewResponseErrorf("%w: %d", dispatch.ErrInvalidArgument, in)
 		} else {
-			res = dispatch.NewResponse(dispatch.String(strconv.Itoa(in)))
+			res = dispatchproto.NewResponse(dispatchproto.String(strconv.Itoa(in)))
 		}
 		dispatch.Yield(res)
 		panic("unreachable")
 	})
 	defer coro.Close()
 
-	res := coro.Run(context.Background(), dispatch.NewRequest("stringify", dispatch.Int(11)))
-	if res.Status() != dispatch.OKStatus {
+	res := coro.Run(context.Background(), dispatchproto.NewRequest("stringify", dispatchproto.Int(11)))
+	if res.Status() != dispatchproto.OKStatus {
 		t.Errorf("unexpected status: %s", res.Status())
 	}
 	output, ok := res.Output()
@@ -90,8 +91,8 @@ func TestCoroutineExit(t *testing.T) {
 		t.Errorf("unexpected output: %s", got)
 	}
 
-	res = coro.Run(context.Background(), dispatch.NewRequest("stringify", dispatch.Int(-23)))
-	if res.Status() != dispatch.InvalidArgumentStatus {
+	res = coro.Run(context.Background(), dispatchproto.NewRequest("stringify", dispatchproto.Int(-23)))
+	if res.Status() != dispatchproto.InvalidArgumentStatus {
 		t.Errorf("unexpected status: %s", res.Status())
 	}
 	if err, ok := res.Error(); !ok {
@@ -108,8 +109,8 @@ func TestCoroutinePoll(t *testing.T) {
 		var repeated string
 		for i := 0; i < n; i++ {
 			// Call a mock identity function that returns its input.
-			call := dispatch.NewCall("http://example.com", "identity", dispatch.String("x"), dispatch.CorrelationID(uint64(i)))
-			poll := dispatch.NewResponse(dispatch.NewPoll(1, 2, time.Minute, dispatch.Calls(call)))
+			call := dispatchproto.NewCall("http://example.com", "identity", dispatchproto.String("x"), dispatchproto.CorrelationID(uint64(i)))
+			poll := dispatchproto.NewResponse(dispatchproto.NewPoll(1, 2, time.Minute, dispatchproto.Calls(call)))
 
 			res := dispatch.Yield(poll)
 
@@ -141,11 +142,11 @@ func TestCoroutinePoll(t *testing.T) {
 	defer coro.Close()
 
 	// Continously run the coroutine until it returns/exits.
-	var req dispatch.Request = dispatch.NewRequest("repeat", dispatch.Int(3))
-	var res dispatch.Response
+	var req dispatchproto.Request = dispatchproto.NewRequest("repeat", dispatchproto.Int(3))
+	var res dispatchproto.Response
 	for {
 		res = coro.Run(context.Background(), req)
-		if res.Status() != dispatch.OKStatus {
+		if res.Status() != dispatchproto.OKStatus {
 			t.Errorf("unexpected status: %s", res.Status())
 		}
 		if _, done := res.Exit(); done {
@@ -181,15 +182,15 @@ func TestCoroutinePoll(t *testing.T) {
 		}
 
 		// Prepare the next request that carries the call result.
-		callResult := dispatch.NewCallResult(
+		callResult := dispatchproto.NewCallResult(
 			call.Input(), // send call input back as the output
-			dispatch.CorrelationID(call.CorrelationID())) // correlation ID needs to match
+			dispatchproto.CorrelationID(call.CorrelationID())) // correlation ID needs to match
 
-		pollResult := dispatch.NewPollResult(
-			dispatch.CoroutineState(poll.CoroutineState()), // send coroutine state back
-			dispatch.CallResults(callResult))
+		pollResult := dispatchproto.NewPollResult(
+			dispatchproto.CoroutineState(poll.CoroutineState()), // send coroutine state back
+			dispatchproto.CallResults(callResult))
 
-		req = dispatch.NewRequest("repeat", pollResult)
+		req = dispatchproto.NewRequest("repeat", pollResult)
 	}
 
 	exit, _ := res.Exit()
@@ -235,13 +236,13 @@ func TestCoroutineAwait(t *testing.T) {
 
 	const repeatCount = 3
 
-	req := dispatch.NewRequest("repeat", dispatch.Int(repeatCount))
-	var res dispatch.Response
+	req := dispatchproto.NewRequest("repeat", dispatchproto.Int(repeatCount))
+	var res dispatchproto.Response
 
 	requestCount := 0
 	for {
 		res = coro.Run(context.Background(), req)
-		if res.Status() != dispatch.OKStatus {
+		if res.Status() != dispatchproto.OKStatus {
 			t.Errorf("unexpected status: %s", res.Status())
 		}
 		if _, done := res.Exit(); done {
@@ -258,15 +259,15 @@ func TestCoroutineAwait(t *testing.T) {
 		}
 		call := calls[0]
 
-		callResult := dispatch.NewCallResult(
+		callResult := dispatchproto.NewCallResult(
 			call.Input(),
-			dispatch.CorrelationID(call.CorrelationID()))
+			dispatchproto.CorrelationID(call.CorrelationID()))
 
-		pollResult := dispatch.NewPollResult(
-			dispatch.CoroutineState(poll.CoroutineState()),
-			dispatch.CallResults(callResult))
+		pollResult := dispatchproto.NewPollResult(
+			dispatchproto.CoroutineState(poll.CoroutineState()),
+			dispatchproto.CallResults(callResult))
 
-		req = dispatch.NewRequest("repeat", pollResult)
+		req = dispatchproto.NewRequest("repeat", pollResult)
 
 		requestCount++
 	}
@@ -319,9 +320,9 @@ func TestCoroutineGather(t *testing.T) {
 
 	const repeatCount = 3
 
-	req := dispatch.NewRequest("repeat", dispatch.Int(repeatCount))
+	req := dispatchproto.NewRequest("repeat", dispatchproto.Int(repeatCount))
 	res := coro.Run(context.Background(), req)
-	if res.Status() != dispatch.OKStatus {
+	if res.Status() != dispatchproto.OKStatus {
 		t.Errorf("unexpected status: %s", res.Status())
 	}
 
@@ -334,21 +335,21 @@ func TestCoroutineGather(t *testing.T) {
 		t.Fatalf("expected %d poll calls, got %s", repeatCount, poll)
 	}
 
-	callResults := make([]dispatch.CallResult, len(calls))
+	callResults := make([]dispatchproto.CallResult, len(calls))
 	for i, call := range calls {
-		callResults[i] = dispatch.NewCallResult(
+		callResults[i] = dispatchproto.NewCallResult(
 			call.Input(),
-			dispatch.CorrelationID(call.CorrelationID()))
+			dispatchproto.CorrelationID(call.CorrelationID()))
 	}
 
 	// Send all results back at once.
-	pollResult := dispatch.NewPollResult(
-		dispatch.CoroutineState(poll.CoroutineState()),
-		dispatch.CallResults(callResults...))
+	pollResult := dispatchproto.NewPollResult(
+		dispatchproto.CoroutineState(poll.CoroutineState()),
+		dispatchproto.CallResults(callResults...))
 
-	req = dispatch.NewRequest("repeat", pollResult)
+	req = dispatchproto.NewRequest("repeat", pollResult)
 	res = coro.Run(context.Background(), req)
-	if res.Status() != dispatch.OKStatus {
+	if res.Status() != dispatchproto.OKStatus {
 		t.Errorf("unexpected status: %s", res.Status())
 	}
 
@@ -398,9 +399,9 @@ func TestCoroutineGatherSlow(t *testing.T) {
 
 	const repeatCount = 3
 
-	req := dispatch.NewRequest("repeat", dispatch.Int(repeatCount))
+	req := dispatchproto.NewRequest("repeat", dispatchproto.Int(repeatCount))
 	res := coro.Run(context.Background(), req)
-	if res.Status() != dispatch.OKStatus {
+	if res.Status() != dispatchproto.OKStatus {
 		t.Errorf("unexpected status: %s", res.Status())
 	}
 
@@ -413,11 +414,11 @@ func TestCoroutineGatherSlow(t *testing.T) {
 		t.Fatalf("expected %d poll calls, got %s", repeatCount, poll)
 	}
 
-	callResults := make([]dispatch.CallResult, len(calls))
+	callResults := make([]dispatchproto.CallResult, len(calls))
 	for i, call := range calls {
-		callResults[i] = dispatch.NewCallResult(
+		callResults[i] = dispatchproto.NewCallResult(
 			call.Input(),
-			dispatch.CorrelationID(call.CorrelationID()))
+			dispatchproto.CorrelationID(call.CorrelationID()))
 	}
 
 	// Randomize call result order.
@@ -426,9 +427,9 @@ func TestCoroutineGatherSlow(t *testing.T) {
 	})
 
 	// Deliver an empty poll result, to assert it's a noop.
-	req = dispatch.NewRequest("repeat", poll.Result())
+	req = dispatchproto.NewRequest("repeat", poll.Result())
 	res = coro.Run(context.Background(), req)
-	if res.Status() != dispatch.OKStatus {
+	if res.Status() != dispatchproto.OKStatus {
 		t.Errorf("unexpected status: %s", res.Status())
 	}
 
@@ -438,11 +439,11 @@ func TestCoroutineGatherSlow(t *testing.T) {
 			t.Fatalf("expected previous response to be a poll before delivering call result %d, but got %s", i, res)
 		}
 
-		pollResult := poll.Result().With(dispatch.CallResults(callResults[i]))
+		pollResult := poll.Result().With(dispatchproto.CallResults(callResults[i]))
 
-		req = dispatch.NewRequest("repeat", pollResult)
+		req = dispatchproto.NewRequest("repeat", pollResult)
 		res = coro.Run(context.Background(), req)
-		if res.Status() != dispatch.OKStatus {
+		if res.Status() != dispatchproto.OKStatus {
 			t.Errorf("unexpected status: %s", res.Status())
 		}
 

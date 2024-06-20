@@ -10,8 +10,11 @@ import (
 	"math/rand/v2"
 	"sync"
 	"time"
+	_ "unsafe"
 
 	"github.com/dispatchrun/coroutine"
+	"github.com/dispatchrun/dispatch-go/dispatchproto"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 const durableCoroutineStateTypeUrl = "buf.build/stealthrocket/coroutine/coroutine.v1.State"
@@ -48,18 +51,18 @@ type Coroutine[I, O any] struct {
 type coroutineID = uint64
 
 // dispatchCoroutine is the flavour of coroutine we support here.
-type dispatchCoroutine = coroutine.Coroutine[Response, Request]
+type dispatchCoroutine = coroutine.Coroutine[dispatchproto.Response, dispatchproto.Request]
 
 // Run runs the function.
-func (c *Coroutine[I, O]) Run(ctx context.Context, req Request) Response {
+func (c *Coroutine[I, O]) Run(ctx context.Context, req dispatchproto.Request) dispatchproto.Response {
 	if name := req.Function(); name != c.name {
-		return NewResponseErrorf("%w: function %q received call for function %q", ErrInvalidArgument, c.name, name)
+		return dispatchproto.NewResponseErrorf("%w: function %q received call for function %q", ErrInvalidArgument, c.name, name)
 	}
 
 	// Create or deserialize the coroutine (depending on the type of request).
 	id, coro, err := c.setUp(req)
 	if err != nil {
-		return NewResponseError(err)
+		return dispatchproto.NewResponseError(err)
 	}
 	defer c.tearDown(id, coro)
 
@@ -85,22 +88,22 @@ func (c *Coroutine[I, O]) Run(ctx context.Context, req Request) Response {
 	// point.
 	state, err := c.serialize(id, coro)
 	if err != nil {
-		return NewResponseError(err)
+		return dispatchproto.NewResponseError(err)
 	}
-	return yield.With(CoroutineState(state))
+	return yield.With(dispatchproto.CoroutineState(state))
 }
 
 // NewCall creates a Call for the function.
-func (f *Coroutine[I, O]) NewCall(input I, opts ...CallOption) (Call, error) {
-	boxedInput, err := NewAny(input)
+func (f *Coroutine[I, O]) NewCall(input I, opts ...dispatchproto.CallOption) (dispatchproto.Call, error) {
+	boxedInput, err := dispatchproto.NewAny(input)
 	if err != nil {
-		return Call{}, fmt.Errorf("cannot serialize input: %v", err)
+		return dispatchproto.Call{}, fmt.Errorf("cannot serialize input: %v", err)
 	}
 	return f.PrimitiveFunction.NewCall(boxedInput, opts...)
 }
 
 // Dispatch dispatches a Call to the function.
-func (f *Coroutine[I, O]) Dispatch(ctx context.Context, input I, opts ...CallOption) (ID, error) {
+func (f *Coroutine[I, O]) Dispatch(ctx context.Context, input I, opts ...dispatchproto.CallOption) (ID, error) {
 	call, err := f.NewCall(input, opts...)
 	if err != nil {
 		return "", err
@@ -108,7 +111,7 @@ func (f *Coroutine[I, O]) Dispatch(ctx context.Context, input I, opts ...CallOpt
 	return f.dispatchCall(ctx, call)
 }
 
-func (c *Coroutine[I, O]) setUp(req Request) (coroutineID, dispatchCoroutine, error) {
+func (c *Coroutine[I, O]) setUp(req dispatchproto.Request) (coroutineID, dispatchCoroutine, error) {
 	// If the request carries a poll result, find (in a volatile mode) or
 	// deserialize (in durable mode) the coroutine.
 	if pollResult, ok := req.PollResult(); ok {
@@ -131,7 +134,7 @@ func (c *Coroutine[I, O]) setUp(req Request) (coroutineID, dispatchCoroutine, er
 
 func (c *Coroutine[I, O]) create(input I) (coroutineID, dispatchCoroutine) {
 	var id coroutineID
-	coro := coroutine.NewWithReturn[Response, Request](c.entrypoint(input))
+	coro := coroutine.NewWithReturn[dispatchproto.Response, dispatchproto.Request](c.entrypoint(input))
 
 	// In volatile mode, we need to create an "instance" of the coroutine that
 	// resides in memory.
@@ -170,32 +173,36 @@ func (c *Coroutine[I, O]) tearDown(id coroutineID, coro dispatchCoroutine) {
 	}
 }
 
-func (c *Coroutine[I, O]) serialize(id coroutineID, coro dispatchCoroutine) (Any, error) {
+func (c *Coroutine[I, O]) serialize(id coroutineID, coro dispatchCoroutine) (dispatchproto.Any, error) {
 	// In volatile mode, serialize a reference to the coroutine instance.
 	if !coroutine.Durable {
-		return NewAny(id)
+		return dispatchproto.NewAny(id)
 	}
 
 	// In durable mode, we serialize the entire state of the coroutine.
 	rawState, err := coro.Context().Marshal()
 	if err != nil {
-		return Any{}, fmt.Errorf("%w: marshal state: %v", ErrPermanent, err)
+		return dispatchproto.Any{}, fmt.Errorf("%w: marshal state: %v", ErrPermanent, err)
 	}
-	state := newAnyTypeValue(durableCoroutineStateTypeUrl, rawState)
+	state := newProtoAny(&anypb.Any{
+		TypeUrl: durableCoroutineStateTypeUrl,
+		Value:   rawState,
+	})
 	return state, nil
 }
 
-func (c *Coroutine[I, O]) deserialize(state Any) (coroutineID, dispatchCoroutine, error) {
+func (c *Coroutine[I, O]) deserialize(state dispatchproto.Any) (coroutineID, dispatchCoroutine, error) {
 	var id coroutineID
 	var coro dispatchCoroutine
 
 	// Deserialize durable coroutine state.
 	if coroutine.Durable {
 		var zero I
-		coro = coroutine.NewWithReturn[Response, Request](c.entrypoint(zero))
+		coro = coroutine.NewWithReturn[dispatchproto.Response, dispatchproto.Request](c.entrypoint(zero))
 		if state.TypeURL() != durableCoroutineStateTypeUrl {
 			return 0, coro, fmt.Errorf("%w: unexpected type URL: %q", ErrIncompatibleState, state.TypeURL())
-		} else if err := coro.Context().Unmarshal(state.Value()); err != nil {
+		}
+		if err := coro.Context().Unmarshal(anyProto(state).GetValue()); err != nil {
 			return 0, coro, fmt.Errorf("%w: unmarshal state: %v", ErrIncompatibleState, err)
 		}
 		return id, coro, nil
@@ -236,8 +243,8 @@ func (c *Coroutine[I, O]) Close() error {
 	return nil
 }
 
-func (c *Coroutine[I, O]) entrypoint(input I) func() Response {
-	return func() Response {
+func (c *Coroutine[I, O]) entrypoint(input I) func() dispatchproto.Response {
+	return func() dispatchproto.Response {
 		// The context that gets passed as argument here should be recreated
 		// each time the coroutine is resumed, ideally inheriting from the
 		// parent context passed to the Run method. This is difficult to
@@ -246,13 +253,13 @@ func (c *Coroutine[I, O]) entrypoint(input I) func() Response {
 		output, err := c.fn(context.TODO(), input)
 		if err != nil {
 			// TODO: include output if not nil
-			return NewResponseError(err)
+			return dispatchproto.NewResponseError(err)
 		}
-		boxedOutput, err := NewAny(output)
+		boxedOutput, err := dispatchproto.NewAny(output)
 		if err != nil {
-			return NewResponseErrorf("%w: invalid output %v: %v", ErrInvalidResponse, output, err)
+			return dispatchproto.NewResponseErrorf("%w: invalid output %v: %v", ErrInvalidResponse, output, err)
 		}
-		return NewResponse(StatusOf(output), boxedOutput)
+		return dispatchproto.NewResponse(dispatchproto.StatusOf(output), boxedOutput)
 	}
 }
 
@@ -262,12 +269,12 @@ func (c *Coroutine[I, O]) entrypoint(input I) func() Response {
 // If the Response carries a directive to perform work, Dispatch will
 // send the results back in a Request and resume execution from this
 // point.
-func Yield(res Response) Request {
-	return coroutine.Yield[Response, Request](res)
+func Yield(res dispatchproto.Response) dispatchproto.Request {
+	return coroutine.Yield[dispatchproto.Response, dispatchproto.Request](res)
 }
 
 // Await awaits the results of calls.
-func Await(strategy AwaitStrategy, calls ...Call) ([]CallResult, error) {
+func Await(strategy AwaitStrategy, calls ...dispatchproto.Call) ([]dispatchproto.CallResult, error) {
 	if len(calls) == 0 {
 		return nil, nil
 	}
@@ -285,7 +292,7 @@ func Await(strategy AwaitStrategy, calls ...Call) ([]CallResult, error) {
 		correlationID := nextCorrelationID
 		nextCorrelationID++
 		pending[correlationID] = i
-		calls[i] = call.With(CorrelationID(correlationID))
+		calls[i] = call.With(dispatchproto.CorrelationID(correlationID))
 	}
 
 	// Set polling configuration. There's no value in waking up the
@@ -296,11 +303,11 @@ func Await(strategy AwaitStrategy, calls ...Call) ([]CallResult, error) {
 	maxResults := len(calls)
 	maxWait := 5 * time.Minute
 
-	callResults := make([]CallResult, len(calls))
+	callResults := make([]dispatchproto.CallResult, len(calls))
 
 	// Poll until results available.
 	for len(pending) > 0 {
-		poll := NewResponse(NewPoll(minResults, maxResults, maxWait, Calls(calls...)))
+		poll := dispatchproto.NewResponse(dispatchproto.NewPoll(minResults, maxResults, maxWait, dispatchproto.Calls(calls...)))
 		res := Yield(poll)
 
 		calls = nil // only submit calls once
@@ -349,7 +356,7 @@ func Await(strategy AwaitStrategy, calls ...Call) ([]CallResult, error) {
 	return callResults, nil
 }
 
-func allFailed(results []CallResult) bool {
+func allFailed(results []dispatchproto.CallResult) bool {
 	for _, result := range results {
 		if _, ok := result.Error(); !ok {
 			return false
@@ -358,7 +365,7 @@ func allFailed(results []CallResult) bool {
 	return true
 }
 
-func joinErrors(results []CallResult) error {
+func joinErrors(results []dispatchproto.CallResult) error {
 	var errs []error
 	for _, result := range results {
 		if err, ok := result.Error(); ok {
@@ -391,7 +398,7 @@ const (
 // Gather awaits the results of calls. It waits until all results
 // are available, or any call fails. It unpacks the output value
 // from the call result when all calls succeed.
-func Gather[O any](calls ...Call) ([]O, error) {
+func Gather[O any](calls ...dispatchproto.Call) ([]O, error) {
 	if len(calls) == 0 {
 		return nil, nil
 	}
@@ -415,15 +422,15 @@ func Gather[O any](calls ...Call) ([]O, error) {
 // Await calls the function and awaits a result.
 //
 // Await should only be called within a Dispatch coroutine (created via NewFunction).
-func (f *PrimitiveFunction) Await(input Any, opts ...CallOption) (Any, error) {
+func (f *PrimitiveFunction) Await(input dispatchproto.Any, opts ...dispatchproto.CallOption) (dispatchproto.Any, error) {
 	call, err := f.NewCall(input, opts...)
 	if err != nil {
-		return Any{}, err
+		return dispatchproto.Any{}, err
 	}
 
 	callResults, err := Await(AwaitAll, call)
 	if err != nil {
-		return Any{}, err
+		return dispatchproto.Any{}, err
 	}
 	callResult := callResults[0]
 
@@ -437,8 +444,8 @@ func (f *PrimitiveFunction) Await(input Any, opts ...CallOption) (Any, error) {
 // Gather makes many concurrent calls to the function and awaits the results.
 //
 // Gather should only be called within a Dispatch coroutine (created via NewFunction).
-func (f *PrimitiveFunction) Gather(inputs []Any, opts ...CallOption) ([]Any, error) {
-	calls := make([]Call, len(inputs))
+func (f *PrimitiveFunction) Gather(inputs []dispatchproto.Any, opts ...dispatchproto.CallOption) ([]dispatchproto.Any, error) {
+	calls := make([]dispatchproto.Call, len(inputs))
 	for i, input := range inputs {
 		call, err := f.NewCall(input, opts...)
 		if err != nil {
@@ -452,7 +459,7 @@ func (f *PrimitiveFunction) Gather(inputs []Any, opts ...CallOption) ([]Any, err
 		return nil, err
 	}
 
-	outputs := make([]Any, len(inputs))
+	outputs := make([]dispatchproto.Any, len(inputs))
 	for i, result := range callResults {
 		output, _ := result.Output()
 		outputs[i] = output
@@ -463,7 +470,7 @@ func (f *PrimitiveFunction) Gather(inputs []Any, opts ...CallOption) ([]Any, err
 // Await calls the function and awaits a result.
 //
 // Await should only be called within a Dispatch coroutine.
-func (c *Coroutine[I, O]) Await(input I, opts ...CallOption) (O, error) {
+func (c *Coroutine[I, O]) Await(input I, opts ...dispatchproto.CallOption) (O, error) {
 	var output O
 
 	call, err := c.NewCall(input, opts...)
@@ -480,8 +487,8 @@ func (c *Coroutine[I, O]) Await(input I, opts ...CallOption) (O, error) {
 // Gather makes many concurrent calls to the function and awaits the results.
 //
 // Gather should only be called within a Dispatch coroutine.
-func (c *Coroutine[I, O]) Gather(inputs []I, opts ...CallOption) ([]O, error) {
-	calls := make([]Call, len(inputs))
+func (c *Coroutine[I, O]) Gather(inputs []I, opts ...dispatchproto.CallOption) ([]O, error) {
+	calls := make([]dispatchproto.Call, len(inputs))
 	for i, input := range inputs {
 		call, err := c.NewCall(input, opts...)
 		if err != nil {
@@ -491,3 +498,9 @@ func (c *Coroutine[I, O]) Gather(inputs []I, opts ...CallOption) ([]O, error) {
 	}
 	return Gather[O](calls...)
 }
+
+//go:linkname newProtoAny github.com/dispatchrun/dispatch-go/dispatchproto.newProtoAny
+func newProtoAny(*anypb.Any) dispatchproto.Any
+
+//go:linkname anyProto github.com/dispatchrun/dispatch-go/dispatchproto.anyProto
+func anyProto(r dispatchproto.Any) *anypb.Any

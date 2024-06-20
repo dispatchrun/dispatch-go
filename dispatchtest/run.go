@@ -6,18 +6,33 @@ import (
 	"sync"
 
 	"github.com/dispatchrun/dispatch-go"
+	"github.com/dispatchrun/dispatch-go/dispatchproto"
 )
 
 // Runnable is something that can be Run.
 type Runnable interface {
-	Run(context.Context, dispatch.Request) dispatch.Response
+	Run(context.Context, dispatchproto.Request) dispatchproto.Response
 }
 
 var _ Runnable = (dispatch.Function)(nil)
 var _ Runnable = (*dispatch.Registry)(nil)
 
+// Call invokes a function or coroutine, runs it to completion,
+// and returns its result.
+func Call[O any](functions Runnable, call dispatchproto.Call) (O, error) {
+	res := Run(functions, call.Request())
+
+	var output O
+	boxedOutput, ok := res.Output()
+	if !ok || !res.OK() {
+		return output, fmt.Errorf("unexpected response: %s", res)
+	}
+	err := boxedOutput.Unmarshal(&output)
+	return output, err
+}
+
 // Run runs a function or coroutine to completion.
-func Run(functions Runnable, req dispatch.Request) dispatch.Response {
+func Run(functions Runnable, req dispatchproto.Request) dispatchproto.Response {
 	for {
 		res := functions.Run(context.Background(), req)
 		if _, ok := res.Exit(); ok {
@@ -27,7 +42,7 @@ func Run(functions Runnable, req dispatch.Request) dispatch.Response {
 	}
 }
 
-func poll(functions Runnable, req dispatch.Request, res dispatch.Response) dispatch.Request {
+func poll(functions Runnable, req dispatchproto.Request, res dispatchproto.Response) dispatchproto.Request {
 	poll, ok := res.Poll()
 	if !ok {
 		panic(fmt.Errorf("not implemented: %s", res))
@@ -37,15 +52,12 @@ func poll(functions Runnable, req dispatch.Request, res dispatch.Response) dispa
 
 	// Make nested calls.
 	if calls := poll.Calls(); len(calls) > 0 {
-		callResults := gomap(calls, func(call dispatch.Call) dispatch.CallResult {
+		callResults := gomap(calls, func(call dispatchproto.Call) dispatchproto.CallResult {
 			res := Run(functions, call.Request())
-			callResult, ok := res.Result()
-			if !ok {
-				callResult = dispatch.NewCallResult()
-			}
-			return callResult.With(dispatch.CorrelationID(call.CorrelationID()))
+			callResult, _ := res.Result()
+			return callResult.With(dispatchproto.CorrelationID(call.CorrelationID()))
 		})
-		result = result.With(dispatch.CallResults(callResults...))
+		result = result.With(dispatchproto.CallResults(callResults...))
 	}
 
 	return req.With(result)

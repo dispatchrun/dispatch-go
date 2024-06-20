@@ -11,12 +11,14 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	_ "unsafe"
 
 	"buf.build/gen/go/stealthrocket/dispatch-proto/connectrpc/go/dispatch/sdk/v1/sdkv1connect"
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
 	"connectrpc.com/connect"
 	"connectrpc.com/validate"
 	"github.com/dispatchrun/coroutine"
+	"github.com/dispatchrun/dispatch-go/dispatchproto"
 	"github.com/dispatchrun/dispatch-go/internal/auth"
 )
 
@@ -209,6 +211,12 @@ func (d *Dispatch) Serve() error {
 type dispatchHandler struct{ dispatch *Dispatch }
 
 func (d dispatchHandler) Run(ctx context.Context, req *connect.Request[sdkv1.RunRequest]) (*connect.Response[sdkv1.RunResponse], error) {
-	res := d.dispatch.registry.Run(ctx, Request{req.Msg})
-	return connect.NewResponse(res.proto), nil
+	res := d.dispatch.registry.Run(ctx, newProtoRequest(req.Msg))
+	return connect.NewResponse(responseProto(res)), nil
 }
+
+//go:linkname newProtoRequest github.com/dispatchrun/dispatch-go/dispatchproto.newProtoRequest
+func newProtoRequest(r *sdkv1.RunRequest) dispatchproto.Request
+
+//go:linkname responseProto github.com/dispatchrun/dispatch-go/dispatchproto.responseProto
+func responseProto(r dispatchproto.Response) *sdkv1.RunResponse

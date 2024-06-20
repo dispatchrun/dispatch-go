@@ -1,4 +1,4 @@
-package dispatch_test
+package dispatchproto_test
 
 import (
 	"bytes"
@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dispatchrun/dispatch-go"
+	dispatch "github.com/dispatchrun/dispatch-go/dispatchproto"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/emptypb"
