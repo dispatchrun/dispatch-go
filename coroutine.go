@@ -84,22 +84,22 @@ func (c *Coroutine[I, O]) Run(ctx context.Context, req dispatchproto.Request) di
 	return yield.With(dispatchproto.CoroutineState(state))
 }
 
-// NewCall creates a Call for the function.
-func (f *Coroutine[I, O]) NewCall(input I, opts ...dispatchproto.CallOption) (dispatchproto.Call, error) {
+// BuildCall creates (but does not dispatch) a Call for the function.
+func (f *Coroutine[I, O]) BuildCall(input I, opts ...dispatchproto.CallOption) (dispatchproto.Call, error) {
 	boxedInput, err := dispatchproto.NewAny(input)
 	if err != nil {
 		return dispatchproto.Call{}, fmt.Errorf("cannot serialize input: %v", err)
 	}
-	return f.PrimitiveFunction.NewCall(boxedInput, opts...)
+	return f.PrimitiveFunction.BuildCall(boxedInput, opts...)
 }
 
 // Dispatch dispatches a Call to the function.
 func (f *Coroutine[I, O]) Dispatch(ctx context.Context, input I, opts ...dispatchproto.CallOption) (dispatchproto.ID, error) {
-	call, err := f.NewCall(input, opts...)
+	boxedInput, err := dispatchproto.NewAny(input)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("cannot serialize input: %v", err)
 	}
-	return f.dispatchCall(ctx, call)
+	return f.PrimitiveFunction.Dispatch(ctx, boxedInput, opts...)
 }
 
 func (c *Coroutine[I, O]) setUp(req dispatchproto.Request) (coroutineID, dispatchcoro.Coroutine, error) {
@@ -241,7 +241,7 @@ func (c *Coroutine[I, O]) entrypoint(input I) func() dispatchproto.Response {
 func (c *Coroutine[I, O]) Await(input I, opts ...dispatchproto.CallOption) (O, error) {
 	var output O
 
-	call, err := c.NewCall(input, opts...)
+	call, err := c.BuildCall(input, opts...)
 	if err != nil {
 		return output, err
 	}
@@ -258,7 +258,7 @@ func (c *Coroutine[I, O]) Await(input I, opts ...dispatchproto.CallOption) (O, e
 func (c *Coroutine[I, O]) Gather(inputs []I, opts ...dispatchproto.CallOption) ([]O, error) {
 	calls := make([]dispatchproto.Call, len(inputs))
 	for i, input := range inputs {
-		call, err := c.NewCall(input, opts...)
+		call, err := c.BuildCall(input, opts...)
 		if err != nil {
 			return nil, err
 		}
@@ -271,7 +271,7 @@ func (c *Coroutine[I, O]) Gather(inputs []I, opts ...dispatchproto.CallOption) (
 //
 // Await should only be called within a Dispatch coroutine (created via Func).
 func (f *PrimitiveFunction) Await(input dispatchproto.Any, opts ...dispatchproto.CallOption) (dispatchproto.Any, error) {
-	call, err := f.NewCall(input, opts...)
+	call, err := f.BuildCall(input, opts...)
 	if err != nil {
 		return dispatchproto.Any{}, err
 	}
@@ -295,7 +295,7 @@ func (f *PrimitiveFunction) Await(input dispatchproto.Any, opts ...dispatchproto
 func (f *PrimitiveFunction) Gather(inputs []dispatchproto.Any, opts ...dispatchproto.CallOption) ([]dispatchproto.Any, error) {
 	calls := make([]dispatchproto.Call, len(inputs))
 	for i, input := range inputs {
-		call, err := f.NewCall(input, opts...)
+		call, err := f.BuildCall(input, opts...)
 		if err != nil {
 			return nil, err
 		}

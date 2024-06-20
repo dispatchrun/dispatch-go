@@ -14,7 +14,7 @@ func TestFunctionRunError(t *testing.T) {
 		return "", errors.New("oops")
 	})
 
-	call, err := fn.NewCall("hello")
+	call, err := fn.BuildCall("hello")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +36,7 @@ func TestFunctionRunResult(t *testing.T) {
 		return "world", nil
 	})
 
-	call, err := fn.NewCall("hello")
+	call, err := fn.BuildCall("hello")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestPrimitiveFunctionNewCallAndDispatchWithoutEndpoint(t *testing.T) {
 		panic("not implemented")
 	})
 
-	_, err := fn.NewCall(dispatchproto.String("bar")) // allowed
+	_, err := fn.BuildCall(dispatchproto.String("bar")) // allowed
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestFunctionNewCallAndDispatchWithoutEndpoint(t *testing.T) {
 		panic("not implemented")
 	})
 
-	_, err := fn.NewCall("bar") // allowed
+	_, err := fn.BuildCall("bar") // allowed
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,8 +98,7 @@ func TestPrimitiveFunctionDispatchWithoutClient(t *testing.T) {
 	})
 	endpoint.Register(fn)
 
-	// It's possible to create a call since an endpoint URL is available.
-	if _, err := fn.NewCall(dispatchproto.String("bar")); err != nil {
+	if _, err := fn.BuildCall(dispatchproto.String("bar")); err != nil { // allowed
 		t.Fatal(err)
 	}
 
@@ -126,8 +125,7 @@ func TestFunctionDispatchWithoutClient(t *testing.T) {
 	})
 	endpoint.Register(fn)
 
-	// It's possible to create a call since an endpoint URL is available.
-	if _, err := fn.NewCall("bar"); err != nil {
+	if _, err := fn.BuildCall("bar"); err != nil { // allowed
 		t.Fatal(err)
 	}
 

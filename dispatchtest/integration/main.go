@@ -44,7 +44,7 @@ func run() error {
 	functions.Register(stringify, double, doubleAndRepeat)
 	defer functions.Close()
 
-	call, err := doubleAndRepeat.NewCall(4)
+	call, err := doubleAndRepeat.BuildCall(4)
 	if err != nil {
 		return fmt.Errorf("new call failed: %v", err)
 	}

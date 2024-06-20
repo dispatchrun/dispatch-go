@@ -120,8 +120,8 @@ func (f *PrimitiveFunction) bind(endpoint *Dispatch) {
 	f.endpoint = endpoint
 }
 
-// NewCall creates a Call for the function.
-func (f *PrimitiveFunction) NewCall(input dispatchproto.Any, opts ...dispatchproto.CallOption) (dispatchproto.Call, error) {
+// BuildCall creates (but does not dispatch) a Call for the function.
+func (f *PrimitiveFunction) BuildCall(input dispatchproto.Any, opts ...dispatchproto.CallOption) (dispatchproto.Call, error) {
 	var url string
 	if f.endpoint != nil {
 		url = f.endpoint.URL()
@@ -132,14 +132,10 @@ func (f *PrimitiveFunction) NewCall(input dispatchproto.Any, opts ...dispatchpro
 
 // Dispatch dispatches a call to the function.
 func (f *PrimitiveFunction) Dispatch(ctx context.Context, input dispatchproto.Any, opts ...dispatchproto.CallOption) (dispatchproto.ID, error) {
-	call, err := f.NewCall(input, opts...)
+	call, err := f.BuildCall(input, opts...)
 	if err != nil {
 		return "", err
 	}
-	return f.dispatchCall(ctx, call)
-}
-
-func (f *PrimitiveFunction) dispatchCall(ctx context.Context, call dispatchproto.Call) (dispatchproto.ID, error) {
 	if f.endpoint == nil {
 		return "", fmt.Errorf("cannot dispatch function call: function has not been registered with a Dispatch endpoint")
 	}

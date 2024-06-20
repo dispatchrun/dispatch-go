@@ -165,11 +165,11 @@ func TestDispatchCallsBatch(t *testing.T) {
 	endpoint.Register(fn1)
 	endpoint.Register(fn2)
 
-	call1, err := fn1.NewCall(dispatchproto.Int(11), dispatchproto.Expiration(10*time.Second))
+	call1, err := fn1.BuildCall(dispatchproto.Int(11), dispatchproto.Expiration(10*time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
-	call2, err := fn2.NewCall("foo", dispatchproto.Version("xyzzy"))
+	call2, err := fn2.BuildCall("foo", dispatchproto.Version("xyzzy"))
 	if err != nil {
 		t.Fatal(err)
 	}
