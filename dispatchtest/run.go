@@ -19,7 +19,7 @@ var _ Runnable = (*dispatch.Registry)(nil)
 
 // Call invokes a function or coroutine, runs it to completion,
 // and returns its result.
-func Call[O any](functions Runnable, call dispatchproto.Call) (O, error) {
+func Call[O any](functions Runnable, call dispatch.Call) (O, error) {
 	res := Run(functions, call.Request())
 
 	var output O
