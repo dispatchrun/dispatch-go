@@ -65,11 +65,6 @@ func (f *Function[I, O]) Dispatch(ctx context.Context, input I, opts ...dispatch
 	return client.Dispatch(ctx, call)
 }
 
-// Primitive returns the associated primitive function.
-func (f *Function[I, O]) Primitive() dispatchproto.Function {
-	return f.run
-}
-
 func (f *Function[I, O]) run(ctx context.Context, req dispatchproto.Request) dispatchproto.Response {
 	if name := req.Function(); name != f.name {
 		return dispatchproto.NewResponseErrorf("%w: function %q received call for function %q", ErrInvalidArgument, f.name, name)
@@ -183,8 +178,11 @@ func (f *Function[I, O]) deserialize(state dispatchproto.Any) (coroutineID, disp
 	return id, coro, err
 }
 
-func (f *Function[I, O]) register(endpoint *Dispatch) {
+// Register is called when the function is registered
+// on a Dispatch endpoint.
+func (f *Function[I, O]) Register(endpoint *Dispatch) (string, dispatchproto.Function) {
 	f.endpoint = endpoint
+	return f.name, f.run
 }
 
 func (c *Function[I, O]) entrypoint(input I) func() dispatchproto.Response {
@@ -238,17 +236,9 @@ func (f *Function[I, O]) Gather(inputs []I, opts ...dispatchproto.CallOption) ([
 	return dispatchcoro.Gather[O](calls...)
 }
 
-// AnyFunction is the interface implemented by all Function[I, O] instances.
+// AnyFunction is a Function[I, O] instance.
 type AnyFunction interface {
-	// Name is the name of the function.
-	Name() string
-
-	// Primitive is the primitive dispatchproto.Function.
-	Primitive() dispatchproto.Function
-
-	// register is an internal hook which binds the function to
-	// a Dispatch endpoint, allowing its Dispatch method to be called.
-	register(*Dispatch)
+	Register(*Dispatch) (string, dispatchproto.Function)
 }
 
 // "Instances" are only applicable when coroutines are running

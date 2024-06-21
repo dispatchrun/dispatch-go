@@ -11,10 +11,8 @@ import (
 
 // Run runs a function and returns its result.
 func Run[O any](call dispatchproto.Call, functions ...dispatch.AnyFunction) (O, error) {
-	runner := Runner{Functions: dispatchproto.FunctionMap{}}
-	for _, fn := range functions {
-		runner.Functions[fn.Name()] = fn.Primitive()
-	}
+	runner := NewRunner(functions...)
+
 	res := runner.Run(call.Request())
 
 	var output O
@@ -42,18 +40,43 @@ func Run[O any](call dispatchproto.Call, functions ...dispatch.AnyFunction) (O, 
 
 // Runner runs functions.
 type Runner struct {
-	Functions dispatchproto.FunctionMap
+	functions dispatchproto.FunctionMap
 }
 
-// Run runs a function and returns its response.
+// NewRunner creates a Runner.
+func NewRunner(functions ...dispatch.AnyFunction) *Runner {
+	runner := &Runner{functions: dispatchproto.FunctionMap{}}
+	for _, fn := range functions {
+		runner.Register(fn)
+	}
+	return runner
+}
+
+// Register registers a function.
+func (r *Runner) Register(fn dispatch.AnyFunction) {
+	name, primitive := fn.Register(nil)
+	r.RegisterPrimitive(name, primitive)
+}
+
+// RegisterPrimitive registers a primitive function.
+func (r *Runner) RegisterPrimitive(name string, fn dispatchproto.Function) {
+	r.functions[name] = fn
+}
+
+// Run runs a function to completion and returns its response.
 func (r *Runner) Run(req dispatchproto.Request) dispatchproto.Response {
 	for {
-		res := r.Functions.Run(context.Background(), req)
+		res := r.RoundTrip(req)
 		if _, ok := res.Exit(); ok {
 			return res
 		}
 		req = r.poll(req, res)
 	}
+}
+
+// RoundTrip sends a request to a function and returns its response.
+func (r Runner) RoundTrip(req dispatchproto.Request) dispatchproto.Response {
+	return r.functions.Run(context.Background(), req)
 }
 
 func (r *Runner) poll(req dispatchproto.Request, res dispatchproto.Response) dispatchproto.Request {

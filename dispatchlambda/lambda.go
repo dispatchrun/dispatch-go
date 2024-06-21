@@ -24,7 +24,8 @@ func Start(functions ...dispatch.AnyFunction) {
 func Handler(functions ...dispatch.AnyFunction) lambda.Handler {
 	handler := &handler{functions: dispatchproto.FunctionMap{}}
 	for _, fn := range functions {
-		handler.functions[fn.Name()] = fn.Primitive()
+		name, primitive := fn.Register(nil)
+		handler.functions[name] = primitive
 	}
 	return handler
 }

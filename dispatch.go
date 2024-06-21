@@ -182,11 +182,7 @@ func Client(client *dispatchclient.Client) Option {
 
 // Register registers a function.
 func (d *Dispatch) Register(fn AnyFunction) {
-	d.RegisterPrimitive(fn.Name(), fn.Primitive())
-
-	// Bind the function to this endpoint, so that the function's
-	// Dispatch method can be used to dispatch calls.
-	fn.register(d)
+	d.RegisterPrimitive(fn.Register(d))
 }
 
 // RegisterPrimitive registers a primitive function.

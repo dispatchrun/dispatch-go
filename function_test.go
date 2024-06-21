@@ -132,11 +132,13 @@ func TestCoroutinePoll(t *testing.T) {
 		return repeated, nil
 	})
 
+	runner := dispatchtest.NewRunner(repeat)
+
 	// Continously run the coroutine until it returns/exits.
 	var req dispatchproto.Request = dispatchproto.NewRequest("repeat", dispatchproto.Int(3))
 	var res dispatchproto.Response
 	for {
-		res = repeat.Primitive()(context.Background(), req)
+		res = runner.RoundTrip(req)
 		if res.Status() != dispatchproto.OKStatus {
 			t.Errorf("unexpected status: %s", res.Status())
 		}
@@ -226,12 +228,14 @@ func TestCoroutineAwait(t *testing.T) {
 
 	const repeatCount = 3
 
+	runner := dispatchtest.NewRunner(repeat)
+
 	req := dispatchproto.NewRequest("repeat", dispatchproto.Int(repeatCount))
 	var res dispatchproto.Response
 
 	requestCount := 0
 	for {
-		res = repeat.Primitive()(context.Background(), req)
+		res = runner.RoundTrip(req)
 		if res.Status() != dispatchproto.OKStatus {
 			t.Errorf("unexpected status: %s", res.Status())
 		}
@@ -309,8 +313,10 @@ func TestCoroutineGather(t *testing.T) {
 
 	const repeatCount = 3
 
+	runner := dispatchtest.NewRunner(repeat)
+
 	req := dispatchproto.NewRequest("repeat", dispatchproto.Int(repeatCount))
-	res := repeat.Primitive()(context.Background(), req)
+	res := runner.RoundTrip(req)
 	if res.Status() != dispatchproto.OKStatus {
 		t.Errorf("unexpected status: %s", res.Status())
 	}
@@ -337,7 +343,7 @@ func TestCoroutineGather(t *testing.T) {
 		dispatchproto.CallResults(callResults...))
 
 	req = dispatchproto.NewRequest("repeat", pollResult)
-	res = repeat.Primitive()(context.Background(), req)
+	res = runner.RoundTrip(req)
 	if res.Status() != dispatchproto.OKStatus {
 		t.Errorf("unexpected status: %s", res.Status())
 	}
@@ -387,8 +393,10 @@ func TestCoroutineGatherSlow(t *testing.T) {
 
 	const repeatCount = 3
 
+	runner := dispatchtest.NewRunner(repeat)
+
 	req := dispatchproto.NewRequest("repeat", dispatchproto.Int(repeatCount))
-	res := repeat.Primitive()(context.Background(), req)
+	res := runner.RoundTrip(req)
 	if res.Status() != dispatchproto.OKStatus {
 		t.Errorf("unexpected status: %s", res.Status())
 	}
@@ -416,7 +424,7 @@ func TestCoroutineGatherSlow(t *testing.T) {
 
 	// Deliver an empty poll result, to assert it's a noop.
 	req = dispatchproto.NewRequest("repeat", poll.Result())
-	res = repeat.Primitive()(context.Background(), req)
+	res = runner.RoundTrip(req)
 	if res.Status() != dispatchproto.OKStatus {
 		t.Errorf("unexpected status: %s", res.Status())
 	}
@@ -430,7 +438,7 @@ func TestCoroutineGatherSlow(t *testing.T) {
 		pollResult := poll.Result().With(dispatchproto.CallResults(callResults[i]))
 
 		req = dispatchproto.NewRequest("repeat", pollResult)
-		res = repeat.Primitive()(context.Background(), req)
+		res = runner.RoundTrip(req)
 		if res.Status() != dispatchproto.OKStatus {
 			t.Errorf("unexpected status: %s", res.Status())
 		}
