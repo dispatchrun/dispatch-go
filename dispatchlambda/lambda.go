@@ -54,7 +54,7 @@ func (h *handler) Invoke(ctx context.Context, payload []byte) ([]byte, error) {
 		return nil, badRequest("raw payload did not contain a protobuf encoded execution request")
 	}
 
-	res := h.registry.Run(ctx, newProtoRequest(req))
+	res := h.registry.RoundTrip(ctx, newProtoRequest(req))
 
 	rawResponse, err := proto.Marshal(responseProto(res))
 	if err != nil {

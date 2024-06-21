@@ -40,33 +40,24 @@ func Call[O any](call dispatchproto.Call, functions ...dispatch.AnyFunction) (O,
 // Run runs a function or coroutine to completion.
 func Run(req dispatchproto.Request, functions ...dispatch.AnyFunction) dispatchproto.Response {
 	var runner runner
-	runner.registry.Register(functions...)
+	runner.Register(functions...)
+	defer runner.Close()
+
 	return runner.run(req)
 }
 
-// RoundTrip makes a request to a function and returns the response.
-func RoundTrip(req dispatchproto.Request, function dispatch.AnyFunction) dispatchproto.Response {
-	var runner runner
-	runner.registry.Register(function)
-	return runner.roundTrip(req)
-}
-
 type runner struct {
-	registry dispatch.FunctionRegistry
+	dispatch.FunctionRegistry
 }
 
 func (r *runner) run(req dispatchproto.Request) dispatchproto.Response {
 	for {
-		res := r.roundTrip(req)
+		res := r.FunctionRegistry.RoundTrip(context.Background(), req)
 		if _, ok := res.Exit(); ok {
 			return res
 		}
 		req = r.poll(req, res)
 	}
-}
-
-func (r *runner) roundTrip(req dispatchproto.Request) dispatchproto.Response {
-	return r.registry.Run(context.Background(), req)
 }
 
 func (r *runner) poll(req dispatchproto.Request, res dispatchproto.Response) dispatchproto.Request {

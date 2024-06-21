@@ -206,7 +206,7 @@ func (d *Dispatch) Serve() error {
 type dispatchHandler struct{ dispatch *Dispatch }
 
 func (d dispatchHandler) Run(ctx context.Context, req *connect.Request[sdkv1.RunRequest]) (*connect.Response[sdkv1.RunResponse], error) {
-	res := d.dispatch.registry.Run(ctx, newProtoRequest(req.Msg))
+	res := d.dispatch.registry.RoundTrip(ctx, newProtoRequest(req.Msg))
 	return connect.NewResponse(responseProto(res)), nil
 }
 

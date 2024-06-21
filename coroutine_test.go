@@ -35,7 +35,6 @@ func TestCoroutineReturn(t *testing.T) {
 		}
 		return strconv.Itoa(in), nil
 	})
-	defer stringify.Close()
 
 	call, err := stringify.BuildCall(11)
 	if err != nil {
@@ -72,7 +71,6 @@ func TestCoroutineExit(t *testing.T) {
 		dispatchcoro.Yield(res)
 		panic("unreachable")
 	})
-	defer stringify.Close()
 
 	call, err := stringify.BuildCall(11)
 	if err != nil {
@@ -133,13 +131,16 @@ func TestCoroutinePoll(t *testing.T) {
 		}
 		return repeated, nil
 	})
-	defer repeat.Close()
+
+	var functions dispatch.FunctionRegistry
+	functions.Register(repeat)
+	defer functions.Close()
 
 	// Continously run the coroutine until it returns/exits.
 	var req dispatchproto.Request = dispatchproto.NewRequest("repeat", dispatchproto.Int(3))
 	var res dispatchproto.Response
 	for {
-		res = dispatchtest.RoundTrip(req, repeat)
+		res = functions.RoundTrip(context.Background(), req)
 		if res.Status() != dispatchproto.OKStatus {
 			t.Errorf("unexpected status: %s", res.Status())
 		}
@@ -226,16 +227,19 @@ func TestCoroutineAwait(t *testing.T) {
 		}
 		return repeated, nil
 	})
-	defer repeat.Close()
 
 	const repeatCount = 3
 
 	req := dispatchproto.NewRequest("repeat", dispatchproto.Int(repeatCount))
 	var res dispatchproto.Response
 
+	var functions dispatch.FunctionRegistry
+	functions.Register(identity, repeat)
+	defer functions.Close()
+
 	requestCount := 0
 	for {
-		res = dispatchtest.RoundTrip(req, repeat)
+		res = functions.RoundTrip(context.Background(), req)
 		if res.Status() != dispatchproto.OKStatus {
 			t.Errorf("unexpected status: %s", res.Status())
 		}
@@ -310,12 +314,15 @@ func TestCoroutineGather(t *testing.T) {
 		}
 		return strings.Join(results, ""), nil
 	})
-	defer repeat.Close()
 
 	const repeatCount = 3
 
+	var functions dispatch.FunctionRegistry
+	functions.Register(identity, repeat)
+	defer functions.Close()
+
 	req := dispatchproto.NewRequest("repeat", dispatchproto.Int(repeatCount))
-	res := dispatchtest.RoundTrip(req, repeat)
+	res := functions.RoundTrip(context.Background(), req)
 	if res.Status() != dispatchproto.OKStatus {
 		t.Errorf("unexpected status: %s", res.Status())
 	}
@@ -342,7 +349,7 @@ func TestCoroutineGather(t *testing.T) {
 		dispatchproto.CallResults(callResults...))
 
 	req = dispatchproto.NewRequest("repeat", pollResult)
-	res = dispatchtest.RoundTrip(req, repeat)
+	res = functions.RoundTrip(context.Background(), req)
 	if res.Status() != dispatchproto.OKStatus {
 		t.Errorf("unexpected status: %s", res.Status())
 	}
@@ -389,12 +396,15 @@ func TestCoroutineGatherSlow(t *testing.T) {
 		}
 		return strings.Join(results, ""), nil
 	})
-	defer repeat.Close()
+
+	var functions dispatch.FunctionRegistry
+	functions.Register(identity, repeat)
+	defer functions.Close()
 
 	const repeatCount = 3
 
 	req := dispatchproto.NewRequest("repeat", dispatchproto.Int(repeatCount))
-	res := dispatchtest.RoundTrip(req, repeat)
+	res := functions.RoundTrip(context.Background(), req)
 	if res.Status() != dispatchproto.OKStatus {
 		t.Errorf("unexpected status: %s", res.Status())
 	}
@@ -422,7 +432,7 @@ func TestCoroutineGatherSlow(t *testing.T) {
 
 	// Deliver an empty poll result, to assert it's a noop.
 	req = dispatchproto.NewRequest("repeat", poll.Result())
-	res = dispatchtest.RoundTrip(req, repeat)
+	res = functions.RoundTrip(context.Background(), req)
 	if res.Status() != dispatchproto.OKStatus {
 		t.Errorf("unexpected status: %s", res.Status())
 	}
@@ -436,7 +446,7 @@ func TestCoroutineGatherSlow(t *testing.T) {
 		pollResult := poll.Result().With(dispatchproto.CallResults(callResults[i]))
 
 		req = dispatchproto.NewRequest("repeat", pollResult)
-		res = dispatchtest.RoundTrip(req, repeat)
+		res = functions.RoundTrip(context.Background(), req)
 		if res.Status() != dispatchproto.OKStatus {
 			t.Errorf("unexpected status: %s", res.Status())
 		}

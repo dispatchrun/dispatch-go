@@ -195,11 +195,7 @@ func (f *Function[I, O]) deserialize(state dispatchproto.Any) (coroutineID, disp
 	return id, coro, nil
 }
 
-// Close closes the function.
-//
-// In volatile mode, Close destroys all running instances of the coroutine.
-// In durable mode, Close is a noop.
-func (f *Function[I, O]) Close() error {
+func (f *Function[I, O]) close() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -208,7 +204,6 @@ func (f *Function[I, O]) Close() error {
 		fn.Next()
 	}
 	clear(f.instances)
-	return nil
 }
 
 func (c *Function[I, O]) entrypoint(input I) func() dispatchproto.Response {
