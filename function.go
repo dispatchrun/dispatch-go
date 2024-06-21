@@ -19,13 +19,10 @@ type Function interface {
 	// Run runs the function.
 	Run(context.Context, dispatchproto.Request) dispatchproto.Response
 
-	// Close closes the function.
-	Close() error
-
 	// bind is an internal hook for binding a function to
-	// a Dispatch endpoint, allowing the NewCall and Dispatch
-	// methods to be called on the function.
-	bind(endpoint *Dispatch)
+	// a Dispatch endpoint, allowing the Dispatch
+	// method to be called on the function.
+	bind(*Dispatch)
 }
 
 // Registry is a collection of Dispatch functions.
@@ -66,21 +63,6 @@ func (r *Registry) Run(ctx context.Context, req dispatchproto.Request) dispatchp
 	return fn.Run(ctx, req)
 }
 
-// Close closes the registry and all functions within it.
-func (r *Registry) Close() error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	var err error
-	for _, fn := range r.functions {
-		if closeErr := fn.Close(); closeErr != nil && err == nil {
-			err = closeErr
-		}
-	}
-	clear(r.functions)
-	return err
-}
-
 // PrimitiveFunc creates a PrimitiveFunction.
 //
 // Most users should instead use Func to create a Dispatch Function.
@@ -112,14 +94,6 @@ func (f *PrimitiveFunction) Run(ctx context.Context, req dispatchproto.Request) 
 	return f.fn(ctx, req)
 }
 
-func (f *PrimitiveFunction) Close() error {
-	return nil
-}
-
-func (f *PrimitiveFunction) bind(endpoint *Dispatch) {
-	f.endpoint = endpoint
-}
-
 // BuildCall creates (but does not dispatch) a Call for the function.
 func (f *PrimitiveFunction) BuildCall(input dispatchproto.Any, opts ...dispatchproto.CallOption) (dispatchproto.Call, error) {
 	var url string
@@ -144,4 +118,8 @@ func (f *PrimitiveFunction) Dispatch(ctx context.Context, input dispatchproto.An
 		return "", fmt.Errorf("cannot dispatch function call: %w", err)
 	}
 	return client.Dispatch(ctx, call)
+}
+
+func (f *PrimitiveFunction) bind(endpoint *Dispatch) {
+	f.endpoint = endpoint
 }

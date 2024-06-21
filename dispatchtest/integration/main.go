@@ -40,9 +40,13 @@ func run() error {
 		return strings.Repeat(stringified, doubled), nil
 	})
 
+	// FIXME: remove the need to close
+	defer stringify.Close()
+	defer double.Close()
+	defer doubleAndRepeat.Close()
+
 	var functions dispatch.Registry
 	functions.Register(stringify, double, doubleAndRepeat)
-	defer functions.Close()
 
 	call, err := doubleAndRepeat.BuildCall(4)
 	if err != nil {
