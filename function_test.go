@@ -2,57 +2,11 @@ package dispatch_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/dispatchrun/dispatch-go"
 	"github.com/dispatchrun/dispatch-go/dispatchproto"
 )
-
-func TestFunctionRunError(t *testing.T) {
-	fn := dispatch.Func("foo", func(ctx context.Context, input string) (string, error) {
-		return "", errors.New("oops")
-	})
-
-	call, err := fn.BuildCall("hello")
-	if err != nil {
-		t.Fatal(err)
-	}
-	res := fn.Run(context.Background(), call.Request())
-	error, ok := res.Error()
-	if !ok {
-		t.Fatalf("invalid response: %v", res)
-	}
-	if error.Type() != "errorString" {
-		t.Errorf("unexpected coroutine error type: %s", error.Type())
-	}
-	if error.Message() != "oops" {
-		t.Errorf("unexpected coroutine error message: %s", error.Message())
-	}
-}
-
-func TestFunctionRunResult(t *testing.T) {
-	fn := dispatch.Func("foo", func(ctx context.Context, input string) (string, error) {
-		return "world", nil
-	})
-
-	call, err := fn.BuildCall("hello")
-	if err != nil {
-		t.Fatal(err)
-	}
-	res := fn.Run(context.Background(), call.Request())
-	if error, ok := res.Error(); ok {
-		t.Fatalf("unexpected response error: %v", error)
-	}
-	var output string
-	if boxed, ok := res.Output(); !ok {
-		t.Fatalf("invalid response: %v", res)
-	} else if err := boxed.Unmarshal(&output); err != nil {
-		t.Fatalf("unexpected output: %v", err)
-	} else if output != "world" {
-		t.Errorf("unexpected output: %s", output)
-	}
-}
 
 func TestPrimitiveFunctionNewCallAndDispatchWithoutEndpoint(t *testing.T) {
 	fn := dispatch.PrimitiveFunc("foo", func(ctx context.Context, req dispatchproto.Request) dispatchproto.Response {

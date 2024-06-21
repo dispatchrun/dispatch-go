@@ -14,19 +14,21 @@ import (
 )
 
 // Start is a shortcut to start a Lambda function handler executing the given
-// Dispatch function when invoked.
-func Start(fn dispatch.Function) {
-	lambda.Start(Handler(fn))
+// Dispatch functions when invoked.
+func Start(functions ...dispatch.AnyFunction) {
+	lambda.Start(Handler(functions...))
 }
 
-// Handler creates a lambda function handler executing the given Dispatch
-// function when invoked.
-func Handler(fn dispatch.Function) lambda.Handler {
-	return &handler{fn}
+// Handler creates a lambda function handler executing the given
+// Dispatch functions when invoked.
+func Handler(functions ...dispatch.AnyFunction) lambda.Handler {
+	var handler handler
+	handler.registry.Register(functions...)
+	return &handler
 }
 
 type handler struct {
-	function dispatch.Function
+	registry dispatch.FunctionRegistry
 }
 
 func (h *handler) Invoke(ctx context.Context, payload []byte) ([]byte, error) {
@@ -52,7 +54,7 @@ func (h *handler) Invoke(ctx context.Context, payload []byte) ([]byte, error) {
 		return nil, badRequest("raw payload did not contain a protobuf encoded execution request")
 	}
 
-	res := h.function.Run(ctx, newProtoRequest(req))
+	res := h.registry.Run(ctx, newProtoRequest(req))
 
 	rawResponse, err := proto.Marshal(responseProto(res))
 	if err != nil {

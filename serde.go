@@ -64,7 +64,7 @@ func protoDeserializer(d *types.Deserializer, mp *proto.Message) error {
 
 type serializedDispatch struct {
 	opts      []DispatchOption
-	functions map[string]Function
+	functions map[string]AnyFunction
 }
 
 func dispatchSerializer(s *types.Serializer, d *Dispatch) error {

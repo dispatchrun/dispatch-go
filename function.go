@@ -11,43 +11,39 @@ import (
 	"github.com/dispatchrun/dispatch-go/dispatchproto"
 )
 
-// Function is a Dispatch function.
-type Function interface {
-	// Name is the name of the function.
-	Name() string
+// AnyFunction is the interface implemented by all Dispatch functions.
+//
+// See Func and PrimitiveFunc.
+type AnyFunction interface {
+	name() string
 
-	// Run runs the function.
-	Run(context.Context, dispatchproto.Request) dispatchproto.Response
+	run(context.Context, dispatchproto.Request) dispatchproto.Response
 
-	// bind is an internal hook for binding a function to
-	// a Dispatch endpoint, allowing the Dispatch
-	// method to be called on the function.
 	bind(*Dispatch)
 }
 
-// Registry is a collection of Dispatch functions.
-type Registry struct {
-	functions map[string]Function
+// FunctionRegistry is a collection of Dispatch functions.
+type FunctionRegistry struct {
+	functions map[string]AnyFunction
 
 	mu sync.Mutex
 }
 
 // Register registers functions.
-func (r *Registry) Register(fns ...Function) {
+func (r *FunctionRegistry) Register(fns ...AnyFunction) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	if r.functions == nil {
-		r.functions = map[string]Function{}
+		r.functions = map[string]AnyFunction{}
 	}
 
 	for _, fn := range fns {
-		r.functions[fn.Name()] = fn
+		r.functions[fn.name()] = fn
 	}
 }
 
-// Lookup retrieves a function by name.
-func (r *Registry) Lookup(name string) Function {
+func (r *FunctionRegistry) lookup(name string) AnyFunction {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -55,43 +51,30 @@ func (r *Registry) Lookup(name string) Function {
 }
 
 // Run runs a function.
-func (r *Registry) Run(ctx context.Context, req dispatchproto.Request) dispatchproto.Response {
-	fn := r.Lookup(req.Function())
+func (r *FunctionRegistry) Run(ctx context.Context, req dispatchproto.Request) dispatchproto.Response {
+	fn := r.lookup(req.Function())
 	if fn == nil {
 		return dispatchproto.NewResponseErrorf("%w: function %q not found", ErrNotFound, req.Function())
 	}
-	return fn.Run(ctx, req)
+	return fn.run(ctx, req)
 }
 
 // PrimitiveFunc creates a PrimitiveFunction.
 //
 // Most users should instead use Func to create a Dispatch Function.
-func PrimitiveFunc(name string, fn func(context.Context, dispatchproto.Request) dispatchproto.Response) *PrimitiveFunction {
-	return &PrimitiveFunction{name: name, fn: fn}
+func PrimitiveFunc(name string, function func(context.Context, dispatchproto.Request) dispatchproto.Response) *PrimitiveFunction {
+	return &PrimitiveFunction{functionName: name, function: function}
 }
 
 // PrimitiveFunction is a Function that's close to the underlying
 // Dispatch protocol, accepting a dispatchproto.Request and returning
 // a dispatchproto.Response.
 type PrimitiveFunction struct {
-	name string
+	functionName string
 
-	fn func(context.Context, dispatchproto.Request) dispatchproto.Response
+	function func(context.Context, dispatchproto.Request) dispatchproto.Response
 
 	endpoint *Dispatch
-}
-
-// Name is the name of the function.
-func (f *PrimitiveFunction) Name() string {
-	return f.name
-}
-
-// Run runs the function.
-func (f *PrimitiveFunction) Run(ctx context.Context, req dispatchproto.Request) dispatchproto.Response {
-	if name := req.Function(); name != f.name {
-		return dispatchproto.NewResponseErrorf("%w: function %q received call for function %q", ErrInvalidArgument, f.name, name)
-	}
-	return f.fn(ctx, req)
 }
 
 // BuildCall creates (but does not dispatch) a Call for the function.
@@ -101,7 +84,7 @@ func (f *PrimitiveFunction) BuildCall(input dispatchproto.Any, opts ...dispatchp
 		url = f.endpoint.URL()
 	}
 	opts = append(slices.Clip(opts), input)
-	return dispatchproto.NewCall(url, f.name, opts...), nil
+	return dispatchproto.NewCall(url, f.functionName, opts...), nil
 }
 
 // Dispatch dispatches a call to the function.
@@ -118,6 +101,17 @@ func (f *PrimitiveFunction) Dispatch(ctx context.Context, input dispatchproto.An
 		return "", fmt.Errorf("cannot dispatch function call: %w", err)
 	}
 	return client.Dispatch(ctx, call)
+}
+
+func (f *PrimitiveFunction) name() string {
+	return f.functionName
+}
+
+func (f *PrimitiveFunction) run(ctx context.Context, req dispatchproto.Request) dispatchproto.Response {
+	if name := req.Function(); name != f.functionName {
+		return dispatchproto.NewResponseErrorf("%w: function %q received call for function %q", ErrInvalidArgument, f.functionName, name)
+	}
+	return f.function(ctx, req)
 }
 
 func (f *PrimitiveFunction) bind(endpoint *Dispatch) {

@@ -9,44 +9,67 @@ import (
 	"github.com/dispatchrun/dispatch-go/dispatchproto"
 )
 
-// Runnable is something that can be Run.
-type Runnable interface {
-	Run(context.Context, dispatchproto.Request) dispatchproto.Response
-}
-
-var _ Runnable = (dispatch.Function)(nil)
-var _ Runnable = (*dispatch.Registry)(nil)
-
 // Call invokes a function or coroutine, runs it to completion,
 // and returns its result.
-func Call[O any](functions Runnable, call dispatchproto.Call) (O, error) {
-	res := Run(functions, call.Request())
+func Call[O any](call dispatchproto.Call, functions ...dispatch.AnyFunction) (O, error) {
+	res := Run(call.Request(), functions...)
 
 	var output O
-	if !res.OK() {
-		return output, dispatchproto.StatusError(res.Status())
-	}
-
-	boxedOutput, ok := res.Output()
-	if !ok || !res.OK() {
+	result, ok := res.Result()
+	if !ok {
+		if !res.OK() {
+			return output, dispatchproto.StatusError(res.Status())
+		}
 		return output, fmt.Errorf("unexpected response: %s", res)
 	}
-	err := boxedOutput.Unmarshal(&output)
+	var err error
+	if resultErr, ok := result.Error(); ok {
+		err = resultErr
+	} else if !res.OK() {
+		err = dispatchproto.StatusError(res.Status())
+	}
+	boxedOutput, ok := res.Output()
+	if ok {
+		if unmarshalErr := boxedOutput.Unmarshal(&output); err == nil && unmarshalErr != nil {
+			err = fmt.Errorf("failed to unmarshal output: %w", unmarshalErr)
+		}
+	}
 	return output, err
 }
 
 // Run runs a function or coroutine to completion.
-func Run(functions Runnable, req dispatchproto.Request) dispatchproto.Response {
+func Run(req dispatchproto.Request, functions ...dispatch.AnyFunction) dispatchproto.Response {
+	var runner runner
+	runner.registry.Register(functions...)
+	return runner.run(req)
+}
+
+// RoundTrip makes a request to a function and returns the response.
+func RoundTrip(req dispatchproto.Request, function dispatch.AnyFunction) dispatchproto.Response {
+	var runner runner
+	runner.registry.Register(function)
+	return runner.roundTrip(req)
+}
+
+type runner struct {
+	registry dispatch.FunctionRegistry
+}
+
+func (r *runner) run(req dispatchproto.Request) dispatchproto.Response {
 	for {
-		res := functions.Run(context.Background(), req)
+		res := r.roundTrip(req)
 		if _, ok := res.Exit(); ok {
 			return res
 		}
-		req = poll(functions, req, res)
+		req = r.poll(req, res)
 	}
 }
 
-func poll(functions Runnable, req dispatchproto.Request, res dispatchproto.Response) dispatchproto.Request {
+func (r *runner) roundTrip(req dispatchproto.Request) dispatchproto.Response {
+	return r.registry.Run(context.Background(), req)
+}
+
+func (r *runner) poll(req dispatchproto.Request, res dispatchproto.Response) dispatchproto.Request {
 	poll, ok := res.Poll()
 	if !ok {
 		panic(fmt.Errorf("not implemented: %s", res))
@@ -57,7 +80,7 @@ func poll(functions Runnable, req dispatchproto.Request, res dispatchproto.Respo
 	// Make nested calls.
 	if calls := poll.Calls(); len(calls) > 0 {
 		callResults := gomap(calls, func(call dispatchproto.Call) dispatchproto.CallResult {
-			res := Run(functions, call.Request())
+			res := r.run(call.Request())
 			callResult, _ := res.Result()
 			return callResult.With(dispatchproto.CorrelationID(call.CorrelationID()))
 		})

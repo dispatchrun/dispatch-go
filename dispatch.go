@@ -35,7 +35,7 @@ type Dispatch struct {
 	path    string
 	handler http.Handler
 
-	registry Registry
+	registry FunctionRegistry
 }
 
 // New creates a Dispatch endpoint.
@@ -164,7 +164,7 @@ func ServeAddress(addr string) DispatchOption {
 }
 
 // Register registers a function.
-func (d *Dispatch) Register(fn Function) {
+func (d *Dispatch) Register(fn AnyFunction) {
 	d.registry.Register(fn)
 
 	// Bind the function to this endpoint, so that the function's

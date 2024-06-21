@@ -314,7 +314,15 @@ func (e Error) Value() []byte {
 
 // Error implements the error interface.
 func (e Error) Error() string {
-	return fmt.Sprintf("%s: %s", e.Type(), e.Value())
+	typ := e.Type()
+	msg := e.Message()
+	if typ != "" && msg != "" {
+		return typ + ": " + msg
+	}
+	if typ != "" {
+		return typ
+	}
+	return msg
 }
 
 // Traceback is the encoded stack trace for the error.

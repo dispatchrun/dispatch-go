@@ -45,15 +45,12 @@ func run() error {
 	defer double.Close()
 	defer doubleAndRepeat.Close()
 
-	var functions dispatch.Registry
-	functions.Register(stringify, double, doubleAndRepeat)
-
 	call, err := doubleAndRepeat.BuildCall(4)
 	if err != nil {
 		return fmt.Errorf("new call failed: %v", err)
 	}
 
-	output, err := dispatchtest.Call[string](&functions, call)
+	output, err := dispatchtest.Call[string](call, stringify, double, doubleAndRepeat)
 	if err != nil {
 		return err
 	}
