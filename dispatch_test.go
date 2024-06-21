@@ -27,13 +27,13 @@ func TestDispatchEndpoint(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	endpoint.Register(dispatch.PrimitiveFunc("identity", func(ctx context.Context, req dispatchproto.Request) dispatchproto.Response {
+	endpoint.RegisterPrimitive("identity", func(ctx context.Context, req dispatchproto.Request) dispatchproto.Response {
 		input, ok := req.Input()
 		if !ok {
 			return dispatchproto.NewResponseErrorf("%w: unexpected request: %v", dispatch.ErrInvalidArgument, req)
 		}
 		return dispatchproto.NewResponse(input)
-	}))
+	})
 
 	// Send a request for the identity function, and check that the
 	// input was echoed back.
@@ -87,12 +87,12 @@ func TestDispatchCall(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fn := dispatch.PrimitiveFunc("function1", func(ctx context.Context, req dispatchproto.Request) dispatchproto.Response {
+	fn := dispatch.Func("function1", func(ctx context.Context, x int) (string, error) {
 		panic("not implemented")
 	})
 	endpoint.Register(fn)
 
-	_, err = fn.Dispatch(context.Background(), dispatchproto.Int(11), dispatchproto.Expiration(10*time.Second))
+	_, err = fn.Dispatch(context.Background(), 11, dispatchproto.Expiration(10*time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,17 +156,17 @@ func TestDispatchCallsBatch(t *testing.T) {
 	}
 	client = nil
 
-	fn1 := dispatch.PrimitiveFunc("function1", func(ctx context.Context, req dispatchproto.Request) dispatchproto.Response {
+	fn1 := dispatch.Func("function1", func(ctx context.Context, input int) (string, error) {
 		panic("not implemented")
 	})
-	fn2 := dispatch.Func("function2", func(ctx context.Context, input string) (string, error) {
+	fn2 := dispatch.Func("function2", func(ctx context.Context, input string) (int, error) {
 		panic("not implemented")
 	})
 
 	endpoint.Register(fn1)
 	endpoint.Register(fn2)
 
-	call1, err := fn1.BuildCall(dispatchproto.Int(11), dispatchproto.Expiration(10*time.Second))
+	call1, err := fn1.BuildCall(11, dispatchproto.Expiration(10*time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}

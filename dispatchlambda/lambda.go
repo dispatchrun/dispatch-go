@@ -22,13 +22,15 @@ func Start(functions ...dispatch.AnyFunction) {
 // Handler creates a lambda function handler executing the given
 // Dispatch functions when invoked.
 func Handler(functions ...dispatch.AnyFunction) lambda.Handler {
-	var handler handler
-	handler.registry.Register(functions...)
-	return &handler
+	handler := &handler{functions: dispatchproto.FunctionMap{}}
+	for _, fn := range functions {
+		handler.functions[fn.Name()] = fn.Primitive()
+	}
+	return handler
 }
 
 type handler struct {
-	registry dispatch.FunctionRegistry
+	functions dispatchproto.FunctionMap
 }
 
 func (h *handler) Invoke(ctx context.Context, payload []byte) ([]byte, error) {
@@ -54,7 +56,7 @@ func (h *handler) Invoke(ctx context.Context, payload []byte) ([]byte, error) {
 		return nil, badRequest("raw payload did not contain a protobuf encoded execution request")
 	}
 
-	res := h.registry.RoundTrip(ctx, newProtoRequest(req))
+	res := h.functions.Run(ctx, newProtoRequest(req))
 
 	rawResponse, err := proto.Marshal(responseProto(res))
 	if err != nil {

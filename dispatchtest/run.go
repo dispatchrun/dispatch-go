@@ -12,7 +12,11 @@ import (
 // Call invokes a function or coroutine, runs it to completion,
 // and returns its result.
 func Call[O any](call dispatchproto.Call, functions ...dispatch.AnyFunction) (O, error) {
-	res := Run(call.Request(), functions...)
+	m := dispatchproto.FunctionMap{}
+	for _, fn := range functions {
+		m[fn.Name()] = fn.Primitive()
+	}
+	res := Run(call.Request(), m)
 
 	var output O
 	result, ok := res.Result()
@@ -38,21 +42,16 @@ func Call[O any](call dispatchproto.Call, functions ...dispatch.AnyFunction) (O,
 }
 
 // Run runs a function or coroutine to completion.
-func Run(req dispatchproto.Request, functions ...dispatch.AnyFunction) dispatchproto.Response {
-	var runner runner
-	runner.Register(functions...)
-	defer runner.Close()
-
-	return runner.run(req)
+func Run(req dispatchproto.Request, functions dispatchproto.FunctionMap) dispatchproto.Response {
+	r := runner{functions}
+	return r.run(req)
 }
 
-type runner struct {
-	dispatch.FunctionRegistry
-}
+type runner struct{ functions dispatchproto.FunctionMap }
 
 func (r *runner) run(req dispatchproto.Request) dispatchproto.Response {
 	for {
-		res := r.FunctionRegistry.RoundTrip(context.Background(), req)
+		res := r.functions.Run(context.Background(), req)
 		if _, ok := res.Exit(); ok {
 			return res
 		}

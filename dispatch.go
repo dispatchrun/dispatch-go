@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	_ "unsafe"
 
 	"buf.build/gen/go/stealthrocket/dispatch-proto/connectrpc/go/dispatch/sdk/v1/sdkv1connect"
@@ -37,14 +38,16 @@ type Dispatch struct {
 	path    string
 	handler http.Handler
 
-	functions FunctionRegistry
+	functions dispatchproto.FunctionMap
+	mu        sync.Mutex
 }
 
 // New creates a Dispatch endpoint.
 func New(opts ...Option) (*Dispatch, error) {
 	d := &Dispatch{
-		env:  os.Environ(),
-		opts: opts,
+		env:       os.Environ(),
+		opts:      opts,
+		functions: map[string]dispatchproto.Function{},
 	}
 	for _, opt := range opts {
 		opt(d)
@@ -179,12 +182,19 @@ func Client(client *dispatchclient.Client) Option {
 
 // Register registers a function.
 func (d *Dispatch) Register(fn AnyFunction) {
-	d.functions.Register(fn)
+	d.RegisterPrimitive(fn.Name(), fn.Primitive())
 
 	// Bind the function to this endpoint, so that the function's
-	// NewCall and Dispatch methods can be used to build and
-	// dispatch calls.
+	// Dispatch method can be used to dispatch calls.
 	fn.register(d)
+}
+
+// RegisterPrimitive registers a primitive function.
+func (d *Dispatch) RegisterPrimitive(name string, fn dispatchproto.Function) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	d.functions[name] = fn
 }
 
 // URL is the URL of the Dispatch endpoint.
@@ -214,18 +224,13 @@ func (d *Dispatch) Serve() error {
 	return server.ListenAndServe()
 }
 
-// Close closes the Dispatch endpoint.
-func (d *Dispatch) Close() error {
-	return d.functions.Close()
-}
-
 // The gRPC handler is deliberately unexported. This forces
 // the user to access it through Dispatch.Handler, and get
 // a handler that has signature verification middleware attached.
 type dispatchHandler struct{ dispatch *Dispatch }
 
 func (d dispatchHandler) Run(ctx context.Context, req *connect.Request[sdkv1.RunRequest]) (*connect.Response[sdkv1.RunResponse], error) {
-	res := d.dispatch.functions.RoundTrip(ctx, newProtoRequest(req.Msg))
+	res := d.dispatch.functions.Run(ctx, newProtoRequest(req.Msg))
 	return connect.NewResponse(responseProto(res)), nil
 }
 
