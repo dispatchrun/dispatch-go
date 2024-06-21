@@ -123,7 +123,7 @@ func New(opts ...Option) (*Dispatch, error) {
 }
 
 // Option configures a Dispatch endpoint.
-type Option func(d *Dispatch)
+type Option func(*Dispatch)
 
 // EndpointUrl sets the URL of the Dispatch endpoint.
 //
