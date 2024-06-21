@@ -15,7 +15,7 @@ import (
 //
 // Unlike dispatch.New, it starts a test server that serves the endpoint
 // and automatically sets the endpoint URL.
-func NewEndpoint(opts ...dispatch.DispatchOption) (*dispatch.Dispatch, *EndpointServer, error) {
+func NewEndpoint(opts ...dispatch.Option) (*dispatch.Dispatch, *EndpointServer, error) {
 	mux := http.NewServeMux()
 	server := httptest.NewServer(mux)
 

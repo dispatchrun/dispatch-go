@@ -1,6 +1,4 @@
-//go:build !durable
-
-package dispatch
+package dispatchclient
 
 import (
 	"context"
@@ -14,6 +12,7 @@ import (
 	"connectrpc.com/connect"
 	"connectrpc.com/validate"
 	"github.com/dispatchrun/dispatch-go/dispatchproto"
+	"github.com/dispatchrun/dispatch-go/internal/env"
 )
 
 const defaultApiUrl = "https://api.dispatch.run"
@@ -27,23 +26,23 @@ type Client struct {
 	apiUrl        string
 	env           []string
 	httpClient    *http.Client
-	opts          []ClientOption
+	opts          []Option
 
 	client sdkv1connect.DispatchServiceClient
 }
 
-// NewClient creates a Client.
-func NewClient(opts ...ClientOption) (*Client, error) {
+// New creates a Client.
+func New(opts ...Option) (*Client, error) {
 	c := &Client{
 		env:  os.Environ(),
 		opts: opts,
 	}
 	for _, opt := range opts {
-		opt.configureClient(c)
+		opt(c)
 	}
 
 	if c.apiKey == "" {
-		c.apiKey = getenv(c.env, "DISPATCH_API_KEY")
+		c.apiKey = env.Get(c.env, "DISPATCH_API_KEY")
 		c.apiKeyFromEnv = true
 	}
 	if c.apiKey == "" {
@@ -51,7 +50,7 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 	}
 
 	if c.apiUrl == "" {
-		c.apiUrl = getenv(c.env, "DISPATCH_API_URL")
+		c.apiUrl = env.Get(c.env, "DISPATCH_API_URL")
 	}
 	if c.apiUrl == "" {
 		c.apiUrl = defaultApiUrl
@@ -81,22 +80,14 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 }
 
 // ClientOption configures a Client.
-type ClientOption interface {
-	configureClient(d *Client)
-}
-
-type clientOptionFunc func(d *Client)
-
-func (fn clientOptionFunc) configureClient(d *Client) {
-	fn(d)
-}
+type Option func(*Client)
 
 // APIKey sets the Dispatch API key to use for authentication when
 // dispatching function calls through a Client.
 //
 // It defaults to the value of the DISPATCH_API_KEY environment variable.
-func APIKey(apiKey string) ClientOption {
-	return clientOptionFunc(func(c *Client) { c.apiKey = apiKey })
+func APIKey(apiKey string) Option {
+	return func(c *Client) { c.apiKey = apiKey }
 }
 
 // APIUrl sets the URL of the Dispatch API.
@@ -104,8 +95,16 @@ func APIKey(apiKey string) ClientOption {
 // It defaults to the value of the DISPATCH_API_URL environment variable,
 // or the default API URL (https://api.dispatch.run) if DISPATCH_API_URL
 // is unset.
-func APIUrl(apiUrl string) ClientOption {
-	return clientOptionFunc(func(c *Client) { c.apiUrl = apiUrl })
+func APIUrl(apiUrl string) Option {
+	return func(c *Client) { c.apiUrl = apiUrl }
+}
+
+// Env sets the environment variables that a Client parses its
+// default configuration from.
+//
+// It defaults to os.Environ().
+func Env(env ...string) Option {
+	return func(c *Client) { c.env = env }
 }
 
 // Dispatch dispatches a function call.
@@ -117,10 +116,6 @@ func (c *Client) Dispatch(ctx context.Context, call dispatchproto.Call) (dispatc
 		return "", err
 	}
 	return ids[0], nil
-}
-
-func (c *Client) configureDispatch(d *Dispatch) {
-	d.client = c
 }
 
 // Batch creates a Batch.

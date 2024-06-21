@@ -8,6 +8,7 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/dispatchrun/dispatch-go"
+	"github.com/dispatchrun/dispatch-go/dispatchclient"
 	"github.com/dispatchrun/dispatch-go/dispatchproto"
 	"github.com/dispatchrun/dispatch-go/dispatchtest"
 )
@@ -76,12 +77,12 @@ func TestDispatchCall(t *testing.T) {
 	recorder := &dispatchtest.CallRecorder{}
 	server := dispatchtest.NewServer(recorder)
 
-	client, err := dispatch.NewClient(dispatch.APIKey("foobar"), dispatch.APIUrl(server.URL))
+	client, err := dispatchclient.New(dispatchclient.APIKey("foobar"), dispatchclient.APIUrl(server.URL))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	endpoint, err := dispatch.New(dispatch.EndpointUrl("http://example.com"), client)
+	endpoint, err := dispatch.New(dispatch.EndpointUrl("http://example.com"), dispatch.Client(client))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,12 +145,12 @@ func TestDispatchCallsBatch(t *testing.T) {
 
 	server := dispatchtest.NewServer(&recorder)
 
-	client, err := dispatch.NewClient(dispatch.APIKey("foobar"), dispatch.APIUrl(server.URL))
+	client, err := dispatchclient.New(dispatchclient.APIKey("foobar"), dispatchclient.APIUrl(server.URL))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	endpoint, err := dispatch.New(dispatch.EndpointUrl("http://example.com"), client)
+	endpoint, err := dispatch.New(dispatch.EndpointUrl("http://example.com"), dispatch.Client(client))
 	if err != nil {
 		t.Fatal(err)
 	}

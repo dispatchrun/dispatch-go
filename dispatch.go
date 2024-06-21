@@ -17,8 +17,10 @@ import (
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
 	"connectrpc.com/connect"
 	"connectrpc.com/validate"
+	"github.com/dispatchrun/dispatch-go/dispatchclient"
 	"github.com/dispatchrun/dispatch-go/dispatchproto"
 	"github.com/dispatchrun/dispatch-go/internal/auth"
+	"github.com/dispatchrun/dispatch-go/internal/env"
 )
 
 // Dispatch is a Dispatch endpoint.
@@ -27,9 +29,9 @@ type Dispatch struct {
 	verificationKey string
 	serveAddr       string
 	env             []string
-	opts            []DispatchOption
+	opts            []Option
 
-	client    *Client
+	client    *dispatchclient.Client
 	clientErr error
 
 	path    string
@@ -39,19 +41,19 @@ type Dispatch struct {
 }
 
 // New creates a Dispatch endpoint.
-func New(opts ...DispatchOption) (*Dispatch, error) {
+func New(opts ...Option) (*Dispatch, error) {
 	d := &Dispatch{
 		env:  os.Environ(),
 		opts: opts,
 	}
 	for _, opt := range opts {
-		opt.configureDispatch(d)
+		opt(d)
 	}
 
 	// Prepare the endpoint URL.
 	var endpointUrlFromEnv bool
 	if d.endpointUrl == "" {
-		d.endpointUrl = getenv(d.env, "DISPATCH_ENDPOINT_URL")
+		d.endpointUrl = env.Get(d.env, "DISPATCH_ENDPOINT_URL")
 		endpointUrlFromEnv = true
 	}
 	if d.endpointUrl == "" {
@@ -67,7 +69,7 @@ func New(opts ...DispatchOption) (*Dispatch, error) {
 
 	// Prepare the address to serve on.
 	if d.serveAddr == "" {
-		d.serveAddr = getenv(d.env, "DISPATCH_ENDPOINT_ADDR")
+		d.serveAddr = env.Get(d.env, "DISPATCH_ENDPOINT_ADDR")
 		if d.serveAddr == "" {
 			d.serveAddr = "127.0.0.1:8000"
 		}
@@ -76,7 +78,7 @@ func New(opts ...DispatchOption) (*Dispatch, error) {
 	// Prepare the verification key.
 	var verificationKeyFromEnv bool
 	if d.verificationKey == "" {
-		d.verificationKey = getenv(d.env, "DISPATCH_VERIFICATION_KEY")
+		d.verificationKey = env.Get(d.env, "DISPATCH_VERIFICATION_KEY")
 		verificationKeyFromEnv = true
 	}
 	var verificationKey ed25519.PublicKey
@@ -111,29 +113,21 @@ func New(opts ...DispatchOption) (*Dispatch, error) {
 
 	// Optionally attach a client.
 	if d.client == nil {
-		d.client, d.clientErr = NewClient(Env(d.env...))
+		d.client, d.clientErr = dispatchclient.New(dispatchclient.Env(d.env...))
 	}
 
 	return d, nil
 }
 
-// DispatchOption configures a Dispatch endpoint.
-type DispatchOption interface {
-	configureDispatch(d *Dispatch)
-}
-
-type dispatchOptionFunc func(d *Dispatch)
-
-func (fn dispatchOptionFunc) configureDispatch(d *Dispatch) {
-	fn(d)
-}
+// Option configures a Dispatch endpoint.
+type Option func(d *Dispatch)
 
 // EndpointUrl sets the URL of the Dispatch endpoint.
 //
 // It defaults to the value of the DISPATCH_ENDPOINT_URL environment
 // variable.
-func EndpointUrl(endpointUrl string) DispatchOption {
-	return dispatchOptionFunc(func(d *Dispatch) { d.endpointUrl = endpointUrl })
+func EndpointUrl(endpointUrl string) Option {
+	return func(d *Dispatch) { d.endpointUrl = endpointUrl }
 }
 
 // VerificationKey sets the verification key to use when verifying
@@ -146,8 +140,8 @@ func EndpointUrl(endpointUrl string) DispatchOption {
 //
 // If a verification key is not provided, request signatures will
 // not be validated.
-func VerificationKey(verificationKey string) DispatchOption {
-	return dispatchOptionFunc(func(d *Dispatch) { d.verificationKey = verificationKey })
+func VerificationKey(verificationKey string) Option {
+	return func(d *Dispatch) { d.verificationKey = verificationKey }
 }
 
 // ServeAddress sets the address that the Dispatch endpoint
@@ -159,8 +153,28 @@ func VerificationKey(verificationKey string) DispatchOption {
 // It defaults to the value of the DISPATCH_ENDPOINT_ADDR environment
 // variable, which is automatically set by the Dispatch CLI. If this
 // is unset, it defaults to 127.0.0.1:8000.
-func ServeAddress(addr string) DispatchOption {
-	return dispatchOptionFunc(func(d *Dispatch) { d.serveAddr = addr })
+func ServeAddress(addr string) Option {
+	return func(d *Dispatch) { d.serveAddr = addr }
+}
+
+// Env sets the environment variables that a Dispatch endpoint
+// parses its default configuration from.
+//
+// It defaults to os.Environ().
+func Env(env ...string) Option {
+	return func(d *Dispatch) { d.env = env }
+}
+
+// Client sets the client to use when dispatching calls
+// from functions registered on the endpoint.
+//
+// By default the Dispatch endpoint will attempt to construct
+// a dispatchclient.Client instance using the DISPATCH_API_KEY
+// and optional DISPATCH_API_URL environment variables. If more
+// control is required over client configuration, the custom
+// client instance can be registered here and used instead.
+func Client(client *dispatchclient.Client) Option {
+	return func(d *Dispatch) { d.client = client }
 }
 
 // Register registers a function.
@@ -185,7 +199,7 @@ func (d *Dispatch) Handler() (string, http.Handler) {
 }
 
 // Client returns the Client attached to this endpoint.
-func (d *Dispatch) Client() (*Client, error) {
+func (d *Dispatch) Client() (*dispatchclient.Client, error) {
 	return d.client, d.clientErr
 }
 
