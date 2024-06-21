@@ -40,7 +40,7 @@ func TestCoroutineReturn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	output, err := dispatchtest.Call[string](call, stringify)
+	output, err := dispatchtest.Run[string](call, stringify)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func TestCoroutineReturn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = dispatchtest.Call[string](call2, stringify)
+	_, err = dispatchtest.Run[string](call2, stringify)
 	if err == nil || !strings.Contains(err.Error(), "InvalidArgument: -23") {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -76,7 +76,7 @@ func TestCoroutineExit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	output, err := dispatchtest.Call[string](call, stringify)
+	output, err := dispatchtest.Run[string](call, stringify)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestCoroutineExit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = dispatchtest.Call[string](call2, stringify)
+	_, err = dispatchtest.Run[string](call2, stringify)
 	if err == nil || !strings.Contains(err.Error(), "InvalidArgument: -23") {
 		t.Fatalf("unexpected error: %v", err)
 	}

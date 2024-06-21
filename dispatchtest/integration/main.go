@@ -45,7 +45,7 @@ func run() error {
 		return fmt.Errorf("new call failed: %v", err)
 	}
 
-	output, err := dispatchtest.Call[string](call, stringify, double, doubleAndRepeat)
+	output, err := dispatchtest.Run[string](call, stringify, double, doubleAndRepeat)
 	if err != nil {
 		return err
 	}

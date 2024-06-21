@@ -9,14 +9,13 @@ import (
 	"github.com/dispatchrun/dispatch-go/dispatchproto"
 )
 
-// Call invokes a function or coroutine, runs it to completion,
-// and returns its result.
-func Call[O any](call dispatchproto.Call, functions ...dispatch.AnyFunction) (O, error) {
-	m := dispatchproto.FunctionMap{}
+// Run runs a function and returns its result.
+func Run[O any](call dispatchproto.Call, functions ...dispatch.AnyFunction) (O, error) {
+	runner := Runner{Functions: dispatchproto.FunctionMap{}}
 	for _, fn := range functions {
-		m[fn.Name()] = fn.Primitive()
+		runner.Functions[fn.Name()] = fn.Primitive()
 	}
-	res := Run(call.Request(), m)
+	res := runner.Run(call.Request())
 
 	var output O
 	result, ok := res.Result()
@@ -41,17 +40,15 @@ func Call[O any](call dispatchproto.Call, functions ...dispatch.AnyFunction) (O,
 	return output, err
 }
 
-// Run runs a function or coroutine to completion.
-func Run(req dispatchproto.Request, functions dispatchproto.FunctionMap) dispatchproto.Response {
-	r := runner{functions}
-	return r.run(req)
+// Runner runs functions.
+type Runner struct {
+	Functions dispatchproto.FunctionMap
 }
 
-type runner struct{ functions dispatchproto.FunctionMap }
-
-func (r *runner) run(req dispatchproto.Request) dispatchproto.Response {
+// Run runs a function and returns its response.
+func (r *Runner) Run(req dispatchproto.Request) dispatchproto.Response {
 	for {
-		res := r.functions.Run(context.Background(), req)
+		res := r.Functions.Run(context.Background(), req)
 		if _, ok := res.Exit(); ok {
 			return res
 		}
@@ -59,7 +56,7 @@ func (r *runner) run(req dispatchproto.Request) dispatchproto.Response {
 	}
 }
 
-func (r *runner) poll(req dispatchproto.Request, res dispatchproto.Response) dispatchproto.Request {
+func (r *Runner) poll(req dispatchproto.Request, res dispatchproto.Response) dispatchproto.Request {
 	poll, ok := res.Poll()
 	if !ok {
 		panic(fmt.Errorf("not implemented: %s", res))
@@ -70,7 +67,7 @@ func (r *runner) poll(req dispatchproto.Request, res dispatchproto.Response) dis
 	// Make nested calls.
 	if calls := poll.Calls(); len(calls) > 0 {
 		callResults := gomap(calls, func(call dispatchproto.Call) dispatchproto.CallResult {
-			res := r.run(call.Request())
+			res := r.Run(call.Request())
 			callResult, _ := res.Result()
 			return callResult.With(dispatchproto.CorrelationID(call.CorrelationID()))
 		})
