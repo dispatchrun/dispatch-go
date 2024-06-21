@@ -35,7 +35,7 @@ type Dispatch struct {
 	path    string
 	handler http.Handler
 
-	registry FunctionRegistry
+	functions FunctionRegistry
 }
 
 // New creates a Dispatch endpoint.
@@ -165,7 +165,7 @@ func ServeAddress(addr string) DispatchOption {
 
 // Register registers a function.
 func (d *Dispatch) Register(fn AnyFunction) {
-	d.registry.Register(fn)
+	d.functions.Register(fn)
 
 	// Bind the function to this endpoint, so that the function's
 	// NewCall and Dispatch methods can be used to build and
@@ -200,13 +200,18 @@ func (d *Dispatch) Serve() error {
 	return server.ListenAndServe()
 }
 
+// Close closes the Dispatch endpoint.
+func (d *Dispatch) Close() error {
+	return d.functions.Close()
+}
+
 // The gRPC handler is deliberately unexported. This forces
 // the user to access it through Dispatch.Handler, and get
 // a handler that has signature verification middleware attached.
 type dispatchHandler struct{ dispatch *Dispatch }
 
 func (d dispatchHandler) Run(ctx context.Context, req *connect.Request[sdkv1.RunRequest]) (*connect.Response[sdkv1.RunResponse], error) {
-	res := d.dispatch.registry.RoundTrip(ctx, newProtoRequest(req.Msg))
+	res := d.dispatch.functions.RoundTrip(ctx, newProtoRequest(req.Msg))
 	return connect.NewResponse(responseProto(res)), nil
 }
 

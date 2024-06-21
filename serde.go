@@ -64,11 +64,11 @@ func protoDeserializer(d *types.Deserializer, mp *proto.Message) error {
 
 type serializedDispatch struct {
 	opts      []DispatchOption
-	functions map[string]AnyFunction
+	functions *FunctionRegistry
 }
 
 func dispatchSerializer(s *types.Serializer, d *Dispatch) error {
-	types.SerializeT(s, serializedDispatch{d.opts, d.registry.functions})
+	types.SerializeT(s, serializedDispatch{d.opts, &d.functions})
 	return nil
 }
 
@@ -80,10 +80,8 @@ func dispatchDeserializer(d *types.Deserializer, c *Dispatch) error {
 	if err != nil {
 		return err
 	}
-	for _, fn := range sd.functions {
-		dispatch.Register(fn)
-	}
-	*c = *dispatch //nolint
+	dispatch.functions = *sd.functions // nolint
+	*c = *dispatch                     //nolint
 	return nil
 }
 
