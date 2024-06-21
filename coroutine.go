@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"math/rand/v2"
+	"slices"
 	"sync"
 
 	"github.com/dispatchrun/coroutine"
@@ -14,19 +15,21 @@ import (
 )
 
 // Func creates a Function.
-func Func[I, O any](name string, function func(context.Context, I) (O, error)) *Function[I, O] {
+func Func[I, O any](name string, fn func(context.Context, I) (O, error)) *Function[I, O] {
 	return &Function[I, O]{
-		PrimitiveFunction: PrimitiveFunction{functionName: name},
-		function:          function,
-		nextID:            rand.Uint64(),
+		name:   name,
+		fn:     fn,
+		nextID: rand.Uint64(),
 	}
 }
 
 // Function is a Dispatch Function.
 type Function[I, O any] struct {
-	PrimitiveFunction
+	name string
 
-	function func(ctx context.Context, input I) (O, error)
+	fn func(ctx context.Context, input I) (O, error)
+
+	endpoint *Dispatch
 
 	instances map[coroutineID]dispatchcoro.Coroutine
 	nextID    coroutineID
@@ -35,27 +38,44 @@ type Function[I, O any] struct {
 
 type coroutineID = uint64
 
+// Name is the name of the function.
+func (f *Function[I, O]) Name() string {
+	return f.name
+}
+
 // BuildCall creates (but does not dispatch) a Call for the function.
 func (f *Function[I, O]) BuildCall(input I, opts ...dispatchproto.CallOption) (dispatchproto.Call, error) {
 	boxedInput, err := dispatchproto.NewAny(input)
 	if err != nil {
 		return dispatchproto.Call{}, fmt.Errorf("cannot serialize input: %v", err)
 	}
-	return f.PrimitiveFunction.BuildCall(boxedInput, opts...)
+	var url string
+	if f.endpoint != nil {
+		url = f.endpoint.URL()
+	}
+	opts = append(slices.Clip(opts), boxedInput)
+	return dispatchproto.NewCall(url, f.name, opts...), nil
 }
 
 // Dispatch dispatches a Call to the function.
 func (f *Function[I, O]) Dispatch(ctx context.Context, input I, opts ...dispatchproto.CallOption) (dispatchproto.ID, error) {
-	boxedInput, err := dispatchproto.NewAny(input)
+	call, err := f.BuildCall(input, opts...)
 	if err != nil {
-		return "", fmt.Errorf("cannot serialize input: %v", err)
+		return "", err
 	}
-	return f.PrimitiveFunction.Dispatch(ctx, boxedInput, opts...)
+	if f.endpoint == nil {
+		return "", fmt.Errorf("cannot dispatch function call: function has not been registered with a Dispatch endpoint")
+	}
+	client, err := f.endpoint.Client()
+	if err != nil {
+		return "", fmt.Errorf("cannot dispatch function call: %w", err)
+	}
+	return client.Dispatch(ctx, call)
 }
 
 func (f *Function[I, O]) run(ctx context.Context, req dispatchproto.Request) dispatchproto.Response {
-	if name := req.Function(); name != f.functionName {
-		return dispatchproto.NewResponseErrorf("%w: function %q received call for function %q", ErrInvalidArgument, f.functionName, name)
+	if name := req.Function(); name != f.name {
+		return dispatchproto.NewResponseErrorf("%w: function %q received call for function %q", ErrInvalidArgument, f.name, name)
 	}
 
 	id, coro, err := f.setUp(req)
@@ -195,6 +215,10 @@ func (f *Function[I, O]) deserialize(state dispatchproto.Any) (coroutineID, disp
 	return id, coro, nil
 }
 
+func (f *Function[I, O]) register(endpoint *Dispatch) {
+	f.endpoint = endpoint
+}
+
 func (f *Function[I, O]) close() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -213,7 +237,7 @@ func (c *Function[I, O]) entrypoint(input I) func() dispatchproto.Response {
 		// parent context passed to the Run method. This is difficult to
 		// do right in durable mode because we shouldn't capture the parent
 		// context in the coroutine state.
-		output, err := c.function(context.TODO(), input)
+		output, err := c.fn(context.TODO(), input)
 		if err != nil {
 			// TODO: include output if not nil
 			return dispatchproto.NewResponseError(err)

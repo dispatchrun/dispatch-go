@@ -184,7 +184,7 @@ func (d *Dispatch) Register(fn AnyFunction) {
 	// Bind the function to this endpoint, so that the function's
 	// NewCall and Dispatch methods can be used to build and
 	// dispatch calls.
-	fn.bind(d)
+	fn.register(d)
 }
 
 // URL is the URL of the Dispatch endpoint.

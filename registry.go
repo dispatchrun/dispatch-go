@@ -23,7 +23,7 @@ func (r *FunctionRegistry) Register(fns ...AnyFunction) {
 		r.functions = map[string]AnyFunction{}
 	}
 	for _, fn := range fns {
-		r.functions[fn.name()] = fn
+		r.functions[fn.Name()] = fn
 	}
 }
 
