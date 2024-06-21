@@ -79,7 +79,7 @@ func New(opts ...Option) (*Client, error) {
 	return c, nil
 }
 
-// ClientOption configures a Client.
+// Option configures a Client.
 type Option func(*Client)
 
 // APIKey sets the Dispatch API key to use for authentication when

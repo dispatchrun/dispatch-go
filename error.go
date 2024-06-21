@@ -23,7 +23,7 @@ var (
 	// ErrPermanent indicates an operation failed with a permanent error.
 	ErrPermanent error = dispatchproto.StatusError(dispatchproto.PermanentErrorStatus)
 
-	// ErrIncompatibleStatus indicates that a coroutine's serialized state is incompatible.
+	// ErrIncompatibleStatus indicates that a function's serialized state is incompatible.
 	ErrIncompatibleState error = dispatchproto.StatusError(dispatchproto.IncompatibleStateStatus)
 
 	// ErrDNS indicates an operation failed with a DNS error.
