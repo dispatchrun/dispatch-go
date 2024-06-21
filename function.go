@@ -5,9 +5,7 @@ package dispatch
 import (
 	"context"
 	"fmt"
-	"math/rand/v2"
 	"slices"
-	"sync"
 
 	"github.com/dispatchrun/coroutine"
 	"github.com/dispatchrun/dispatch-go/dispatchcoro"
@@ -27,7 +25,7 @@ type Function[I, O any] struct {
 
 	endpoint *Dispatch
 
-	volatileCoroutines
+	instances dispatchcoro.VolatileCoroutines
 }
 
 // Name is the name of the function.
@@ -103,7 +101,7 @@ func (f *Function[I, O]) run(ctx context.Context, req dispatchproto.Request) dis
 	return yield.With(dispatchproto.CoroutineState(state))
 }
 
-func (f *Function[I, O]) setUp(req dispatchproto.Request) (coroutineID, dispatchcoro.Coroutine, error) {
+func (f *Function[I, O]) setUp(req dispatchproto.Request) (dispatchcoro.InstanceID, dispatchcoro.Coroutine, error) {
 	// If the request carries a poll result, find/deserialize the
 	// suspended coroutine.
 	if pollResult, ok := req.PollResult(); ok {
@@ -119,20 +117,20 @@ func (f *Function[I, O]) setUp(req dispatchproto.Request) (coroutineID, dispatch
 	if err := boxedInput.Unmarshal(&input); err != nil {
 		return 0, dispatchcoro.Coroutine{}, fmt.Errorf("%w: invalid input %v: %v", ErrInvalidArgument, boxedInput, err)
 	}
-	coro := coroutine.NewWithReturn[dispatchproto.Response, dispatchproto.Request](f.entrypoint(input))
+	coro := dispatchcoro.New(f.entrypoint(input))
 
 	// In volatile mode, register the coroutine instance and assign a unique ID.
-	var id coroutineID
+	var id dispatchcoro.InstanceID
 	if !coroutine.Durable {
-		id = f.registerCoroutineInstance(coro)
+		id = f.instances.Register(coro)
 	}
 	return id, coro, nil
 }
 
-func (f *Function[I, O]) tearDown(id coroutineID, coro dispatchcoro.Coroutine) {
+func (f *Function[I, O]) tearDown(id dispatchcoro.InstanceID, coro dispatchcoro.Coroutine) {
 	// Remove volatile coroutine instances only once they're done.
 	if !coroutine.Durable && coro.Done() {
-		f.volatileCoroutines.deleteCoroutineInstance(id)
+		f.instances.Delete(id)
 	}
 
 	// Always tear down durable coroutines. They'll be rebuilt
@@ -144,7 +142,7 @@ func (f *Function[I, O]) tearDown(id coroutineID, coro dispatchcoro.Coroutine) {
 	}
 }
 
-func (f *Function[I, O]) serialize(id coroutineID, coro dispatchcoro.Coroutine) (dispatchproto.Any, error) {
+func (f *Function[I, O]) serialize(id dispatchcoro.InstanceID, coro dispatchcoro.Coroutine) (dispatchproto.Any, error) {
 	// In volatile mode, serialize a reference to the coroutine instance.
 	if !coroutine.Durable {
 		return dispatchproto.NewAny(id)
@@ -158,11 +156,11 @@ func (f *Function[I, O]) serialize(id coroutineID, coro dispatchcoro.Coroutine) 
 	return state, nil
 }
 
-func (f *Function[I, O]) deserialize(state dispatchproto.Any) (coroutineID, dispatchcoro.Coroutine, error) {
+func (f *Function[I, O]) deserialize(state dispatchproto.Any) (dispatchcoro.InstanceID, dispatchcoro.Coroutine, error) {
 	// In durable mode, create the coroutine and then deserialize its prior state.
 	if coroutine.Durable {
 		var zero I
-		coro := coroutine.NewWithReturn[dispatchproto.Response, dispatchproto.Request](f.entrypoint(zero))
+		coro := dispatchcoro.New(f.entrypoint(zero))
 		if err := dispatchcoro.Deserialize(coro, state); err != nil {
 			return 0, dispatchcoro.Coroutine{}, fmt.Errorf("%w: %v", ErrIncompatibleState, err)
 		}
@@ -170,11 +168,11 @@ func (f *Function[I, O]) deserialize(state dispatchproto.Any) (coroutineID, disp
 	}
 
 	// In volatile mode, find the suspended coroutine instance.
-	var id coroutineID
+	var id dispatchcoro.InstanceID
 	if err := state.Unmarshal(&id); err != nil {
 		return 0, dispatchcoro.Coroutine{}, fmt.Errorf("%w: invalid volatile coroutine reference: %s", ErrIncompatibleState, state)
 	}
-	coro, err := f.findCoroutineInstance(id)
+	coro, err := f.instances.Find(id)
 	return id, coro, err
 }
 
@@ -239,66 +237,4 @@ func (f *Function[I, O]) Gather(inputs []I, opts ...dispatchproto.CallOption) ([
 // AnyFunction is a Function[I, O] instance.
 type AnyFunction interface {
 	Register(*Dispatch) (string, dispatchproto.Function)
-}
-
-// "Instances" are only applicable when coroutines are running
-// in volatile mode, since we must be keep suspended coroutines in
-// memory while they're polling. In durable mode, there's no need
-// to keep "instances" around, since we can serialize the state of
-// each coroutine and send it back and forth to Dispatch. In durable
-// mode Function[I,O] is stateless.
-type volatileCoroutines struct {
-	instances map[coroutineID]dispatchcoro.Coroutine
-	nextID    coroutineID
-	mu        sync.Mutex
-}
-
-type coroutineID = uint64
-
-func (f *volatileCoroutines) registerCoroutineInstance(coro dispatchcoro.Coroutine) coroutineID {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	if f.nextID == 0 {
-		f.nextID = rand.Uint64()
-	}
-	f.nextID++
-
-	id := f.nextID
-	if f.instances == nil {
-		f.instances = map[coroutineID]dispatchcoro.Coroutine{}
-	}
-	f.instances[id] = coro
-
-	return id
-}
-
-func (f *volatileCoroutines) findCoroutineInstance(id coroutineID) (dispatchcoro.Coroutine, error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	coro, ok := f.instances[id]
-	if !ok {
-		return coro, fmt.Errorf("%w: volatile coroutine %d not found", ErrIncompatibleState, id)
-	}
-	return coro, nil
-}
-
-func (f *volatileCoroutines) deleteCoroutineInstance(id coroutineID) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	delete(f.instances, id)
-}
-
-func (f *volatileCoroutines) Close() error {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-
-	for _, fn := range f.instances {
-		fn.Stop()
-		fn.Next()
-	}
-	clear(f.instances)
-	return nil
 }

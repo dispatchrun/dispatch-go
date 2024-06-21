@@ -10,6 +10,11 @@ import (
 // Coroutine is the flavour of coroutine supported by Dispatch and the SDK.
 type Coroutine = coroutine.Coroutine[dispatchproto.Response, dispatchproto.Request]
 
+// New creates a Coroutine.
+func New(fn func() dispatchproto.Response) Coroutine {
+	return coroutine.NewWithReturn[dispatchproto.Response, dispatchproto.Request](fn)
+}
+
 // Yield yields control to Dispatch.
 //
 // The coroutine is suspended while the Response is sent to Dispatch.
