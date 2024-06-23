@@ -19,13 +19,14 @@ import (
 
 	"connectrpc.com/connect"
 	"github.com/dispatchrun/dispatch-go"
+	"github.com/dispatchrun/dispatch-go/dispatchproto"
 )
 
 func TestErrorStatus(t *testing.T) {
 	tests := []struct {
 		scenario string
 		error    func(*testing.T) error
-		status   dispatch.Status
+		status   dispatchproto.Status
 	}{
 		// Testing for the nil error ensures that if for any reasons some of the
 		// tests will return nil, they will fail because we know that the status
@@ -34,7 +35,7 @@ func TestErrorStatus(t *testing.T) {
 		{
 			scenario: "nil",
 			error:    func(*testing.T) error { return nil },
-			status:   dispatch.OKStatus,
+			status:   dispatchproto.OKStatus,
 		},
 
 		// In some cases, the user may want to manually categorize an error. Err{Status}
@@ -43,85 +44,85 @@ func TestErrorStatus(t *testing.T) {
 		{
 			scenario: "when the error is due to a timeout",
 			error:    func(*testing.T) error { return fmt.Errorf("error: %w", dispatch.ErrTimeout) },
-			status:   dispatch.TimeoutStatus,
+			status:   dispatchproto.TimeoutStatus,
 		},
 
 		{
 			scenario: "when the error is due to throttling",
 			error:    func(*testing.T) error { return fmt.Errorf("error: %w", dispatch.ErrThrottled) },
-			status:   dispatch.ThrottledStatus,
+			status:   dispatchproto.ThrottledStatus,
 		},
 
 		{
 			scenario: "when the error is due to an invalid argument",
 			error:    func(*testing.T) error { return fmt.Errorf("error: %w", dispatch.ErrInvalidArgument) },
-			status:   dispatch.InvalidArgumentStatus,
+			status:   dispatchproto.InvalidArgumentStatus,
 		},
 
 		{
 			scenario: "when the error is due to an invalid response",
 			error:    func(*testing.T) error { return fmt.Errorf("error: %w", dispatch.ErrInvalidResponse) },
-			status:   dispatch.InvalidResponseStatus,
+			status:   dispatchproto.InvalidResponseStatus,
 		},
 
 		{
 			scenario: "when the error is due to a temporary error",
 			error:    func(*testing.T) error { return fmt.Errorf("error: %w", dispatch.ErrTemporary) },
-			status:   dispatch.TemporaryErrorStatus,
+			status:   dispatchproto.TemporaryErrorStatus,
 		},
 
 		{
 			scenario: "when the error is due to a permanent error",
 			error:    func(*testing.T) error { return fmt.Errorf("error: %w", dispatch.ErrPermanent) },
-			status:   dispatch.PermanentErrorStatus,
+			status:   dispatchproto.PermanentErrorStatus,
 		},
 
 		{
 			scenario: "when the error is due to incompatible state",
 			error:    func(*testing.T) error { return fmt.Errorf("error: %w", dispatch.ErrIncompatibleState) },
-			status:   dispatch.IncompatibleStateStatus,
+			status:   dispatchproto.IncompatibleStateStatus,
 		},
 
 		{
 			scenario: "when the error is due to DNS",
 			error:    func(*testing.T) error { return fmt.Errorf("error: %w", dispatch.ErrDNS) },
-			status:   dispatch.DNSErrorStatus,
+			status:   dispatchproto.DNSErrorStatus,
 		},
 
 		{
 			scenario: "when the error is due to TCP",
 			error:    func(*testing.T) error { return fmt.Errorf("error: %w", dispatch.ErrTCP) },
-			status:   dispatch.TCPErrorStatus,
+			status:   dispatchproto.TCPErrorStatus,
 		},
 
 		{
 			scenario: "when the error is due to TLS",
 			error:    func(*testing.T) error { return fmt.Errorf("error: %w", dispatch.ErrTLS) },
-			status:   dispatch.TLSErrorStatus,
+			status:   dispatchproto.TLSErrorStatus,
 		},
 
 		{
 			scenario: "when the error is due to HTTP",
 			error:    func(*testing.T) error { return fmt.Errorf("error: %w", dispatch.ErrHTTP) },
-			status:   dispatch.HTTPErrorStatus,
+			status:   dispatchproto.HTTPErrorStatus,
 		},
 
 		{
 			scenario: "when the error is due to authentication",
 			error:    func(*testing.T) error { return fmt.Errorf("error: %w", dispatch.ErrUnauthenticated) },
-			status:   dispatch.UnauthenticatedStatus,
+			status:   dispatchproto.UnauthenticatedStatus,
 		},
 
 		{
 			scenario: "when the error is due to permissions",
 			error:    func(*testing.T) error { return fmt.Errorf("error: %w", dispatch.ErrPermissionDenied) },
-			status:   dispatch.PermissionDeniedStatus,
+			status:   dispatchproto.PermissionDeniedStatus,
 		},
 
 		{
 			scenario: "when the error is due to not found",
 			error:    func(*testing.T) error { return fmt.Errorf("error: %w", dispatch.ErrNotFound) },
-			status:   dispatch.NotFoundStatus,
+			status:   dispatchproto.NotFoundStatus,
 		},
 
 		// Error values may have a Status() Status method to override the
@@ -132,14 +133,18 @@ func TestErrorStatus(t *testing.T) {
 
 		{
 			scenario: "when the error value has a Status method it is used to determine the status (INVALID_ARGUMENT)",
-			error:    func(*testing.T) error { return fmt.Errorf("error: %w", status(dispatch.InvalidArgumentStatus)) },
-			status:   dispatch.InvalidArgumentStatus,
+			error: func(*testing.T) error {
+				return fmt.Errorf("error: %w", dispatchproto.StatusError(dispatchproto.InvalidArgumentStatus))
+			},
+			status: dispatchproto.InvalidArgumentStatus,
 		},
 
 		{
 			scenario: "when the error value has a Status method it is used to determine the status (INVALID_RESPONSE)",
-			error:    func(*testing.T) error { return fmt.Errorf("error: %w", status(dispatch.InvalidResponseStatus)) },
-			status:   dispatch.InvalidResponseStatus,
+			error: func(*testing.T) error {
+				return fmt.Errorf("error: %w", dispatchproto.StatusError(dispatchproto.InvalidResponseStatus))
+			},
+			status: dispatchproto.InvalidResponseStatus,
 		},
 
 		// Error values returned by errors.Join have a special Unwrap() []error
@@ -152,37 +157,37 @@ func TestErrorStatus(t *testing.T) {
 		{
 			scenario: "errors.Join with a single permanent error",
 			error:    func(*testing.T) error { return errors.Join(permanent{}) },
-			status:   dispatch.PermanentErrorStatus,
+			status:   dispatchproto.PermanentErrorStatus,
 		},
 
 		{
 			scenario: "errors.Join with a single temporary error",
 			error:    func(*testing.T) error { return errors.Join(temporary{}) },
-			status:   dispatch.TemporaryErrorStatus,
+			status:   dispatchproto.TemporaryErrorStatus,
 		},
 
 		{
 			scenario: "errors.Join with a single timeout error",
 			error:    func(*testing.T) error { return errors.Join(timeout{}) },
-			status:   dispatch.TimeoutStatus,
+			status:   dispatchproto.TimeoutStatus,
 		},
 
 		{
 			scenario: "errors.Join with multiple permanent error",
 			error:    func(*testing.T) error { return errors.Join(permanent{}, permanent{}, permanent{}) },
-			status:   dispatch.PermanentErrorStatus,
+			status:   dispatchproto.PermanentErrorStatus,
 		},
 
 		{
 			scenario: "errors.Join with multiple temporary error",
 			error:    func(*testing.T) error { return errors.Join(temporary{}, temporary{}, temporary{}) },
-			status:   dispatch.TemporaryErrorStatus,
+			status:   dispatchproto.TemporaryErrorStatus,
 		},
 
 		{
 			scenario: "errors.Join with multiple timeout error",
 			error:    func(*testing.T) error { return errors.Join(timeout{}, timeout{}, timeout{}) },
-			status:   dispatch.TimeoutStatus,
+			status:   dispatchproto.TimeoutStatus,
 		},
 
 		{
@@ -190,7 +195,7 @@ func TestErrorStatus(t *testing.T) {
 			error: func(*testing.T) error {
 				return errors.Join(errors.Join(permanent{}), errors.Join(temporary{}))
 			},
-			status: dispatch.UnspecifiedStatus,
+			status: dispatchproto.UnspecifiedStatus,
 		},
 
 		{
@@ -198,7 +203,7 @@ func TestErrorStatus(t *testing.T) {
 			error: func(*testing.T) error {
 				return errors.Join(errors.Join(permanent{}), errors.Join(timeout{}))
 			},
-			status: dispatch.UnspecifiedStatus,
+			status: dispatchproto.UnspecifiedStatus,
 		},
 
 		{
@@ -206,7 +211,7 @@ func TestErrorStatus(t *testing.T) {
 			error: func(*testing.T) error {
 				return errors.Join(errors.Join(temporary{}), errors.Join(timeout{}))
 			},
-			status: dispatch.UnspecifiedStatus,
+			status: dispatchproto.UnspecifiedStatus,
 		},
 
 		// Context errors are often dependent on the context's state, or the
@@ -219,7 +224,7 @@ func TestErrorStatus(t *testing.T) {
 				cancel()
 				return ctx.Err()
 			},
-			status: dispatch.TemporaryErrorStatus,
+			status: dispatchproto.TemporaryErrorStatus,
 		},
 
 		{
@@ -229,7 +234,7 @@ func TestErrorStatus(t *testing.T) {
 				cancel(permanent{})
 				return context.Cause(ctx)
 			},
-			status: dispatch.PermanentErrorStatus,
+			status: dispatchproto.PermanentErrorStatus,
 		},
 
 		{
@@ -239,7 +244,7 @@ func TestErrorStatus(t *testing.T) {
 				cancel(temporary{})
 				return context.Cause(ctx)
 			},
-			status: dispatch.TemporaryErrorStatus,
+			status: dispatchproto.TemporaryErrorStatus,
 		},
 
 		{
@@ -249,7 +254,7 @@ func TestErrorStatus(t *testing.T) {
 				cancel(timeout{})
 				return context.Cause(ctx)
 			},
-			status: dispatch.TimeoutStatus,
+			status: dispatchproto.TimeoutStatus,
 		},
 
 		// Connection issuses should generally be treated as temporary errors
@@ -263,7 +268,7 @@ func TestErrorStatus(t *testing.T) {
 				_, err := net.Dial("tcp", "127.0.0.1:0")
 				return err
 			},
-			status: dispatch.TCPErrorStatus,
+			status: dispatchproto.TCPErrorStatus,
 		},
 
 		{
@@ -272,7 +277,7 @@ func TestErrorStatus(t *testing.T) {
 				_, err := net.Dial("tcp", "127.0.0.1:56789")
 				return err
 			},
-			status: dispatch.TCPErrorStatus,
+			status: dispatchproto.TCPErrorStatus,
 		},
 
 		{
@@ -285,7 +290,7 @@ func TestErrorStatus(t *testing.T) {
 				r.Body.Close()
 				return nil
 			},
-			status: dispatch.TCPErrorStatus,
+			status: dispatchproto.TCPErrorStatus,
 		},
 
 		{
@@ -298,7 +303,7 @@ func TestErrorStatus(t *testing.T) {
 				r.Body.Close()
 				return nil
 			},
-			status: dispatch.TCPErrorStatus,
+			status: dispatchproto.TCPErrorStatus,
 		},
 
 		{
@@ -331,7 +336,7 @@ func TestErrorStatus(t *testing.T) {
 				r.Body.Close()
 				return nil
 			},
-			status: dispatch.TCPErrorStatus,
+			status: dispatchproto.TCPErrorStatus,
 		},
 
 		{
@@ -382,7 +387,7 @@ func TestErrorStatus(t *testing.T) {
 				r.Body.Close()
 				return nil
 			},
-			status: dispatch.TCPErrorStatus,
+			status: dispatchproto.TCPErrorStatus,
 		},
 
 		// fs package errors often indicate an invalid state in the application
@@ -392,25 +397,25 @@ func TestErrorStatus(t *testing.T) {
 		{
 			scenario: "fs.ErrInvalid",
 			error:    func(*testing.T) error { return fs.ErrInvalid },
-			status:   dispatch.InvalidArgumentStatus,
+			status:   dispatchproto.InvalidArgumentStatus,
 		},
 
 		{
 			scenario: "fs.ErrPermission",
 			error:    func(*testing.T) error { return fs.ErrPermission },
-			status:   dispatch.PermissionDeniedStatus,
+			status:   dispatchproto.PermissionDeniedStatus,
 		},
 
 		{
 			scenario: "fs.ErrExist",
 			error:    func(*testing.T) error { return fs.ErrExist },
-			status:   dispatch.PermanentErrorStatus,
+			status:   dispatchproto.PermanentErrorStatus,
 		},
 
 		{
 			scenario: "fs.ErrNotExist",
 			error:    func(*testing.T) error { return fs.ErrNotExist },
-			status:   dispatch.NotFoundStatus,
+			status:   dispatchproto.NotFoundStatus,
 		},
 
 		// read/write on closed connections or files is often a sign of a race
@@ -426,7 +431,7 @@ func TestErrorStatus(t *testing.T) {
 				_, err := c1.Read([]byte{0})
 				return err
 			},
-			status: dispatch.TemporaryErrorStatus,
+			status: dispatchproto.TemporaryErrorStatus,
 		},
 
 		{
@@ -438,7 +443,7 @@ func TestErrorStatus(t *testing.T) {
 				_, err := r.Read([]byte{0})
 				return err
 			},
-			status: dispatch.TemporaryErrorStatus,
+			status: dispatchproto.TemporaryErrorStatus,
 		},
 
 		{
@@ -453,7 +458,7 @@ func TestErrorStatus(t *testing.T) {
 				_, err = r.Read([]byte{0})
 				return err
 			},
-			status: dispatch.TemporaryErrorStatus,
+			status: dispatchproto.TemporaryErrorStatus,
 		},
 
 		{
@@ -465,7 +470,7 @@ func TestErrorStatus(t *testing.T) {
 				_, err := c2.Write([]byte("hello"))
 				return err
 			},
-			status: dispatch.TemporaryErrorStatus,
+			status: dispatchproto.TemporaryErrorStatus,
 		},
 
 		{
@@ -477,7 +482,7 @@ func TestErrorStatus(t *testing.T) {
 				_, err := w.Write([]byte("hello"))
 				return err
 			},
-			status: dispatch.TemporaryErrorStatus,
+			status: dispatchproto.TemporaryErrorStatus,
 		},
 
 		{
@@ -492,7 +497,7 @@ func TestErrorStatus(t *testing.T) {
 				_, err = w.Write([]byte("hello"))
 				return err
 			},
-			status: dispatch.TemporaryErrorStatus,
+			status: dispatchproto.TemporaryErrorStatus,
 		},
 
 		{
@@ -512,7 +517,7 @@ func TestErrorStatus(t *testing.T) {
 				r.Body.Close()
 				return nil
 			},
-			status: dispatch.TCPErrorStatus,
+			status: dispatchproto.TCPErrorStatus,
 		},
 
 		// Timeouts have a dedicated category, make sure that various conditions
@@ -521,7 +526,7 @@ func TestErrorStatus(t *testing.T) {
 		{
 			scenario: "timeout",
 			error:    func(*testing.T) error { return timeout{} },
-			status:   dispatch.TimeoutStatus,
+			status:   dispatchproto.TimeoutStatus,
 		},
 
 		{
@@ -534,7 +539,7 @@ func TestErrorStatus(t *testing.T) {
 				_, err := c2.Read([]byte{0})
 				return err
 			},
-			status: dispatch.TimeoutStatus,
+			status: dispatchproto.TimeoutStatus,
 		},
 
 		{
@@ -550,7 +555,7 @@ func TestErrorStatus(t *testing.T) {
 				_, err = r.Read([]byte{0})
 				return err
 			},
-			status: dispatch.TimeoutStatus,
+			status: dispatchproto.TimeoutStatus,
 		},
 
 		{
@@ -571,7 +576,7 @@ func TestErrorStatus(t *testing.T) {
 				r.Body.Close()
 				return nil
 			},
-			status: dispatch.TimeoutStatus,
+			status: dispatchproto.TimeoutStatus,
 		},
 
 		// Problems with DNS resolution are very common, we want to retry those
@@ -581,19 +586,19 @@ func TestErrorStatus(t *testing.T) {
 		{
 			scenario: "DNS resolution error",
 			error:    func(*testing.T) error { return &net.DNSError{Err: "no such host"} },
-			status:   dispatch.DNSErrorStatus,
+			status:   dispatchproto.DNSErrorStatus,
 		},
 
 		{
 			scenario: "DNS resolution error with temporary flag",
 			error:    func(*testing.T) error { return &net.DNSError{Err: "no such host", IsTemporary: true} },
-			status:   dispatch.DNSErrorStatus,
+			status:   dispatchproto.DNSErrorStatus,
 		},
 
 		{
 			scenario: "DNS resolution error with timeout flag",
 			error:    func(*testing.T) error { return &net.DNSError{Err: "no such host", IsTimeout: true} },
-			status:   dispatch.DNSErrorStatus,
+			status:   dispatchproto.DNSErrorStatus,
 		},
 
 		{
@@ -606,7 +611,7 @@ func TestErrorStatus(t *testing.T) {
 				r.Body.Close()
 				return nil
 			},
-			status: dispatch.DNSErrorStatus,
+			status: dispatchproto.DNSErrorStatus,
 		},
 
 		// Errors coming from the TLS stack should be categorized as such.
@@ -630,7 +635,7 @@ func TestErrorStatus(t *testing.T) {
 				r.Body.Close()
 				return nil
 			},
-			status: dispatch.TLSErrorStatus,
+			status: dispatchproto.TLSErrorStatus,
 		},
 
 		// HTTP protocol errors should only occur in case of misconfiguration
@@ -639,19 +644,19 @@ func TestErrorStatus(t *testing.T) {
 		{
 			scenario: "http.ErrNotSupported",
 			error:    func(*testing.T) error { return http.ErrNotSupported },
-			status:   dispatch.HTTPErrorStatus,
+			status:   dispatchproto.HTTPErrorStatus,
 		},
 
 		{
 			scenario: "http.ErrMissingBoundary",
 			error:    func(*testing.T) error { return http.ErrMissingBoundary },
-			status:   dispatch.HTTPErrorStatus,
+			status:   dispatchproto.HTTPErrorStatus,
 		},
 
 		{
 			scenario: "http.ErrNotMultipart",
 			error:    func(*testing.T) error { return http.ErrNotMultipart },
-			status:   dispatch.HTTPErrorStatus,
+			status:   dispatchproto.HTTPErrorStatus,
 		},
 
 		{
@@ -674,7 +679,7 @@ func TestErrorStatus(t *testing.T) {
 				r.Body.Close()
 				return nil
 			},
-			status: dispatch.InvalidResponseStatus,
+			status: dispatchproto.InvalidResponseStatus,
 		},
 
 		{
@@ -701,7 +706,7 @@ func TestErrorStatus(t *testing.T) {
 				}
 				return err
 			},
-			status: dispatch.InvalidResponseStatus,
+			status: dispatchproto.InvalidResponseStatus,
 		},
 
 		// The SDK uses the connect library when remotely interacting with functions.
@@ -713,7 +718,7 @@ func TestErrorStatus(t *testing.T) {
 			error: func(*testing.T) error {
 				return connect.NewError(connect.CodeCanceled, errors.New("the request was canceled"))
 			},
-			status: dispatch.TimeoutStatus,
+			status: dispatchproto.TimeoutStatus,
 		},
 
 		{
@@ -721,7 +726,7 @@ func TestErrorStatus(t *testing.T) {
 			error: func(*testing.T) error {
 				return connect.NewError(connect.CodeUnknown, errors.New("unknown"))
 			},
-			status: dispatch.TemporaryErrorStatus,
+			status: dispatchproto.TemporaryErrorStatus,
 		},
 
 		{
@@ -730,7 +735,7 @@ func TestErrorStatus(t *testing.T) {
 				underlying := connect.NewError(connect.CodeInvalidArgument, errors.New("invalid argument"))
 				return fmt.Errorf("something went wrong: %w", underlying)
 			},
-			status: dispatch.InvalidArgumentStatus,
+			status: dispatchproto.InvalidArgumentStatus,
 		},
 
 		{
@@ -738,7 +743,7 @@ func TestErrorStatus(t *testing.T) {
 			error: func(*testing.T) error {
 				return connect.NewError(connect.CodeDeadlineExceeded, errors.New("deadline exceeded"))
 			},
-			status: dispatch.TimeoutStatus,
+			status: dispatchproto.TimeoutStatus,
 		},
 
 		{
@@ -746,7 +751,7 @@ func TestErrorStatus(t *testing.T) {
 			error: func(*testing.T) error {
 				return connect.NewError(connect.CodeNotFound, errors.New("not found"))
 			},
-			status: dispatch.NotFoundStatus,
+			status: dispatchproto.NotFoundStatus,
 		},
 
 		{
@@ -754,7 +759,7 @@ func TestErrorStatus(t *testing.T) {
 			error: func(*testing.T) error {
 				return connect.NewError(connect.CodeAlreadyExists, errors.New("already exists"))
 			},
-			status: dispatch.PermanentErrorStatus,
+			status: dispatchproto.PermanentErrorStatus,
 		},
 
 		{
@@ -762,7 +767,7 @@ func TestErrorStatus(t *testing.T) {
 			error: func(*testing.T) error {
 				return connect.NewError(connect.CodePermissionDenied, errors.New("permission denied"))
 			},
-			status: dispatch.PermissionDeniedStatus,
+			status: dispatchproto.PermissionDeniedStatus,
 		},
 
 		{
@@ -770,7 +775,7 @@ func TestErrorStatus(t *testing.T) {
 			error: func(*testing.T) error {
 				return connect.NewError(connect.CodeResourceExhausted, errors.New("resource exhausted"))
 			},
-			status: dispatch.ThrottledStatus,
+			status: dispatchproto.ThrottledStatus,
 		},
 
 		{
@@ -778,7 +783,7 @@ func TestErrorStatus(t *testing.T) {
 			error: func(*testing.T) error {
 				return connect.NewError(connect.CodeFailedPrecondition, errors.New("failed precondition"))
 			},
-			status: dispatch.PermanentErrorStatus,
+			status: dispatchproto.PermanentErrorStatus,
 		},
 
 		{
@@ -786,7 +791,7 @@ func TestErrorStatus(t *testing.T) {
 			error: func(*testing.T) error {
 				return connect.NewError(connect.CodeAborted, errors.New("aborted"))
 			},
-			status: dispatch.PermanentErrorStatus,
+			status: dispatchproto.PermanentErrorStatus,
 		},
 
 		{
@@ -794,7 +799,7 @@ func TestErrorStatus(t *testing.T) {
 			error: func(*testing.T) error {
 				return connect.NewError(connect.CodeOutOfRange, errors.New("out of range"))
 			},
-			status: dispatch.InvalidArgumentStatus,
+			status: dispatchproto.InvalidArgumentStatus,
 		},
 
 		{
@@ -802,7 +807,7 @@ func TestErrorStatus(t *testing.T) {
 			error: func(*testing.T) error {
 				return connect.NewError(connect.CodeUnimplemented, errors.New("unimplemented"))
 			},
-			status: dispatch.NotFoundStatus,
+			status: dispatchproto.NotFoundStatus,
 		},
 
 		{
@@ -810,7 +815,7 @@ func TestErrorStatus(t *testing.T) {
 			error: func(*testing.T) error {
 				return connect.NewError(connect.CodeInternal, errors.New("internal"))
 			},
-			status: dispatch.TemporaryErrorStatus,
+			status: dispatchproto.TemporaryErrorStatus,
 		},
 
 		{
@@ -818,7 +823,7 @@ func TestErrorStatus(t *testing.T) {
 			error: func(*testing.T) error {
 				return connect.NewError(connect.CodeUnavailable, errors.New("unavailable"))
 			},
-			status: dispatch.TemporaryErrorStatus,
+			status: dispatchproto.TemporaryErrorStatus,
 		},
 
 		{
@@ -826,7 +831,7 @@ func TestErrorStatus(t *testing.T) {
 			error: func(*testing.T) error {
 				return connect.NewError(connect.CodeDataLoss, errors.New("data loss"))
 			},
-			status: dispatch.PermanentErrorStatus,
+			status: dispatchproto.PermanentErrorStatus,
 		},
 
 		{
@@ -834,7 +839,7 @@ func TestErrorStatus(t *testing.T) {
 			error: func(*testing.T) error {
 				return connect.NewError(connect.CodeUnauthenticated, errors.New("unauthenticated"))
 			},
-			status: dispatch.UnauthenticatedStatus,
+			status: dispatchproto.UnauthenticatedStatus,
 		},
 
 		{
@@ -842,7 +847,7 @@ func TestErrorStatus(t *testing.T) {
 			error: func(*testing.T) error {
 				return connect.NewError(connect.Code(9999), errors.New("unknown"))
 			},
-			status: dispatch.PermanentErrorStatus,
+			status: dispatchproto.PermanentErrorStatus,
 		},
 
 		// The default behavior is to assume permanent errors, but we still want
@@ -854,7 +859,7 @@ func TestErrorStatus(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.scenario, func(t *testing.T) {
 			err := test.error(t)
-			if status := dispatch.ErrorStatus(err); status != test.status {
+			if status := dispatchproto.ErrorStatus(err); status != test.status {
 				s := new(strings.Builder)
 				inspectErrorChain(s, err, 0)
 				t.Errorf("%T: %s: expected %s, got %s\n%s", err, err, test.status, status, s.String())
@@ -878,11 +883,6 @@ type timeout struct{}
 func (timeout) Error() string   { return "timeout" }
 func (timeout) Temporary() bool { return true }
 func (timeout) Timeout() bool   { return true }
-
-type status dispatch.Status
-
-func (s status) Error() string           { return dispatch.Status(s).String() }
-func (s status) Status() dispatch.Status { return dispatch.Status(s) }
 
 // inspectErrorChain is a helper function to print the error chain for debugging
 // in the error status tests.

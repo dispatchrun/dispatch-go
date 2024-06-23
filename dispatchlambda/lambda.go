@@ -9,23 +9,29 @@ import (
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/aws/aws-lambda-go/lambda/messages"
 	"github.com/dispatchrun/dispatch-go"
+	"github.com/dispatchrun/dispatch-go/dispatchproto"
 	"google.golang.org/protobuf/proto"
 )
 
 // Start is a shortcut to start a Lambda function handler executing the given
-// Dispatch function when invoked.
-func Start(fn dispatch.Function) {
-	lambda.Start(Handler(fn))
+// Dispatch functions when invoked.
+func Start(functions ...dispatch.AnyFunction) {
+	lambda.Start(Handler(functions...))
 }
 
-// Handler creates a lambda function handler executing the given Dispatch
-// function when invoked.
-func Handler(fn dispatch.Function) lambda.Handler {
-	return &handler{fn}
+// Handler creates a lambda function handler executing the given
+// Dispatch functions when invoked.
+func Handler(functions ...dispatch.AnyFunction) lambda.Handler {
+	handler := &handler{functions: dispatchproto.FunctionMap{}}
+	for _, fn := range functions {
+		name, primitive := fn.Register(nil)
+		handler.functions[name] = primitive
+	}
+	return handler
 }
 
 type handler struct {
-	function dispatch.Function
+	functions dispatchproto.FunctionMap
 }
 
 func (h *handler) Invoke(ctx context.Context, payload []byte) ([]byte, error) {
@@ -51,7 +57,7 @@ func (h *handler) Invoke(ctx context.Context, payload []byte) ([]byte, error) {
 		return nil, badRequest("raw payload did not contain a protobuf encoded execution request")
 	}
 
-	res := h.function.Run(ctx, newProtoRequest(req))
+	res := h.functions.Run(ctx, newProtoRequest(req))
 
 	rawResponse, err := proto.Marshal(responseProto(res))
 	if err != nil {
@@ -73,8 +79,8 @@ func badRequest(msg string) messages.InvokeResponse_Error {
 	}
 }
 
-//go:linkname newProtoRequest github.com/dispatchrun/dispatch-go.newProtoRequest
-func newProtoRequest(r *sdkv1.RunRequest) dispatch.Request
+//go:linkname newProtoRequest github.com/dispatchrun/dispatch-go/dispatchproto.newProtoRequest
+func newProtoRequest(r *sdkv1.RunRequest) dispatchproto.Request
 
-//go:linkname responseProto github.com/dispatchrun/dispatch-go.responseProto
-func responseProto(r dispatch.Response) *sdkv1.RunResponse
+//go:linkname responseProto github.com/dispatchrun/dispatch-go/dispatchproto.responseProto
+func responseProto(r dispatchproto.Response) *sdkv1.RunResponse

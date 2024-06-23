@@ -1,9 +1,8 @@
-package dispatch
+package dispatchproto
 
 import (
 	"fmt"
 	"time"
-	_ "unsafe"
 
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
 	"google.golang.org/protobuf/proto"
@@ -45,7 +44,7 @@ func Input(input Any) interface {
 
 type inputOption Any
 
-func (i inputOption) configureCall(r *Call) { r.proto.Input = i.proto }
+func (i inputOption) configureCall(c *Call) { c.proto.Input = i.proto }
 
 func (i inputOption) configureRequest(r *Request) {
 	r.proto.Directive = &sdkv1.RunRequest_Input{Input: i.proto}
@@ -101,6 +100,11 @@ func (c Call) Version() string {
 	return c.proto.GetVersion()
 }
 
+// Request converts the call to a request.
+func (c Call) Request() Request {
+	return NewRequest(c.Function(), c.Input())
+}
+
 // CorrelationID is an opaque value that gets repeated in CallResult to
 // correlate asynchronous calls with their results.
 func (c Call) CorrelationID() uint64 {
@@ -115,6 +119,23 @@ func (c Call) String() string {
 // Equal is true if the call is equal to another.
 func (c Call) Equal(other Call) bool {
 	return proto.Equal(c.proto, other.proto)
+}
+
+// Clone creates a copy of the call.
+func (c Call) Clone() Call {
+	if c.proto == nil {
+		return Call{}
+	}
+	return Call{proto.Clone(c.proto).(*sdkv1.Call)}
+}
+
+// With creates a copy of the Call with additional options applied.
+func (c Call) With(opts ...CallOption) Call {
+	call := c.Clone()
+	for _, opt := range opts {
+		opt.configureCall(&call)
+	}
+	return call
 }
 
 // CallResult is a function call result.
@@ -137,6 +158,7 @@ type CallResultOption interface{ configureCallResult(*CallResult) }
 // Output sets the output from a function call or Response.
 func Output(output Any) interface {
 	CallResultOption
+	ExitOption
 	ResponseOption
 } {
 	return outputOption(output)
@@ -145,7 +167,15 @@ func Output(output Any) interface {
 type outputOption Any
 
 func (o outputOption) configureCallResult(r *CallResult) { r.proto.Output = o.proto }
-func (o outputOption) configureResponse(r *Response)     { ensureResponseExitResult(r).Output = o.proto }
+
+func (o outputOption) configureExit(x *Exit) {
+	if x.proto.Result == nil {
+		x.proto.Result = &sdkv1.CallResult{}
+	}
+	x.proto.Result.Output = o.proto
+}
+
+func (o outputOption) configureResponse(r *Response) { ensureResponseExitResult(r).Output = o.proto }
 
 // DispatchID sets the opaque identifier for the function call.
 func DispatchID(id ID) interface {
@@ -202,6 +232,23 @@ func (r CallResult) configureExit(e *Exit) {
 	e.proto.Result = r.proto
 }
 
+// Clone creates a copy of the call.
+func (r CallResult) Clone() CallResult {
+	if r.proto == nil {
+		return CallResult{}
+	}
+	return CallResult{proto.Clone(r.proto).(*sdkv1.CallResult)}
+}
+
+// With creates a copy of the CallResult with additional options applied.
+func (r CallResult) With(opts ...CallResultOption) CallResult {
+	result := r.Clone()
+	for _, opt := range opts {
+		opt.configureCallResult(&result)
+	}
+	return result
+}
+
 // Error is an error that occurred during execution of a function.
 type Error struct {
 	proto *sdkv1.Error
@@ -211,6 +258,11 @@ type Error struct {
 func NewError(err error) Error {
 	// TODO: use ErrorValue / Traceback
 	return NewErrorMessage(errorTypeOf(err), err.Error())
+}
+
+// Errorf creates an Error from the specified message and args.
+func Errorf(msg string, args ...any) Error {
+	return NewError(fmt.Errorf(msg, args...))
 }
 
 // NewErrorMessage creates an Error.
@@ -260,6 +312,19 @@ func (e Error) Value() []byte {
 	return e.proto.GetValue()
 }
 
+// Error implements the error interface.
+func (e Error) Error() string {
+	typ := e.Type()
+	msg := e.Message()
+	if typ != "" && msg != "" {
+		return typ + ": " + msg
+	}
+	if typ != "" {
+		return typ
+	}
+	return msg
+}
+
 // Traceback is the encoded stack trace for the error.
 //
 // The format is language-specific, encoded in the standard format used by
@@ -288,7 +353,10 @@ func (e Error) configurePollResult(p *PollResult) {
 }
 
 func (e Error) configureExit(x *Exit) {
-	x.proto.Result = &sdkv1.CallResult{Error: e.proto}
+	if x.proto.Result == nil {
+		x.proto.Result = &sdkv1.CallResult{}
+	}
+	x.proto.Result.Error = e.proto
 }
 
 func (e Error) configureResponse(r *Response) {
@@ -377,7 +445,7 @@ type Poll struct {
 }
 
 // NewPoll creates a Poll directive.
-func NewPoll(minResults, maxResults int32, maxWait time.Duration, opts ...PollOption) Poll {
+func NewPoll(minResults, maxResults int, maxWait time.Duration, opts ...PollOption) Poll {
 	poll := Poll{&sdkv1.Poll{
 		MinResults: int32(minResults),
 		MaxResults: int32(maxResults),
@@ -397,17 +465,30 @@ type pollOptionFunc func(*Poll)
 func (fn pollOptionFunc) configurePoll(p *Poll) { fn(p) }
 
 // CoroutineState sets the coroutine state.
-func CoroutineState(state []byte) interface {
+func CoroutineState(state Any) interface {
 	PollOption
 	PollResultOption
+	ResponseOption
 } {
 	return coroutineStateOption(state)
 }
 
-type coroutineStateOption []byte
+type coroutineStateOption Any
 
-func (b coroutineStateOption) configurePoll(p *Poll)             { p.proto.CoroutineState = b }
-func (b coroutineStateOption) configurePollResult(r *PollResult) { r.proto.CoroutineState = b }
+func (s coroutineStateOption) configurePoll(p *Poll) {
+	p.proto.State = &sdkv1.Poll_TypedCoroutineState{TypedCoroutineState: s.proto}
+}
+
+func (s coroutineStateOption) configurePollResult(r *PollResult) {
+	r.proto.State = &sdkv1.PollResult_TypedCoroutineState{TypedCoroutineState: s.proto}
+}
+
+func (s coroutineStateOption) configureResponse(r *Response) {
+	switch d := r.proto.GetDirective().(type) {
+	case *sdkv1.RunResponse_Poll:
+		d.Poll.State = &sdkv1.Poll_TypedCoroutineState{TypedCoroutineState: s.proto}
+	} // noop otherwise
+}
 
 // Calls adds calls to a Poll directive.
 func Calls(calls ...Call) PollOption {
@@ -442,8 +523,8 @@ func (p Poll) MaxWait() time.Duration {
 // CoroutineState is a snapshot of the function's state.
 //
 // It's passed back in the PollResult when the function is resumed.
-func (p Poll) CoroutineState() []byte {
-	return p.proto.GetCoroutineState()
+func (p Poll) CoroutineState() Any {
+	return Any{p.proto.GetTypedCoroutineState()}
 }
 
 // Calls are the function calls attached to the poll directive.
@@ -467,6 +548,12 @@ func (p Poll) String() string {
 // Equal is true if the poll directive is equal to another.
 func (p Poll) Equal(other Poll) bool {
 	return proto.Equal(p.proto, other.proto)
+}
+
+// Result creates a result for the Poll directive, that carries
+// the same coroutine state.
+func (p Poll) Result() PollResult {
+	return NewPollResult(CoroutineState(p.CoroutineState()))
 }
 
 func (p Poll) configureResponse(r *Response) {
@@ -505,8 +592,8 @@ func CallResults(results ...CallResult) PollResultOption {
 
 // CoroutineState is the state recorded when the function was
 // suspended while polling.
-func (r PollResult) CoroutineState() []byte {
-	return r.proto.GetCoroutineState()
+func (r PollResult) CoroutineState() Any {
+	return Any{r.proto.GetTypedCoroutineState()}
 }
 
 // Results are the function call results attached to the poll result.
@@ -539,6 +626,27 @@ func (r PollResult) String() string {
 // Equal is true if the poll result is equal to another.
 func (r PollResult) Equal(other PollResult) bool {
 	return proto.Equal(r.proto, other.proto)
+}
+
+// Clone creates a copy of the result.
+func (r PollResult) Clone() PollResult {
+	if r.proto == nil {
+		return PollResult{}
+	}
+	return PollResult{proto.Clone(r.proto).(*sdkv1.PollResult)}
+}
+
+// With creates a copy of the PollResult with additional options applied.
+func (r PollResult) With(opts ...PollResultOption) PollResult {
+	result := r.Clone()
+	for _, opt := range opts {
+		opt.configurePollResult(&result)
+	}
+	return result
+}
+
+func (r PollResult) configureRequest(req *Request) {
+	req.proto.Directive = &sdkv1.RunRequest_PollResult{PollResult: r.proto}
 }
 
 // Request is a request from Dispatch to run a function.
@@ -661,6 +769,23 @@ func (r Request) Equal(other Request) bool {
 	return proto.Equal(r.proto, other.proto)
 }
 
+// Clone creates a copy of the request.
+func (r Request) Clone() Request {
+	if r.proto == nil {
+		return Request{}
+	}
+	return Request{proto.Clone(r.proto).(*sdkv1.RunRequest)}
+}
+
+// With creates a copy of the Request with additional options applied.
+func (r Request) With(opts ...RequestOption) Request {
+	request := r.Clone()
+	for _, opt := range opts {
+		opt.configureRequest(&request)
+	}
+	return request
+}
+
 // Response is a response to Dispatch after a function has run.
 //
 // The Response carries a "directive" to either terminate execution
@@ -674,15 +799,24 @@ type Response struct {
 type ResponseOption interface{ configureResponse(*Response) }
 
 // NewResponse creates a Response.
-func NewResponse(status Status, opts ...ResponseOption) Response {
-	response := Response{&sdkv1.RunResponse{
-		Status: sdkv1.Status(status),
-	}}
+func NewResponse(opts ...ResponseOption) Response {
+	response := Response{&sdkv1.RunResponse{}}
 	for _, opt := range opts {
 		opt.configureResponse(&response)
 	}
+	// Ensure the response has a valid directive.
 	if response.proto.Directive == nil {
 		ensureResponseExitResult(&response)
+	}
+	// Ensure the response has a valid status.
+	if response.proto.Status == sdkv1.Status(UnspecifiedStatus) {
+		response.proto.Status = sdkv1.Status(OKStatus)
+
+		if response.proto.GetExit().GetResult().GetError() != nil {
+			// Error categorization should have come earlier.
+			// If the error wasn't categorized, assume permanent error.
+			response.proto.Status = sdkv1.Status(PermanentErrorStatus)
+		}
 	}
 	return response
 }
@@ -703,10 +837,21 @@ func (r Response) Status() Status {
 	return Status(r.proto.GetStatus())
 }
 
+// OK is true if the response carries an OKStatus status.
+func (r Response) OK() bool {
+	return r.Status() == OKStatus
+}
+
 // Exit is the exit directive on the response.
 func (r Response) Exit() (Exit, bool) {
 	proto := r.proto.GetExit()
 	return Exit{proto}, proto != nil
+}
+
+// Result is the result from the exit directive on the response.
+func (r Response) Result() (CallResult, bool) {
+	proto := r.proto.GetExit().GetResult()
+	return CallResult{proto}, proto != nil
 }
 
 // Error is the error from the exit directive attached to the response.
@@ -748,6 +893,23 @@ func (r Response) Marshal() ([]byte, error) {
 	return proto.Marshal(r.proto)
 }
 
+// Clone creates a copy of the response.
+func (r Response) Clone() Response {
+	if r.proto == nil {
+		return Response{}
+	}
+	return Response{proto.Clone(r.proto).(*sdkv1.RunResponse)}
+}
+
+// With creates a copy of the Response with additional options applied.
+func (r Response) With(opts ...ResponseOption) Response {
+	response := r.Clone()
+	for _, opt := range opts {
+		opt.configureResponse(&response)
+	}
+	return response
+}
+
 func ensureResponseExitResult(r *Response) *sdkv1.CallResult {
 	var d *sdkv1.RunResponse_Exit
 	d, ok := r.proto.Directive.(*sdkv1.RunResponse_Exit)
@@ -764,32 +926,11 @@ func ensureResponseExitResult(r *Response) *sdkv1.CallResult {
 	return d.Exit.Result
 }
 
-// These are hooks used by the dispatchlambda and dispatchtest
-// package that let us avoid exposing proto messages. Exposing
-// the underlying proto messages complicates the API and opens
-// up new failure modes.
+func (s Status) configureResponse(r *Response) { r.proto.Status = sdkv1.Status(s) }
 
-//go:linkname newProtoCall
-func newProtoCall(proto *sdkv1.Call) Call { //nolint
-	return Call{proto}
-}
+func (a Any) configureCall(c *Call)       { inputOption(a).configureCall(c) }
+func (a Any) configureRequest(r *Request) { inputOption(a).configureRequest(r) }
 
-//go:linkname newProtoResponse
-func newProtoResponse(proto *sdkv1.RunResponse) Response { //nolint
-	return Response{proto}
-}
-
-//go:linkname newProtoRequest
-func newProtoRequest(proto *sdkv1.RunRequest) Request { //nolint
-	return Request{proto}
-}
-
-//go:linkname requestProto
-func requestProto(r Request) *sdkv1.RunRequest { //nolint
-	return r.proto
-}
-
-//go:linkname responseProto
-func responseProto(r Response) *sdkv1.RunResponse { //nolint
-	return r.proto
-}
+func (a Any) configureCallResult(r *CallResult) { outputOption(a).configureCallResult(r) }
+func (a Any) configureExit(x *Exit)             { outputOption(a).configureExit(x) }
+func (a Any) configureResponse(r *Response)     { outputOption(a).configureResponse(r) }

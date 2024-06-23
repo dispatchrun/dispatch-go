@@ -1,16 +1,21 @@
-package dispatch
+package dispatchclient
 
 import (
 	"context"
 	"fmt"
 	"net/http"
 	"os"
+	_ "unsafe"
 
 	"buf.build/gen/go/stealthrocket/dispatch-proto/connectrpc/go/dispatch/sdk/v1/sdkv1connect"
 	sdkv1 "buf.build/gen/go/stealthrocket/dispatch-proto/protocolbuffers/go/dispatch/sdk/v1"
 	"connectrpc.com/connect"
 	"connectrpc.com/validate"
+	"github.com/dispatchrun/dispatch-go/dispatchproto"
+	"github.com/dispatchrun/dispatch-go/internal/env"
 )
+
+const defaultApiUrl = "https://api.dispatch.run"
 
 // Client is a client for the Dispatch API.
 //
@@ -21,21 +26,23 @@ type Client struct {
 	apiUrl        string
 	env           []string
 	httpClient    *http.Client
+	opts          []Option
 
 	client sdkv1connect.DispatchServiceClient
 }
 
-// NewClient creates a Client.
-func NewClient(opts ...ClientOption) (*Client, error) {
+// New creates a Client.
+func New(opts ...Option) (*Client, error) {
 	c := &Client{
-		env: os.Environ(),
+		env:  os.Environ(),
+		opts: opts,
 	}
 	for _, opt := range opts {
-		opt.configureClient(c)
+		opt(c)
 	}
 
 	if c.apiKey == "" {
-		c.apiKey = getenv(c.env, "DISPATCH_API_KEY")
+		c.apiKey = env.Get(c.env, "DISPATCH_API_KEY")
 		c.apiKeyFromEnv = true
 	}
 	if c.apiKey == "" {
@@ -43,10 +50,10 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 	}
 
 	if c.apiUrl == "" {
-		c.apiUrl = getenv(c.env, "DISPATCH_API_URL")
+		c.apiUrl = env.Get(c.env, "DISPATCH_API_URL")
 	}
 	if c.apiUrl == "" {
-		c.apiUrl = DefaultApiUrl
+		c.apiUrl = defaultApiUrl
 	}
 
 	if c.httpClient == nil {
@@ -72,38 +79,36 @@ func NewClient(opts ...ClientOption) (*Client, error) {
 	return c, nil
 }
 
-// ClientOption configures a Client.
-type ClientOption interface {
-	configureClient(d *Client)
-}
-
-type clientOptionFunc func(d *Client)
-
-func (fn clientOptionFunc) configureClient(d *Client) {
-	fn(d)
-}
+// Option configures a Client.
+type Option func(*Client)
 
 // APIKey sets the Dispatch API key to use for authentication when
 // dispatching function calls through a Client.
 //
 // It defaults to the value of the DISPATCH_API_KEY environment variable.
-func APIKey(apiKey string) ClientOption {
-	return clientOptionFunc(func(c *Client) { c.apiKey = apiKey })
+func APIKey(apiKey string) Option {
+	return func(c *Client) { c.apiKey = apiKey }
 }
 
 // APIUrl sets the URL of the Dispatch API.
 //
 // It defaults to the value of the DISPATCH_API_URL environment variable,
-// or DefaultApiUrl if DISPATCH_API_URL is unset.
-func APIUrl(apiUrl string) ClientOption {
-	return clientOptionFunc(func(c *Client) { c.apiUrl = apiUrl })
+// or the default API URL (https://api.dispatch.run) if DISPATCH_API_URL
+// is unset.
+func APIUrl(apiUrl string) Option {
+	return func(c *Client) { c.apiUrl = apiUrl }
 }
 
-// DefaultApiUrl is the default Dispatch API URL.
-const DefaultApiUrl = "https://api.dispatch.run"
+// Env sets the environment variables that a Client parses its
+// default configuration from.
+//
+// It defaults to os.Environ().
+func Env(env ...string) Option {
+	return func(c *Client) { c.env = env }
+}
 
 // Dispatch dispatches a function call.
-func (c *Client) Dispatch(ctx context.Context, call Call) (ID, error) {
+func (c *Client) Dispatch(ctx context.Context, call dispatchproto.Call) (dispatchproto.ID, error) {
 	batch := c.Batch()
 	batch.Add(call)
 	ids, err := batch.Dispatch(ctx)
@@ -111,10 +116,6 @@ func (c *Client) Dispatch(ctx context.Context, call Call) (ID, error) {
 		return "", err
 	}
 	return ids[0], nil
-}
-
-func (c *Client) configureDispatch(d *Dispatch) {
-	d.client = c
 }
 
 // Batch creates a Batch.
@@ -136,14 +137,17 @@ func (b *Batch) Reset() {
 }
 
 // Add adds calls to the batch.
-func (b *Batch) Add(calls ...Call) {
+func (b *Batch) Add(calls ...dispatchproto.Call) {
 	for i := range calls {
-		b.calls = append(b.calls, calls[i].proto)
+		b.calls = append(b.calls, callProto(calls[i]))
 	}
 }
 
+//go:linkname callProto github.com/dispatchrun/dispatch-go/dispatchproto.callProto
+func callProto(r dispatchproto.Call) *sdkv1.Call
+
 // Dispatch dispatches the batch of function calls.
-func (b *Batch) Dispatch(ctx context.Context) ([]ID, error) {
+func (b *Batch) Dispatch(ctx context.Context) ([]dispatchproto.ID, error) {
 	req := connect.NewRequest(&sdkv1.DispatchRequest{Calls: b.calls})
 	res, err := b.client.client.Dispatch(ctx, req)
 	if err != nil {
@@ -155,9 +159,9 @@ func (b *Batch) Dispatch(ctx context.Context) ([]ID, error) {
 		}
 		return nil, err
 	}
-	ids := make([]ID, len(res.Msg.DispatchIds))
+	ids := make([]dispatchproto.ID, len(res.Msg.DispatchIds))
 	for i, id := range res.Msg.DispatchIds {
-		ids[i] = ID(id)
+		ids[i] = dispatchproto.ID(id)
 	}
 	return ids, nil
 }
