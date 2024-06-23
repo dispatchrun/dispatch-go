@@ -260,8 +260,8 @@ func NewError(err error) Error {
 	return NewErrorMessage(errorTypeOf(err), err.Error())
 }
 
-// NewErrorf creates an Error from the specified message and args.
-func NewErrorf(msg string, args ...any) Error {
+// Errorf creates an Error from the specified message and args.
+func Errorf(msg string, args ...any) Error {
 	return NewError(fmt.Errorf(msg, args...))
 }
 

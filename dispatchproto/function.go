@@ -12,8 +12,7 @@ type FunctionMap map[string]Function
 func (m FunctionMap) Run(ctx context.Context, req Request) Response {
 	fn, ok := m[req.Function()]
 	if !ok {
-		err := NewErrorf("function %q not found", req.Function())
-		return NewResponse(NotFoundStatus, err)
+		return NewResponse(NotFoundStatus, Errorf("function %q not found", req.Function()))
 	}
 	return fn(ctx, req)
 }

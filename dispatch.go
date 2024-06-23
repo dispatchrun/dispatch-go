@@ -209,8 +209,8 @@ func (d *Dispatch) Client() (*dispatchclient.Client, error) {
 	return d.client, d.clientErr
 }
 
-// Serve serves the Dispatch endpoint.
-func (d *Dispatch) Serve() error {
+// ListenAndServe serves the Dispatch endpoint.
+func (d *Dispatch) ListenAndServe() error {
 	mux := http.NewServeMux()
 	mux.Handle(d.Handler())
 
