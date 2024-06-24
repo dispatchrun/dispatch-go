@@ -52,5 +52,6 @@ func run() error {
 	if output != "88888888" {
 		return fmt.Errorf("unexpected output: %q", output)
 	}
+	fmt.Println("OK")
 	return nil
 }
