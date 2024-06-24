@@ -1,3 +1,5 @@
+//go:build !durable
+
 package dispatchproto
 
 // ID is an identifier for a dispatched function call.

@@ -1,3 +1,5 @@
+//go:build !durable
+
 package dispatchcoro
 
 import (

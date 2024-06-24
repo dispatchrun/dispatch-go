@@ -1,3 +1,5 @@
+//go:build !durable
+
 package dispatchclient
 
 import "github.com/dispatchrun/coroutine/types"

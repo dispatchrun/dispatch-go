@@ -32,4 +32,13 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GOVERSION }}
-      - run: go test -cover ./...
+      - run: make test
+
+  integration_test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GOVERSION }}
+      - run: make integration-test

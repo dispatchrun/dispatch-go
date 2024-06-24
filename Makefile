@@ -15,9 +15,7 @@ integration-test: clean coroc
 	go run -tags durable ./dispatchtest/integration # durable mode
 
 clean:
-	find . -name '*_durable.go' -delete
+	@find . -name '*_durable.go' -delete
 
 coroc:
-	@which coroc &>/dev/null \
-		|| echo "Installing coroc..." \
-		&& go install github.com/dispatchrun/coroutine/compiler/cmd/coroc@latest
+	@which coroc >/dev/null || go install github.com/dispatchrun/coroutine/compiler/cmd/coroc@latest
