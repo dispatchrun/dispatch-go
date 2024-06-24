@@ -50,7 +50,7 @@ func New(opts ...Option) (*Dispatch, error) {
 		functions: map[string]dispatchproto.Function{},
 	}
 	for _, opt := range opts {
-		opt(d)
+		opt.configureDispatch(d)
 	}
 
 	// Prepare the endpoint URL.
@@ -123,14 +123,20 @@ func New(opts ...Option) (*Dispatch, error) {
 }
 
 // Option configures a Dispatch endpoint.
-type Option func(*Dispatch)
+type Option interface {
+	configureDispatch(*Dispatch)
+}
+
+type optionFunc func(*Dispatch)
+
+func (f optionFunc) configureDispatch(d *Dispatch) { f(d) }
 
 // EndpointUrl sets the URL of the Dispatch endpoint.
 //
 // It defaults to the value of the DISPATCH_ENDPOINT_URL environment
 // variable.
 func EndpointUrl(endpointUrl string) Option {
-	return func(d *Dispatch) { d.endpointUrl = endpointUrl }
+	return optionFunc(func(d *Dispatch) { d.endpointUrl = endpointUrl })
 }
 
 // VerificationKey sets the verification key to use when verifying
@@ -144,7 +150,7 @@ func EndpointUrl(endpointUrl string) Option {
 // If a verification key is not provided, request signatures will
 // not be validated.
 func VerificationKey(verificationKey string) Option {
-	return func(d *Dispatch) { d.verificationKey = verificationKey }
+	return optionFunc(func(d *Dispatch) { d.verificationKey = verificationKey })
 }
 
 // ServeAddress sets the address that the Dispatch endpoint
@@ -157,7 +163,7 @@ func VerificationKey(verificationKey string) Option {
 // variable, which is automatically set by the Dispatch CLI. If this
 // is unset, it defaults to 127.0.0.1:8000.
 func ServeAddress(addr string) Option {
-	return func(d *Dispatch) { d.serveAddr = addr }
+	return optionFunc(func(d *Dispatch) { d.serveAddr = addr })
 }
 
 // Env sets the environment variables that a Dispatch endpoint
@@ -165,7 +171,7 @@ func ServeAddress(addr string) Option {
 //
 // It defaults to os.Environ().
 func Env(env ...string) Option {
-	return func(d *Dispatch) { d.env = env }
+	return optionFunc(func(d *Dispatch) { d.env = env })
 }
 
 // Client sets the client to use when dispatching calls
@@ -177,7 +183,7 @@ func Env(env ...string) Option {
 // control is required over client configuration, the custom
 // client instance can be registered here and used instead.
 func Client(client *dispatchclient.Client) Option {
-	return func(d *Dispatch) { d.client = client }
+	return optionFunc(func(d *Dispatch) { d.client = client })
 }
 
 // Register registers a function.
