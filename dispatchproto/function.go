@@ -1,3 +1,5 @@
+//go:build !durable
+
 package dispatchproto
 
 import "context"
