@@ -234,7 +234,13 @@ func (f *Function[I, O]) Gather(inputs []I, opts ...dispatchproto.CallOption) ([
 	return dispatchcoro.Gather[O](calls...)
 }
 
+func (f *Function[I, O]) configureDispatch(d *Dispatch) {
+	d.Register(f)
+}
+
 // AnyFunction is a Function[I, O] instance.
 type AnyFunction interface {
+	Option
+
 	Register(*Dispatch) (string, dispatchproto.Function)
 }
