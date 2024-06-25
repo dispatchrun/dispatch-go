@@ -180,7 +180,10 @@ func (f *Function[I, O]) deserialize(state dispatchproto.Any) (dispatchcoro.Inst
 // on a Dispatch endpoint.
 func (f *Function[I, O]) Register(endpoint *Dispatch) (string, dispatchproto.Function) {
 	f.endpoint = endpoint
-	return f.name, f.run
+
+	return f.name, func(ctx context.Context, req dispatchproto.Request) dispatchproto.Response {
+		return f.run(ctx, req)
+	}
 }
 
 func (c *Function[I, O]) entrypoint(input I) func() dispatchproto.Response {
