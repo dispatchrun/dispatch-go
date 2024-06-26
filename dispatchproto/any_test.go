@@ -141,17 +141,27 @@ func TestAnyTextMarshaler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	var v2 *textMarshaler // (pointer)
 	if err := boxed.Unmarshal(&v2); err != nil {
 		t.Fatal(err)
 	} else if v2.value != v.value {
 		t.Errorf("unexpected serialized value: %v", v2.value)
 	}
+
 	var v3 textMarshaler // (not a pointer)
 	if err := boxed.Unmarshal(&v3); err != nil {
 		t.Fatal(err)
 	} else if v3.value != v.value {
 		t.Errorf("unexpected serialized value: %v", v3.value)
+	}
+
+	// Check a string is sent on the wire.
+	var v4 string
+	if err := boxed.Unmarshal(&v4); err != nil {
+		t.Fatal(err)
+	} else if v4 != v.value {
+		t.Errorf("unexpected serialized value: %v", v4)
 	}
 }
 
@@ -161,17 +171,27 @@ func TestAnyBinaryMarshaler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	var v2 *binaryMarshaler // (pointer)
 	if err := boxed.Unmarshal(&v2); err != nil {
 		t.Fatal(err)
 	} else if !bytes.Equal(v2.value, v.value) {
 		t.Errorf("unexpected serialized value: %v", v2.value)
 	}
+
 	var v3 binaryMarshaler // (not a pointer)
 	if err := boxed.Unmarshal(&v3); err != nil {
 		t.Fatal(err)
 	} else if !bytes.Equal(v3.value, v.value) {
 		t.Errorf("unexpected serialized value: %v", v3.value)
+	}
+
+	// Check bytes are sent on the wire.
+	var v4 []byte
+	if err := boxed.Unmarshal(&v4); err != nil {
+		t.Fatal(err)
+	} else if !bytes.Equal(v4, v.value) {
+		t.Errorf("unexpected serialized value: %v", v4)
 	}
 }
 
