@@ -2,6 +2,7 @@ package dispatchproto_test
 
 import (
 	"bytes"
+	"encoding"
 	"fmt"
 	"math"
 	"reflect"
@@ -134,6 +135,46 @@ func TestAnyDuration(t *testing.T) {
 	}
 }
 
+func TestAnyTextMarshaler(t *testing.T) {
+	v := &textMarshaler{value: "foobar"}
+	boxed, err := dispatchproto.NewAny(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v2 *textMarshaler // (pointer)
+	if err := boxed.Unmarshal(&v2); err != nil {
+		t.Fatal(err)
+	} else if v2.value != v.value {
+		t.Errorf("unexpected serialized value: %v", v2.value)
+	}
+	var v3 textMarshaler // (not a pointer)
+	if err := boxed.Unmarshal(&v3); err != nil {
+		t.Fatal(err)
+	} else if v3.value != v.value {
+		t.Errorf("unexpected serialized value: %v", v3.value)
+	}
+}
+
+func TestAnyBinaryMarshaler(t *testing.T) {
+	v := &binaryMarshaler{value: []byte("foobar")}
+	boxed, err := dispatchproto.NewAny(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v2 *binaryMarshaler // (pointer)
+	if err := boxed.Unmarshal(&v2); err != nil {
+		t.Fatal(err)
+	} else if !bytes.Equal(v2.value, v.value) {
+		t.Errorf("unexpected serialized value: %v", v2.value)
+	}
+	var v3 binaryMarshaler // (not a pointer)
+	if err := boxed.Unmarshal(&v3); err != nil {
+		t.Fatal(err)
+	} else if !bytes.Equal(v3.value, v.value) {
+		t.Errorf("unexpected serialized value: %v", v3.value)
+	}
+}
+
 func TestOverflow(t *testing.T) {
 	var i8 int8
 	if err := dispatchproto.Int(math.MinInt8 - 1).Unmarshal(&i8); err == nil || err.Error() != "cannot unmarshal *wrapperspb.Int64Value of -129 into int8" {
@@ -231,6 +272,10 @@ func TestAny(t *testing.T) {
 		// Raw proto.Message
 		&emptypb.Empty{},
 		&wrapperspb.Int32Value{Value: 11},
+
+		// encoding.{Text,Binary}Marshaler
+		&textMarshaler{value: "foobar"},
+		&binaryMarshaler{value: []byte("foobar")},
 	} {
 		t.Run(fmt.Sprintf("%v", v), func(t *testing.T) {
 			boxed, err := dispatchproto.NewAny(v)
@@ -268,3 +313,31 @@ func TestAny(t *testing.T) {
 		})
 	}
 }
+
+type textMarshaler struct{ value string }
+
+func (t *textMarshaler) MarshalText() ([]byte, error) {
+	return []byte(t.value), nil
+}
+
+func (t *textMarshaler) UnmarshalText(b []byte) error {
+	t.value = string(b)
+	return nil
+}
+
+var _ encoding.TextMarshaler = (*textMarshaler)(nil)
+var _ encoding.TextUnmarshaler = (*textMarshaler)(nil)
+
+type binaryMarshaler struct{ value []byte }
+
+func (t *binaryMarshaler) MarshalBinary() ([]byte, error) {
+	return t.value, nil
+}
+
+func (t *binaryMarshaler) UnmarshalBinary(b []byte) error {
+	t.value = b
+	return nil
+}
+
+var _ encoding.BinaryMarshaler = (*binaryMarshaler)(nil)
+var _ encoding.BinaryUnmarshaler = (*binaryMarshaler)(nil)

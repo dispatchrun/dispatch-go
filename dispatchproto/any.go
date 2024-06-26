@@ -3,6 +3,7 @@
 package dispatchproto
 
 import (
+	"encoding"
 	"fmt"
 	"reflect"
 	"time"
@@ -78,17 +79,33 @@ func Duration(v time.Duration) Any {
 
 // NewAny creates an Any from a proto.Message.
 func NewAny(v any) (Any, error) {
+	if rv := reflect.ValueOf(v); rv.Kind() == reflect.Pointer && rv.IsNil() {
+		return Nil(), nil
+	}
 	var m proto.Message
 	switch vv := v.(type) {
 	case nil:
 		m = &emptypb.Empty{}
-
 	case proto.Message:
 		m = vv
-
+	case time.Time:
+		m = timestamppb.New(vv)
+	case time.Duration:
+		m = durationpb.New(vv)
+	case encoding.TextMarshaler:
+		b, err := vv.MarshalText()
+		if err != nil {
+			return Any{}, err
+		}
+		m = wrapperspb.String(string(b))
+	case encoding.BinaryMarshaler:
+		b, err := vv.MarshalBinary()
+		if err != nil {
+			return Any{}, err
+		}
+		m = wrapperspb.Bytes(b)
 	case bool:
 		m = wrapperspb.Bool(vv)
-
 	case int:
 		m = wrapperspb.Int64(int64(vv))
 	case int8:
@@ -99,7 +116,6 @@ func NewAny(v any) (Any, error) {
 		m = wrapperspb.Int64(int64(vv))
 	case int64:
 		m = wrapperspb.Int64(vv)
-
 	case uint:
 		m = wrapperspb.UInt64(uint64(vv))
 	case uint8:
@@ -110,31 +126,16 @@ func NewAny(v any) (Any, error) {
 		m = wrapperspb.UInt64(uint64(vv))
 	case uint64:
 		m = wrapperspb.UInt64(uint64(vv))
-
 	case float32:
 		m = wrapperspb.Double(float64(vv))
 	case float64:
 		m = wrapperspb.Double(vv)
-
 	case string:
 		m = wrapperspb.String(vv)
-
 	case []byte:
 		m = wrapperspb.Bytes(vv)
-
-	case time.Time:
-		m = timestamppb.New(vv)
-	case time.Duration:
-		m = durationpb.New(vv)
-
 	default:
-		rv := reflect.ValueOf(v)
-		if rv.Kind() == reflect.Pointer && rv.IsNil() {
-			m = &emptypb.Empty{}
-		} else {
-			// TODO: support more types
-			return Any{}, fmt.Errorf("unsupported type: %T", v)
-		}
+		return Any{}, fmt.Errorf("cannot serialize %v (%T)", v, v)
 	}
 
 	proto, err := anypb.New(m)
@@ -155,6 +156,9 @@ func knownAny(v any) Any {
 var (
 	timeType     = reflect.TypeFor[time.Time]()
 	durationType = reflect.TypeFor[time.Duration]()
+
+	textUnmarshalerType   = reflect.TypeFor[encoding.TextUnmarshaler]()
+	binaryUnmarshalerType = reflect.TypeFor[encoding.BinaryUnmarshaler]()
 )
 
 // Unmarshal unmarshals the value.
@@ -173,13 +177,57 @@ func (a Any) Unmarshal(v any) error {
 	if err != nil {
 		return err
 	}
-	rm := reflect.ValueOf(m)
 
-	switch elem.Type() {
-	case rm.Type(): // e.g. a proto.Message impl
+	// Check for an exact match on type (v is a proto.Message).
+	rm := reflect.ValueOf(m)
+	if elem.Type() == rm.Type() {
 		elem.Set(rm)
 		return nil
+	}
 
+	// Check for string => TextUnmarshaler and []byte => BinaryUnmarshaler.
+	switch mm := m.(type) {
+	case *wrapperspb.StringValue:
+		var target reflect.Value
+		if elem.Type().Implements(textUnmarshalerType) {
+			if elem.Kind() == reflect.Pointer && elem.IsNil() {
+				elem.Set(reflect.New(elem.Type().Elem()))
+			}
+			target = elem
+		} else if rv.Type().Implements(textUnmarshalerType) {
+			target = rv
+		}
+		if target != (reflect.Value{}) {
+			unmarshalText := target.MethodByName("UnmarshalText")
+			b := []byte(mm.Value)
+			res := unmarshalText.Call([]reflect.Value{reflect.ValueOf(b)})
+			if err := res[0].Interface(); err != nil {
+				return err.(error)
+			}
+			return nil
+		}
+
+	case *wrapperspb.BytesValue:
+		var target reflect.Value
+		if elem.Type().Implements(binaryUnmarshalerType) {
+			if elem.Kind() == reflect.Pointer && elem.IsNil() {
+				elem.Set(reflect.New(elem.Type().Elem()))
+			}
+			target = elem
+		} else if rv.Type().Implements(binaryUnmarshalerType) {
+			target = rv
+		}
+		if target != (reflect.Value{}) {
+			unmarshalBinary := target.MethodByName("UnmarshalBinary")
+			res := unmarshalBinary.Call([]reflect.Value{reflect.ValueOf(mm.Value)})
+			if err := res[0].Interface(); err != nil {
+				return err.(error)
+			}
+			return nil
+		}
+	}
+
+	switch elem.Type() {
 	case timeType:
 		v, ok := m.(*timestamppb.Timestamp)
 		if !ok {
@@ -279,16 +327,14 @@ func (a Any) Unmarshal(v any) error {
 
 	case reflect.Slice:
 		if elem.Type().Elem().Kind() == reflect.Uint8 {
-			v, ok := m.(*wrapperspb.BytesValue)
-			if !ok {
-				return fmt.Errorf("cannot unmarshal %T into []byte", m)
+			if v, ok := m.(*wrapperspb.BytesValue); ok {
+				elem.SetBytes(v.Value)
+				return nil
 			}
-			elem.SetBytes(v.Value)
-			return nil
 		}
 	}
 
-	return fmt.Errorf("unsupported type: %v (%v kind)", elem.Type(), elem.Kind())
+	return fmt.Errorf("cannot deserialize %T into %v (%v kind)", m, elem.Type(), elem.Kind())
 }
 
 // TypeURL is a URL that uniquely identifies the type of the
