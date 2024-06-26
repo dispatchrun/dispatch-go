@@ -348,10 +348,9 @@ func (a Any) TypeURL() string {
 	return a.proto.GetTypeUrl()
 }
 
-func (a Any) Format(f fmt.State, verb rune) {
-	// Implement fmt.Formatter rather than fmt.Stringer
-	// so that we can use String() to extract the string value.
-	_, _ = f.Write([]byte(fmt.Sprintf("Any(%s)", a.proto)))
+// String is the string representation of the any value.
+func (a Any) String() string {
+	return fmt.Sprintf("Any(%s)", a.proto)
 }
 
 // Equal is true if this Any is equal to another.
