@@ -77,8 +77,13 @@ func Duration(v time.Duration) Any {
 	return knownAny(durationpb.New(v))
 }
 
-// NewAny creates an Any from a proto.Message.
-func NewAny(v any) (Any, error) {
+// Marshal packages a Go value into an Any, for use as input
+// to or output from a Dispatch function.
+//
+// Primitive values (booleans, integers, floats, strings, bytes, timestamps,
+// durations) are supported, along with values that implement either
+// proto.Message, encoding.TextMarshaler or encoding.BinaryMarshaler.
+func Marshal(v any) (Any, error) {
 	if rv := reflect.ValueOf(v); rv.Kind() == reflect.Pointer && rv.IsNil() {
 		return Nil(), nil
 	}
@@ -146,7 +151,7 @@ func NewAny(v any) (Any, error) {
 }
 
 func knownAny(v any) Any {
-	any, err := NewAny(v)
+	any, err := Marshal(v)
 	if err != nil {
 		panic(err)
 	}

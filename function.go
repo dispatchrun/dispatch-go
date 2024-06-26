@@ -35,7 +35,7 @@ func (f *Function[I, O]) Name() string {
 
 // BuildCall creates (but does not dispatch) a Call for the function.
 func (f *Function[I, O]) BuildCall(input I, opts ...dispatchproto.CallOption) (dispatchproto.Call, error) {
-	boxedInput, err := dispatchproto.NewAny(input)
+	boxedInput, err := dispatchproto.Marshal(input)
 	if err != nil {
 		return dispatchproto.Call{}, fmt.Errorf("cannot serialize input: %v", err)
 	}
@@ -145,7 +145,7 @@ func (f *Function[I, O]) tearDown(id dispatchcoro.InstanceID, coro dispatchcoro.
 func (f *Function[I, O]) serialize(id dispatchcoro.InstanceID, coro dispatchcoro.Coroutine) (dispatchproto.Any, error) {
 	// In volatile mode, serialize a reference to the coroutine instance.
 	if !coroutine.Durable {
-		return dispatchproto.NewAny(id)
+		return dispatchproto.Marshal(id)
 	}
 
 	// In durable mode, serialize the state of the coroutine.
@@ -198,7 +198,7 @@ func (c *Function[I, O]) entrypoint(input I) func() dispatchproto.Response {
 			// TODO: include output if not nil
 			return dispatchproto.NewResponseError(err)
 		}
-		boxedOutput, err := dispatchproto.NewAny(output)
+		boxedOutput, err := dispatchproto.Marshal(output)
 		if err != nil {
 			return dispatchproto.NewResponseErrorf("%w: invalid output %v: %v", ErrInvalidResponse, output, err)
 		}

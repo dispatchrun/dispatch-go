@@ -137,7 +137,7 @@ func TestAnyDuration(t *testing.T) {
 
 func TestAnyTextMarshaler(t *testing.T) {
 	v := &textMarshaler{value: "foobar"}
-	boxed, err := dispatchproto.NewAny(v)
+	boxed, err := dispatchproto.Marshal(v)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +157,7 @@ func TestAnyTextMarshaler(t *testing.T) {
 
 func TestAnyBinaryMarshaler(t *testing.T) {
 	v := &binaryMarshaler{value: []byte("foobar")}
-	boxed, err := dispatchproto.NewAny(v)
+	boxed, err := dispatchproto.Marshal(v)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +218,7 @@ func TestOverflow(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 
-	badTime, err := dispatchproto.NewAny(&timestamppb.Timestamp{Seconds: math.MinInt64})
+	badTime, err := dispatchproto.Marshal(&timestamppb.Timestamp{Seconds: math.MinInt64})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +227,7 @@ func TestOverflow(t *testing.T) {
 		t.Error("expected an error")
 	}
 
-	badDuration, err := dispatchproto.NewAny(&durationpb.Duration{Seconds: math.MaxInt64})
+	badDuration, err := dispatchproto.Marshal(&durationpb.Duration{Seconds: math.MaxInt64})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -278,7 +278,7 @@ func TestAny(t *testing.T) {
 		&binaryMarshaler{value: []byte("foobar")},
 	} {
 		t.Run(fmt.Sprintf("%v", v), func(t *testing.T) {
-			boxed, err := dispatchproto.NewAny(v)
+			boxed, err := dispatchproto.Marshal(v)
 			if err != nil {
 				t.Fatalf("NewAny(%v): %v", v, err)
 			}
