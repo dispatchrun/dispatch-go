@@ -10,12 +10,18 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 // Any represents any value.
 type Any struct{ proto *anypb.Any }
+
+// Nil creates an Any that contains nil/null.
+func Nil() Any {
+	return knownAny(&emptypb.Empty{})
+}
 
 // Bool creates an Any that contains a boolean value.
 func Bool(v bool) Any {
@@ -74,6 +80,9 @@ func Duration(v time.Duration) Any {
 func NewAny(v any) (Any, error) {
 	var m proto.Message
 	switch vv := v.(type) {
+	case nil:
+		m = &emptypb.Empty{}
+
 	case proto.Message:
 		m = vv
 
@@ -119,8 +128,13 @@ func NewAny(v any) (Any, error) {
 		m = durationpb.New(vv)
 
 	default:
-		// TODO: support more types
-		return Any{}, fmt.Errorf("unsupported type: %T", v)
+		rv := reflect.ValueOf(v)
+		if rv.Kind() == reflect.Pointer && rv.IsNil() {
+			m = &emptypb.Empty{}
+		} else {
+			// TODO: support more types
+			return Any{}, fmt.Errorf("unsupported type: %T", v)
+		}
 	}
 
 	proto, err := anypb.New(m)
@@ -151,7 +165,7 @@ func (a Any) Unmarshal(v any) error {
 
 	rv := reflect.ValueOf(v)
 	if rv.Kind() != reflect.Pointer || rv.IsNil() {
-		panic("Any.Unmarshal expects a pointer")
+		panic("Any.Unmarshal expects a pointer to a non-nil object")
 	}
 	elem := rv.Elem()
 
@@ -249,9 +263,22 @@ func (a Any) Unmarshal(v any) error {
 		elem.SetString(v.Value)
 		return nil
 
-	default:
-		// Special case for []byte. Other reflect.Slice values aren't supported at this time.
-		if elem.Kind() == reflect.Slice && elem.Type().Elem().Kind() == reflect.Uint8 {
+	case reflect.Interface:
+		if elem.NumMethod() == 0 {
+			if _, ok := m.(*emptypb.Empty); ok {
+				elem.SetZero()
+				return nil
+			}
+		}
+
+	case reflect.Pointer:
+		if _, ok := m.(*emptypb.Empty); ok {
+			elem.Set(reflect.New(elem.Type()).Elem())
+			return nil
+		}
+
+	case reflect.Slice:
+		if elem.Type().Elem().Kind() == reflect.Uint8 {
 			v, ok := m.(*wrapperspb.BytesValue)
 			if !ok {
 				return fmt.Errorf("cannot unmarshal %T into []byte", m)
@@ -259,10 +286,9 @@ func (a Any) Unmarshal(v any) error {
 			elem.SetBytes(v.Value)
 			return nil
 		}
-
-		// TODO: support more types
-		return fmt.Errorf("unsupported type: %v (%v kind)", elem.Type(), elem.Kind())
 	}
+
+	return fmt.Errorf("unsupported type: %v (%v kind)", elem.Type(), elem.Kind())
 }
 
 // TypeURL is a URL that uniquely identifies the type of the
