@@ -4,6 +4,7 @@ package dispatchproto
 
 import (
 	"encoding"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -82,7 +84,8 @@ func Duration(v time.Duration) Any {
 //
 // Primitive values (booleans, integers, floats, strings, bytes, timestamps,
 // durations) are supported, along with values that implement either
-// proto.Message, encoding.TextMarshaler or encoding.BinaryMarshaler.
+// proto.Message, json.Marshaler, encoding.TextMarshaler or
+// encoding.BinaryMarshaler.
 func Marshal(v any) (Any, error) {
 	if rv := reflect.ValueOf(v); rv.Kind() == reflect.Pointer && rv.IsNil() {
 		return Nil(), nil
@@ -97,6 +100,23 @@ func Marshal(v any) (Any, error) {
 		m = timestamppb.New(vv)
 	case time.Duration:
 		m = durationpb.New(vv)
+	case json.Marshaler:
+		// Obviously not ideal going to bytes, then to any, then
+		// to structpb.Value! It would be more efficient to use
+		// a json.Decoder, and/or to use a third-party JSON library.
+		b, err := vv.MarshalJSON()
+		if err != nil {
+			return Any{}, err
+		}
+		var v any
+		if err := json.Unmarshal(b, &v); err != nil {
+			return Any{}, err
+		}
+		m, err = structpb.NewValue(v)
+		if err != nil {
+			return Any{}, err
+		}
+
 	case encoding.TextMarshaler:
 		b, err := vv.MarshalText()
 		if err != nil {
@@ -162,6 +182,7 @@ var (
 	timeType     = reflect.TypeFor[time.Time]()
 	durationType = reflect.TypeFor[time.Duration]()
 
+	jsonUnmarshalerType   = reflect.TypeFor[json.Unmarshaler]()
 	textUnmarshalerType   = reflect.TypeFor[encoding.TextUnmarshaler]()
 	binaryUnmarshalerType = reflect.TypeFor[encoding.BinaryUnmarshaler]()
 )
@@ -190,8 +211,34 @@ func (a Any) Unmarshal(v any) error {
 		return nil
 	}
 
-	// Check for string => TextUnmarshaler and []byte => BinaryUnmarshaler.
+	// Check for:
+	// - structpb.Value => json.Unmarshaler
+	// - wrapperspb.StringValue => encoding.TextUnmarshaler
+	// - wrapperspb.BytesValue => encoding.BinaryUnmarshaler
 	switch mm := m.(type) {
+	case *structpb.Value:
+		var target reflect.Value
+		if elem.Type().Implements(jsonUnmarshalerType) {
+			if elem.Kind() == reflect.Pointer && elem.IsNil() {
+				elem.Set(reflect.New(elem.Type().Elem()))
+			}
+			target = elem
+		} else if rv.Type().Implements(jsonUnmarshalerType) {
+			target = rv
+		}
+		if target != (reflect.Value{}) {
+			unmarshalJSON := target.MethodByName("UnmarshalJSON")
+			b, err := mm.MarshalJSON()
+			if err != nil {
+				return err
+			}
+			res := unmarshalJSON.Call([]reflect.Value{reflect.ValueOf(b)})
+			if err := res[0].Interface(); err != nil {
+				return err.(error)
+			}
+			return nil
+		}
+
 	case *wrapperspb.StringValue:
 		var target reflect.Value
 		if elem.Type().Implements(textUnmarshalerType) {

@@ -20,6 +20,7 @@ require (
 	github.com/bufbuild/protovalidate-go v0.6.2 // indirect
 	github.com/dunglas/httpsfv v1.0.2 // indirect
 	github.com/google/cel-go v0.20.1 // indirect
+	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/stoewer/go-strcase v1.3.0 // indirect
 	golang.org/x/exp v0.0.0-20240613232115-7f521ea00fb8 // indirect
 	golang.org/x/text v0.16.0 // indirect

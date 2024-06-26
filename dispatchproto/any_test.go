@@ -3,6 +3,7 @@ package dispatchproto_test
 import (
 	"bytes"
 	"encoding"
+	"encoding/json"
 	"fmt"
 	"math"
 	"reflect"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/dispatchrun/dispatch-go/dispatchproto"
+	"github.com/google/go-cmp/cmp"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -136,7 +138,7 @@ func TestAnyDuration(t *testing.T) {
 }
 
 func TestAnyTextMarshaler(t *testing.T) {
-	v := &textMarshaler{value: "foobar"}
+	v := &textMarshaler{Value: "foobar"}
 	boxed, err := dispatchproto.Marshal(v)
 	if err != nil {
 		t.Fatal(err)
@@ -145,28 +147,28 @@ func TestAnyTextMarshaler(t *testing.T) {
 	var v2 *textMarshaler // (pointer)
 	if err := boxed.Unmarshal(&v2); err != nil {
 		t.Fatal(err)
-	} else if v2.value != v.value {
-		t.Errorf("unexpected serialized value: %v", v2.value)
+	} else if v2.Value != v.Value {
+		t.Errorf("unexpected serialized value: %v", v2.Value)
 	}
 
 	var v3 textMarshaler // (not a pointer)
 	if err := boxed.Unmarshal(&v3); err != nil {
 		t.Fatal(err)
-	} else if v3.value != v.value {
-		t.Errorf("unexpected serialized value: %v", v3.value)
+	} else if v3.Value != v.Value {
+		t.Errorf("unexpected serialized value: %v", v3.Value)
 	}
 
 	// Check a string is sent on the wire.
 	var v4 string
 	if err := boxed.Unmarshal(&v4); err != nil {
 		t.Fatal(err)
-	} else if v4 != v.value {
+	} else if v4 != v.Value {
 		t.Errorf("unexpected serialized value: %v", v4)
 	}
 }
 
 func TestAnyBinaryMarshaler(t *testing.T) {
-	v := &binaryMarshaler{value: []byte("foobar")}
+	v := &binaryMarshaler{Value: []byte("foobar")}
 	boxed, err := dispatchproto.Marshal(v)
 	if err != nil {
 		t.Fatal(err)
@@ -175,23 +177,52 @@ func TestAnyBinaryMarshaler(t *testing.T) {
 	var v2 *binaryMarshaler // (pointer)
 	if err := boxed.Unmarshal(&v2); err != nil {
 		t.Fatal(err)
-	} else if !bytes.Equal(v2.value, v.value) {
-		t.Errorf("unexpected serialized value: %v", v2.value)
+	} else if !bytes.Equal(v2.Value, v.Value) {
+		t.Errorf("unexpected serialized value: %v", v2.Value)
 	}
 
 	var v3 binaryMarshaler // (not a pointer)
 	if err := boxed.Unmarshal(&v3); err != nil {
 		t.Fatal(err)
-	} else if !bytes.Equal(v3.value, v.value) {
-		t.Errorf("unexpected serialized value: %v", v3.value)
+	} else if !bytes.Equal(v3.Value, v.Value) {
+		t.Errorf("unexpected serialized value: %v", v3.Value)
 	}
 
 	// Check bytes are sent on the wire.
 	var v4 []byte
 	if err := boxed.Unmarshal(&v4); err != nil {
 		t.Fatal(err)
-	} else if !bytes.Equal(v4, v.value) {
+	} else if !bytes.Equal(v4, v.Value) {
 		t.Errorf("unexpected serialized value: %v", v4)
+	}
+}
+
+func TestAnyJsonMarshaler(t *testing.T) {
+	v := &jsonMarshaler{Value: jsonValue{
+		Bool:   true,
+		Int:    11,
+		Float:  3.14,
+		String: "foo",
+		List:   []any{nil, false, []any{"foo", "bar"}, map[string]any{"abc": "xyz"}},
+		Object: map[string]any{"n": 3.14, "flag": true, "tags": []any{"x", "y", "z"}},
+	}}
+	boxed, err := dispatchproto.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var v2 *jsonMarshaler // (pointer)
+	if err := boxed.Unmarshal(&v2); err != nil {
+		t.Fatal(err)
+	} else if diff := cmp.Diff(v2.Value, v.Value); diff != "" {
+		t.Errorf("unexpected serialized value: %v", diff)
+	}
+
+	var v3 *jsonMarshaler // (not a pointer)
+	if err := boxed.Unmarshal(&v3); err != nil {
+		t.Fatal(err)
+	} else if diff := cmp.Diff(v3.Value, v.Value); diff != "" {
+		t.Errorf("unexpected serialized value: %v", diff)
 	}
 }
 
@@ -294,13 +325,23 @@ func TestAny(t *testing.T) {
 		&wrapperspb.Int32Value{Value: 11},
 
 		// encoding.{Text,Binary}Marshaler
-		&textMarshaler{value: "foobar"},
-		&binaryMarshaler{value: []byte("foobar")},
+		&textMarshaler{Value: "foobar"},
+		&binaryMarshaler{Value: []byte("foobar")},
+
+		// json.Marshaler
+		&jsonMarshaler{Value: jsonValue{
+			Bool:   true,
+			Int:    11,
+			Float:  3.14,
+			String: "foo",
+			List:   []any{nil, false, []any{"foo", "bar"}, map[string]any{"abc": "xyz"}},
+			Object: map[string]any{"n": 3.14, "flag": true, "tags": []any{"x", "y", "z"}},
+		}},
 	} {
 		t.Run(fmt.Sprintf("%v", v), func(t *testing.T) {
 			boxed, err := dispatchproto.Marshal(v)
 			if err != nil {
-				t.Fatalf("NewAny(%v): %v", v, err)
+				t.Fatalf("Marshal(%v): %v", v, err)
 			}
 
 			var rt reflect.Type
@@ -321,43 +362,64 @@ func TestAny(t *testing.T) {
 				want = reflect.ValueOf(v).Interface()
 			}
 
-			var equal bool
 			if wantProto, ok := want.(proto.Message); ok {
-				equal = proto.Equal(got.(proto.Message), wantProto)
-			} else {
-				equal = reflect.DeepEqual(got, want)
-			}
-			if !equal {
-				t.Errorf("unexpected NewAny(%v).Unmarshal result: %#v", v, got)
+				if equal := proto.Equal(got.(proto.Message), wantProto); !equal {
+					t.Errorf("unexpected Marshal(%v).Unmarshal result: %#v", v, got)
+				}
+			} else if diff := cmp.Diff(want, got); diff != "" {
+				t.Errorf("unexpected Marshal(%v).Unmarshal result: %v", v, diff)
 			}
 		})
 	}
 }
 
-type textMarshaler struct{ value string }
+type textMarshaler struct{ Value string }
 
 func (t *textMarshaler) MarshalText() ([]byte, error) {
-	return []byte(t.value), nil
+	return []byte(t.Value), nil
 }
 
 func (t *textMarshaler) UnmarshalText(b []byte) error {
-	t.value = string(b)
+	t.Value = string(b)
 	return nil
 }
 
 var _ encoding.TextMarshaler = (*textMarshaler)(nil)
 var _ encoding.TextUnmarshaler = (*textMarshaler)(nil)
 
-type binaryMarshaler struct{ value []byte }
+type binaryMarshaler struct{ Value []byte }
 
 func (t *binaryMarshaler) MarshalBinary() ([]byte, error) {
-	return t.value, nil
+	return t.Value, nil
 }
 
 func (t *binaryMarshaler) UnmarshalBinary(b []byte) error {
-	t.value = b
+	t.Value = b
 	return nil
 }
 
 var _ encoding.BinaryMarshaler = (*binaryMarshaler)(nil)
 var _ encoding.BinaryUnmarshaler = (*binaryMarshaler)(nil)
+
+type jsonMarshaler struct{ Value jsonValue }
+
+type jsonValue struct {
+	Null   *any           `json:"null"`
+	Bool   bool           `json:"bool"`
+	String string         `json:"string"`
+	Int    int64          `json:"int"`
+	Float  float64        `json:"float"`
+	List   []any          `json:"list"`
+	Object map[string]any `json:"object"`
+}
+
+func (j *jsonMarshaler) MarshalJSON() ([]byte, error) {
+	return json.Marshal(j.Value)
+}
+
+func (j *jsonMarshaler) UnmarshalJSON(b []byte) error {
+	return json.Unmarshal(b, &j.Value)
+}
+
+var _ json.Marshaler = (*jsonMarshaler)(nil)
+var _ json.Unmarshaler = (*jsonMarshaler)(nil)
