@@ -16,6 +16,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
@@ -222,6 +223,23 @@ func TestAnyJsonMarshaler(t *testing.T) {
 	if err := boxed.Unmarshal(&v3); err != nil {
 		t.Fatal(err)
 	} else if diff := cmp.Diff(v3.Value, v.Value); diff != "" {
+		t.Errorf("unexpected serialized value: %v", diff)
+	}
+
+	// Check a structpb.Value is sent on the wire.
+	var v4 *structpb.Value
+	want := map[string]any{
+		"null":   nil,
+		"bool":   true,
+		"int":    float64(11), // (there's only one "number" type)
+		"float":  3.14,
+		"string": "foo",
+		"list":   []any{nil, false, []any{"foo", "bar"}, map[string]any{"abc": "xyz"}},
+		"object": map[string]any{"n": 3.14, "flag": true, "tags": []any{"x", "y", "z"}},
+	}
+	if err := boxed.Unmarshal(&v4); err != nil {
+		t.Fatal(err)
+	} else if diff := cmp.Diff(v4.AsInterface(), want); diff != "" {
 		t.Errorf("unexpected serialized value: %v", diff)
 	}
 }
