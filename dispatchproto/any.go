@@ -454,6 +454,22 @@ func newStructpbValue(rv reflect.Value) (*structpb.Value, error) {
 			}
 		}
 		return structpb.NewListValue(list), nil
+	case reflect.Map:
+		strct := &structpb.Struct{Fields: make(map[string]*structpb.Value, rv.Len())}
+		iter := rv.MapRange()
+		for iter.Next() {
+			k := iter.Key()
+			v := iter.Value()
+			if k.Kind() != reflect.String {
+				return nil, fmt.Errorf("cannot serialize map with %s (%s) key", k.Type(), k.Kind())
+			}
+			boxed, err := newStructpbValue(v)
+			if err != nil {
+				return nil, err
+			}
+			strct.Fields[k.String()] = boxed
+		}
+		return structpb.NewStructValue(strct), nil
 	}
 	return nil, fmt.Errorf("not implemented: %s", rv.Type())
 }
@@ -494,6 +510,20 @@ func fromStructpbValue(rv reflect.Value, s *structpb.Value) error {
 				if err := fromStructpbValue(rv.Index(i), value); err != nil {
 					return err
 				}
+			}
+			return nil
+		}
+	case reflect.Map:
+		if strct, ok := s.Kind.(*structpb.Value_StructValue); ok {
+			fields := strct.StructValue.Fields
+			rv.Set(reflect.MakeMapWithSize(rv.Type(), len(fields)))
+			valueType := rv.Type().Elem()
+			for key, value := range fields {
+				mv := reflect.New(valueType).Elem()
+				if err := fromStructpbValue(mv, value); err != nil {
+					return err
+				}
+				rv.SetMapIndex(reflect.ValueOf(key), mv)
 			}
 			return nil
 		}

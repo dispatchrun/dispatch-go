@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"net/http"
 	"reflect"
 	"strings"
 	"testing"
@@ -363,6 +364,12 @@ func TestAny(t *testing.T) {
 		[]float64{3.14, 1.25},
 		[][]string{{"foo", "bar"}, {"abc", "xyz"}},
 		[]any{3.14, true, "x", nil},
+
+		// maps
+		map[string]string{"abc": "xyz", "foo": "bar"},
+		map[string]int{"n": 3},
+		map[string]http.Header{"original": {"X-Foo": []string{"bar"}}},
+		map[string]any{"foo": "bar", "pi": 3.14},
 	} {
 		t.Run(fmt.Sprintf("%v", v), func(t *testing.T) {
 			boxed, err := dispatchproto.Marshal(v)
