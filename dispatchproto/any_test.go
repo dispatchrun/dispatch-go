@@ -362,6 +362,7 @@ func TestAny(t *testing.T) {
 		[]bool{true, false, true},
 		[]float64{3.14, 1.25},
 		[][]string{{"foo", "bar"}, {"abc", "xyz"}},
+		[]any{3.14, true, "x"},
 	} {
 		t.Run(fmt.Sprintf("%v", v), func(t *testing.T) {
 			boxed, err := dispatchproto.Marshal(v)

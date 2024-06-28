@@ -435,6 +435,10 @@ func newStructpbValue(rv reflect.Value) (*structpb.Value, error) {
 		return structpb.NewNumberValue(rv.Float()), nil
 	case reflect.String:
 		return structpb.NewStringValue(rv.String()), nil
+	case reflect.Interface:
+		if rv.NumMethod() == 0 { // interface{} aka. any
+			return newStructpbValue(reflect.ValueOf(rv.Interface()))
+		}
 	case reflect.Slice:
 		list := &structpb.ListValue{Values: make([]*structpb.Value, rv.Len())}
 		for i := range list.Values {
@@ -446,9 +450,8 @@ func newStructpbValue(rv reflect.Value) (*structpb.Value, error) {
 			}
 		}
 		return structpb.NewListValue(list), nil
-	default:
-		return nil, fmt.Errorf("not implemented: %s", rv.Type())
 	}
+	return nil, fmt.Errorf("not implemented: %s", rv.Type())
 }
 
 func fromStructpbValue(rv reflect.Value, s *structpb.Value) error {
@@ -488,6 +491,11 @@ func fromStructpbValue(rv reflect.Value, s *structpb.Value) error {
 					return err
 				}
 			}
+			return nil
+		}
+	case reflect.Interface:
+		if rv.NumMethod() == 0 { // interface{} aka. any
+			rv.Set(reflect.ValueOf(s.AsInterface()))
 			return nil
 		}
 	}
