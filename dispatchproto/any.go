@@ -459,15 +459,28 @@ func newStructpbValue(rv reflect.Value) (*structpb.Value, error) {
 		iter := rv.MapRange()
 		for iter.Next() {
 			k := iter.Key()
-			v := iter.Value()
-			if k.Kind() != reflect.String {
+
+			var strKey string
+			var hasStrKey bool
+			switch k.Kind() {
+			case reflect.String:
+				strKey = k.String()
+				hasStrKey = true
+			case reflect.Interface:
+				if s, ok := k.Interface().(string); ok {
+					strKey = s
+					hasStrKey = true
+				}
+			}
+			if !hasStrKey {
 				return nil, fmt.Errorf("cannot serialize map with %s (%s) key", k.Type(), k.Kind())
 			}
-			boxed, err := newStructpbValue(v)
+
+			v, err := newStructpbValue(iter.Value())
 			if err != nil {
 				return nil, err
 			}
-			strct.Fields[k.String()] = boxed
+			strct.Fields[strKey] = v
 		}
 		return structpb.NewStructValue(strct), nil
 	}

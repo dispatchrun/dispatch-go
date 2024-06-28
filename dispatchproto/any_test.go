@@ -369,7 +369,7 @@ func TestAny(t *testing.T) {
 		map[string]string{"abc": "xyz", "foo": "bar"},
 		map[string]int{"n": 3},
 		map[string]http.Header{"original": {"X-Foo": []string{"bar"}}},
-		map[string]any{"foo": "bar", "pi": 3.14},
+		map[any]any{"foo": "bar", "pi": 3.14},
 	} {
 		t.Run(fmt.Sprintf("%v", v), func(t *testing.T) {
 			boxed, err := dispatchproto.Marshal(v)
