@@ -85,7 +85,8 @@ func Duration(v time.Duration) Any {
 // Primitive values (booleans, integers, floats, strings, bytes, timestamps,
 // durations) are supported, along with values that implement either
 // proto.Message, json.Marshaler, encoding.TextMarshaler or
-// encoding.BinaryMarshaler.
+// encoding.BinaryMarshaler. Slices and maps are also supported, as long
+// as they are JSON-like in shape.
 func Marshal(v any) (Any, error) {
 	rv := reflect.ValueOf(v)
 	if rv.Kind() == reflect.Pointer && rv.IsNil() {
