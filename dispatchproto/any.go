@@ -85,9 +85,11 @@ func Duration(v time.Duration) Any {
 // Primitive values (booleans, integers, floats, strings, bytes, timestamps,
 // durations) are supported, along with values that implement either
 // proto.Message, json.Marshaler, encoding.TextMarshaler or
-// encoding.BinaryMarshaler.
+// encoding.BinaryMarshaler. Slices and maps are also supported, as long
+// as they are JSON-like in shape.
 func Marshal(v any) (Any, error) {
-	if rv := reflect.ValueOf(v); rv.Kind() == reflect.Pointer && rv.IsNil() {
+	rv := reflect.ValueOf(v)
+	if rv.Kind() == reflect.Pointer && rv.IsNil() {
 		return Nil(), nil
 	}
 	var m proto.Message
@@ -160,7 +162,10 @@ func Marshal(v any) (Any, error) {
 	case []byte:
 		m = wrapperspb.Bytes(vv)
 	default:
-		return Any{}, fmt.Errorf("cannot serialize %v (%T)", v, v)
+		var err error
+		if m, err = newStructpbValue(rv); err != nil {
+			return Any{}, fmt.Errorf("cannot serialize %v: %w", v, err)
+		}
 	}
 
 	proto, err := anypb.New(m)
@@ -386,6 +391,10 @@ func (a Any) Unmarshal(v any) error {
 		}
 	}
 
+	if s, ok := m.(*structpb.Value); ok {
+		return fromStructpbValue(elem, s)
+	}
+
 	return fmt.Errorf("cannot deserialize %T into %v (%v kind)", m, elem.Type(), elem.Kind())
 }
 
@@ -403,4 +412,145 @@ func (a Any) String() string {
 // Equal is true if this Any is equal to another.
 func (a Any) Equal(other Any) bool {
 	return proto.Equal(a.proto, other.proto)
+}
+
+func newStructpbValue(rv reflect.Value) (*structpb.Value, error) {
+	switch rv.Kind() {
+	case reflect.Bool:
+		return structpb.NewBoolValue(rv.Bool()), nil
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		n := rv.Int()
+		f := float64(n)
+		if int64(f) != n {
+			return nil, fmt.Errorf("cannot serialize %d as number structpb.Value (%v) without losing information", n, f)
+		}
+		return structpb.NewNumberValue(f), nil
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		n := rv.Uint()
+		f := float64(n)
+		if uint64(f) != n {
+			return nil, fmt.Errorf("cannot serialize %d as number structpb.Value (%v) without losing information", n, f)
+		}
+		return structpb.NewNumberValue(f), nil
+	case reflect.Float32, reflect.Float64:
+		return structpb.NewNumberValue(rv.Float()), nil
+	case reflect.String:
+		return structpb.NewStringValue(rv.String()), nil
+	case reflect.Interface:
+		if rv.NumMethod() == 0 { // interface{} aka. any
+			v := rv.Interface()
+			if v == nil {
+				return structpb.NewNullValue(), nil
+			}
+			return newStructpbValue(reflect.ValueOf(v))
+		}
+	case reflect.Slice:
+		list := &structpb.ListValue{Values: make([]*structpb.Value, rv.Len())}
+		for i := range list.Values {
+			elem := rv.Index(i)
+			var err error
+			list.Values[i], err = newStructpbValue(elem)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return structpb.NewListValue(list), nil
+	case reflect.Map:
+		strct := &structpb.Struct{Fields: make(map[string]*structpb.Value, rv.Len())}
+		iter := rv.MapRange()
+		for iter.Next() {
+			k := iter.Key()
+
+			var strKey string
+			var hasStrKey bool
+			switch k.Kind() {
+			case reflect.String:
+				strKey = k.String()
+				hasStrKey = true
+			case reflect.Interface:
+				if s, ok := k.Interface().(string); ok {
+					strKey = s
+					hasStrKey = true
+				}
+			}
+			if !hasStrKey {
+				return nil, fmt.Errorf("cannot serialize map with %s (%s) key", k.Type(), k.Kind())
+			}
+
+			v, err := newStructpbValue(iter.Value())
+			if err != nil {
+				return nil, err
+			}
+			strct.Fields[strKey] = v
+		}
+		return structpb.NewStructValue(strct), nil
+	}
+	return nil, fmt.Errorf("not implemented: %s", rv.Type())
+}
+
+func fromStructpbValue(rv reflect.Value, s *structpb.Value) error {
+	switch rv.Kind() {
+	case reflect.Bool:
+		if b, ok := s.Kind.(*structpb.Value_BoolValue); ok {
+			rv.SetBool(b.BoolValue)
+			return nil
+		}
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		if n, ok := s.Kind.(*structpb.Value_NumberValue); ok {
+			rv.SetInt(int64(n.NumberValue))
+			return nil
+		}
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		if n, ok := s.Kind.(*structpb.Value_NumberValue); ok {
+			rv.SetUint(uint64(n.NumberValue))
+			return nil
+		}
+	case reflect.Float32, reflect.Float64:
+		if n, ok := s.Kind.(*structpb.Value_NumberValue); ok {
+			rv.SetFloat(n.NumberValue)
+			return nil
+		}
+	case reflect.String:
+		if str, ok := s.Kind.(*structpb.Value_StringValue); ok {
+			rv.SetString(str.StringValue)
+			return nil
+		}
+	case reflect.Slice:
+		if l, ok := s.Kind.(*structpb.Value_ListValue); ok {
+			values := l.ListValue.GetValues()
+			rv.Grow(len(values))
+			rv.SetLen(len(values))
+			for i, value := range values {
+				if err := fromStructpbValue(rv.Index(i), value); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	case reflect.Map:
+		if strct, ok := s.Kind.(*structpb.Value_StructValue); ok {
+			fields := strct.StructValue.Fields
+			rv.Set(reflect.MakeMapWithSize(rv.Type(), len(fields)))
+			valueType := rv.Type().Elem()
+			for key, value := range fields {
+				mv := reflect.New(valueType).Elem()
+				if err := fromStructpbValue(mv, value); err != nil {
+					return err
+				}
+				rv.SetMapIndex(reflect.ValueOf(key), mv)
+			}
+			return nil
+		}
+	case reflect.Interface:
+		if rv.NumMethod() == 0 { // interface{} aka. any
+			v := s.AsInterface()
+			if v == nil {
+				rv.SetZero()
+			} else {
+				rv.Set(reflect.ValueOf(s.AsInterface()))
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("cannot deserialize %T into %v (%v kind)", s, rv.Type(), rv.Kind())
 }

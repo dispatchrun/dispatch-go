@@ -1,3 +1,5 @@
+//go:build !durable
+
 package main
 
 import (
@@ -12,14 +14,14 @@ import (
 
 func main() {
 	getRepo := dispatch.Func("getRepo", func(ctx context.Context, name string) (*dispatchhttp.Response, error) {
-		return dispatchhttp.Get(context.Background(), "https://api.github.com/repos/dispatchrun/"+name)
+		return dispatchhttp.Get(ctx, "https://api.github.com/repos/dispatchrun/"+name)
 	})
 
 	getStargazers := dispatch.Func("getStargazers", func(ctx context.Context, url string) (*dispatchhttp.Response, error) {
-		return dispatchhttp.Get(context.Background(), url)
+		return dispatchhttp.Get(ctx, url)
 	})
 
-	reduceStargazers := dispatch.Func("reduceStargazers", func(ctx context.Context, stargazerURLs strings) (strings, error) {
+	reduceStargazers := dispatch.Func("reduceStargazers", func(ctx context.Context, stargazerURLs []string) ([]string, error) {
 		responses, err := getStargazers.Gather(stargazerURLs)
 		if err != nil {
 			return nil, err
@@ -39,7 +41,7 @@ func main() {
 		return maps.Keys(stargazers), nil
 	})
 
-	fanout := dispatch.Func("fanout", func(ctx context.Context, repoNames strings) (strings, error) {
+	fanout := dispatch.Func("fanout", func(ctx context.Context, repoNames []string) ([]string, error) {
 		responses, err := getRepo.Gather(repoNames)
 		if err != nil {
 			return nil, err
@@ -65,7 +67,7 @@ func main() {
 	}
 
 	go func() {
-		if _, err := fanout.Dispatch(context.Background(), strings{"coroutine", "dispatch-py"}); err != nil {
+		if _, err := fanout.Dispatch(context.Background(), []string{"coroutine", "dispatch-py"}); err != nil {
 			log.Fatalf("failed to dispatch call: %v", err)
 		}
 	}()
@@ -73,21 +75,4 @@ func main() {
 	if err := endpoint.ListenAndServe(); err != nil {
 		log.Fatalf("failed to serve endpoint: %v", err)
 	}
-}
-
-// TODO: update dispatchproto.Marshal to support serializing slices/maps
-// natively (if they can be sent on the wire as structpb.Value)
-type strings []string
-
-func (s strings) MarshalJSON() ([]byte, error) {
-	return json.Marshal([]string(s))
-}
-
-func (s *strings) UnmarshalJSON(b []byte) error {
-	var c []string
-	if err := json.Unmarshal(b, &c); err != nil {
-		return err
-	}
-	*s = c
-	return nil
 }
