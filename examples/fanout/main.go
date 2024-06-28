@@ -14,11 +14,11 @@ import (
 
 func main() {
 	getRepo := dispatch.Func("getRepo", func(ctx context.Context, name string) (*dispatchhttp.Response, error) {
-		return dispatchhttp.Get(context.Background(), "https://api.github.com/repos/dispatchrun/"+name)
+		return dispatchhttp.Get(ctx, "https://api.github.com/repos/dispatchrun/"+name)
 	})
 
 	getStargazers := dispatch.Func("getStargazers", func(ctx context.Context, url string) (*dispatchhttp.Response, error) {
-		return dispatchhttp.Get(context.Background(), url)
+		return dispatchhttp.Get(ctx, url)
 	})
 
 	reduceStargazers := dispatch.Func("reduceStargazers", func(ctx context.Context, stargazerURLs []string) ([]string, error) {
