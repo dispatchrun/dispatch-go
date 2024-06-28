@@ -355,6 +355,13 @@ func TestAny(t *testing.T) {
 			List:   []any{nil, false, []any{"foo", "bar"}, map[string]any{"abc": "xyz"}},
 			Object: map[string]any{"n": 3.14, "flag": true, "tags": []any{"x", "y", "z"}},
 		}},
+
+		// slices
+		[]string{"foo", "bar"},
+		[]int{-1, 1, 111},
+		[]bool{true, false, true},
+		[]float64{3.14, 1.25},
+		[][]string{{"foo", "bar"}, {"abc", "xyz"}},
 	} {
 		t.Run(fmt.Sprintf("%v", v), func(t *testing.T) {
 			boxed, err := dispatchproto.Marshal(v)
