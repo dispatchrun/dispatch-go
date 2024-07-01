@@ -74,9 +74,10 @@ configuration, so we recommend starting with it._
 The Go SDK can be added as a dependency using:
 
 ```console
-go mod init dispatch-example # if starting fresh
 go get github.com/dispatchrun/dispatch-go@latest
 ```
+
+If you're starting fresh, don't forget to run `go mod init` first (e.g. `go mod init dispatch-example`).
 
 ## Usage
 
@@ -169,7 +170,7 @@ transform1 := dispatch.Func("transform1", func (ctx context.Context, msg string)
     // ...
 })
 
-transform2 := dispatch.Func("transform1", func (ctx context.Context, msg string) (string, error) {
+transform2 := dispatch.Func("transform2", func (ctx context.Context, msg string) (string, error) {
     // ...
 })
 ```
@@ -179,7 +180,7 @@ This model is composable and can be used to create fan-out/fan-in control flows.
 
 ```go
 process := dispatch.Func("process", func (ctx context.Context, msgs []string) ([]string, error) {
-    // Transform messages concurrently and await all of their results.
+    // Transform messages concurrently and await the results.
     return transform.Gather(ctx, msgs)
 })
 
@@ -268,10 +269,10 @@ Dispatch uses protobuf to serialize input and output values.
 The inputs and outputs must either be primitive values, list or maps
 of primitive values, or have a type that implements one of the
 following interfaces:
-- `proto.Message`
 - `encoding.TextMarshaler`
 - `encoding.BinaryMarshaler`
 - `json.Marshaler`
+- `proto.Message`
 
 #### Coroutine State
 
