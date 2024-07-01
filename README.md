@@ -5,8 +5,6 @@
   </picture>
 </p>
 
-# dispatch-go
-
 [![Test](https://github.com/dispatchrun/dispatch-go/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/dispatchrun/dispatch-go/actions/workflows/test.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/dispatchrun/dispatch-go.svg)](https://pkg.go.dev/github.com/dispatchrun/dispatch-go)
 [![Apache 2 License](https://img.shields.io/badge/license-Apache%202-blue.svg)](LICENSE)
