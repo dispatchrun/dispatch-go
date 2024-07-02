@@ -40,12 +40,9 @@ func run() error {
 		return strings.Repeat(stringified, doubled), nil
 	})
 
-	call, err := doubleAndRepeat.BuildCall(4)
-	if err != nil {
-		return fmt.Errorf("new call failed: %v", err)
-	}
+	runner := dispatchtest.NewRunner(stringify, double, doubleAndRepeat)
 
-	output, err := dispatchtest.Run[string](call, stringify, double, doubleAndRepeat)
+	output, err := dispatchtest.Call(runner, doubleAndRepeat, 4)
 	if err != nil {
 		return err
 	}
