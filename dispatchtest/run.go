@@ -11,26 +11,33 @@ import (
 	"github.com/dispatchrun/dispatch-go/dispatchproto"
 )
 
-// Run runs a function and returns its result.
-func Run[O any](call dispatchproto.Call, functions ...dispatch.AnyFunction) (O, error) {
-	runner := NewRunner(functions...)
+// Call calls a dispatch.Function using the specified Runner.
+func Call[I, O any](runner *Runner, fn *dispatch.Function[I, O], input I) (O, error) {
+	// Note: runner.Call[I, O] isn't possible because Go doesn't support generic methods.
+
+	var zero O
+	call, err := fn.BuildCall(input)
+	if err != nil {
+		return zero, err
+	}
 
 	res := runner.Run(call.Request())
 
-	var output O
 	result, ok := res.Result()
 	if !ok {
 		if !res.OK() {
-			return output, dispatchproto.StatusError(res.Status())
+			return zero, dispatchproto.StatusError(res.Status())
 		}
-		return output, fmt.Errorf("unexpected response: %s", res)
+		return zero, fmt.Errorf("unexpected response: %s", res)
 	}
-	var err error
+
 	if resultErr, ok := result.Error(); ok {
 		err = resultErr
 	} else if !res.OK() {
 		err = dispatchproto.StatusError(res.Status())
 	}
+
+	var output O
 	boxedOutput, ok := res.Output()
 	if ok {
 		if unmarshalErr := boxedOutput.Unmarshal(&output); err == nil && unmarshalErr != nil {

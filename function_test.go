@@ -36,23 +36,16 @@ func TestCoroutineReturn(t *testing.T) {
 		return strconv.Itoa(in), nil
 	})
 
-	call, err := stringify.BuildCall(11)
+	runner := dispatchtest.NewRunner(stringify)
+
+	output, err := dispatchtest.Call(runner, stringify, 11)
 	if err != nil {
 		t.Fatal(err)
-	}
-	output, err := dispatchtest.Run[string](call, stringify)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if output != "11" {
+	} else if output != "11" {
 		t.Errorf("unexpected output: %s", output)
 	}
 
-	call2, err := stringify.BuildCall(-23)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = dispatchtest.Run[string](call2, stringify)
+	_, err = dispatchtest.Call(runner, stringify, -23)
 	if err == nil || !strings.Contains(err.Error(), "InvalidArgument: -23") {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -72,23 +65,16 @@ func TestCoroutineExit(t *testing.T) {
 		panic("unreachable")
 	})
 
-	call, err := stringify.BuildCall(11)
+	runner := dispatchtest.NewRunner(stringify)
+
+	output, err := dispatchtest.Call(runner, stringify, 11)
 	if err != nil {
 		t.Fatal(err)
-	}
-	output, err := dispatchtest.Run[string](call, stringify)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if output != "11" {
+	} else if output != "11" {
 		t.Errorf("unexpected output: %s", output)
 	}
 
-	call2, err := stringify.BuildCall(-23)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = dispatchtest.Run[string](call2, stringify)
+	_, err = dispatchtest.Call(runner, stringify, -23)
 	if err == nil || !strings.Contains(err.Error(), "InvalidArgument: -23") {
 		t.Fatalf("unexpected error: %v", err)
 	}
