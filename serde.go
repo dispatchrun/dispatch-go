@@ -19,18 +19,18 @@ type serializedDispatch struct {
 func dispatchSerializer(s *types.Serializer, d *Dispatch) error {
 	opts := make([]Option, 0, len(d.opts))
 	for _, opt := range d.opts {
-		if _, ok := opt.(AnyFunction); ok {
-			// No need to serialize these options, since we serialize the
-			// map of registered functions directly.
-			continue
-		}
+		// if _, ok := opt.(AnyFunction); ok {
+		// 	// No need to serialize these options, since we serialize the
+		// 	// map of registered functions directly.
+		// 	continue
+		// }
 		opts = append(opts, opt)
 	}
 	types.SerializeT(s, serializedDispatch{opts, d.functions})
 	return nil
 }
 
-func dispatchDeserializer(d *types.Deserializer, c *Dispatch) error {
+func dispatchDeserializer(d *types.Deserializer, c **Dispatch) error {
 	var sd serializedDispatch
 	types.DeserializeTo(d, &sd)
 
@@ -39,6 +39,6 @@ func dispatchDeserializer(d *types.Deserializer, c *Dispatch) error {
 		return err
 	}
 	dispatch.functions = sd.functions
-	*c = *dispatch //nolint
+	*c = dispatch
 	return nil
 }

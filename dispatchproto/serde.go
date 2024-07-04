@@ -14,8 +14,7 @@ func init() {
 	types.Register(protoSerializer, protoDeserializer)
 }
 
-func protoSerializer(s *types.Serializer, mp *proto.Message) error {
-	m := *mp
+func protoSerializer(s *types.Serializer, m proto.Message) error {
 	if m == nil {
 		types.SerializeT(s, false)
 		return nil

@@ -13,7 +13,7 @@ func clientSerializer(s *types.Serializer, c *Client) error {
 	return nil
 }
 
-func clientDeserializer(d *types.Deserializer, c *Client) error {
+func clientDeserializer(d *types.Deserializer, c **Client) error {
 	var opts []Option
 	types.DeserializeTo(d, &opts)
 
@@ -21,6 +21,6 @@ func clientDeserializer(d *types.Deserializer, c *Client) error {
 	if err != nil {
 		return err
 	}
-	*c = *client
+	*c = client
 	return nil
 }
